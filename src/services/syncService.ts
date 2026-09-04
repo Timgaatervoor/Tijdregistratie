@@ -76,14 +76,24 @@ class SyncService {
     }
 
     try {
-      const response = await fetch(`${config.projectUrl}/rest/v1/`, {
+      const response = await fetch(`${config.projectUrl}/rest/v1/race_operations?select=operation_id&limit=1`, {
         headers: {
           apikey: config.anonKey,
           Authorization: `Bearer ${config.anonKey}`,
         },
       });
       if (!response.ok) {
-        return { ok: false, error: `Supabase antwoordde met HTTP ${response.status}.` };
+        const detail = (await response.text()).slice(0, 180);
+        if (response.status === 401) {
+          return { ok: false, error: 'HTTP 401: de publishable/anon key is ongeldig of onvolledig.' };
+        }
+        if (response.status === 404) {
+          return { ok: false, error: 'HTTP 404: tabel race_operations bestaat nog niet.' };
+        }
+        if (response.status === 403) {
+          return { ok: false, error: 'HTTP 403: RLS blokkeert lezen. Voeg de SELECT-policy uit de handleiding toe.' };
+        }
+        return { ok: false, error: `Supabase antwoordde met HTTP ${response.status}: ${detail}` };
       }
       return { ok: true };
     } catch {

@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/Tijdregistratie/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

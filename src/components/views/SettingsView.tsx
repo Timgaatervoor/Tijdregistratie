@@ -507,6 +507,55 @@ const SyncSettings: React.FC<SyncSettingsProps> = ({ eventId }) => {
 
   return (
     <div className="space-y-6">
+      <div className="bg-blue-950/30 border border-blue-700/40 rounded-2xl p-6 text-xs text-slate-200 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-blue-400" /> Synchronisatie instellen in 5 stappen
+          </h3>
+          <p className="text-slate-400 mt-1">
+            Supabase is de gratis online database. De app bewaart elke actie eerst lokaal en synchroniseert daarna de wachtrij.
+          </p>
+        </div>
+
+        <ol className="list-decimal list-inside space-y-2 text-slate-300">
+          <li>Maak een gratis project aan op <strong className="text-white">supabase.com</strong>.</li>
+          <li>Open in Supabase <strong className="text-white">SQL Editor</strong>, maak een nieuwe query en voer de SQL hieronder uit.</li>
+          <li>Open <strong className="text-white">Project Settings &gt; API</strong> en kopieer de Project URL en de <strong className="text-white">Publishable key</strong> (of legacy anon public key).</li>
+          <li>Vul die gegevens hieronder in, gebruik als Event-ID bijvoorbeeld <code className="text-amber-300">event-de-haan-2026</code>, en klik op <strong className="text-white">Verbinding testen</strong>.</li>
+          <li>Krijg je “Verbinding met Supabase werkt”, klik dan op <strong className="text-white">Instellingen opslaan</strong>.</li>
+        </ol>
+
+        <details className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+          <summary className="cursor-pointer text-amber-300 font-bold">SQL voor de tabel race_operations tonen</summary>
+          <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed text-slate-300">{`create table public.race_operations (
+  operation_id text primary key,
+  event_id text not null,
+  participant_id text,
+  type text not null,
+  device_id text not null,
+  operator_id text not null,
+  device_timestamp timestamptz not null,
+  server_timestamp timestamptz,
+  payload jsonb not null default '{}'::jsonb,
+  revision integer not null default 1,
+  created_at timestamptz not null default now()
+);
+
+alter table public.race_operations enable row level security;
+
+create policy "race operations insert"
+on public.race_operations for insert to anon
+with check (true);
+
+create policy "race operations read"
+on public.race_operations for select to anon
+using (true);`}</pre>
+          <p className="mt-3 text-amber-200">
+            Gebruik voor de app alleen de publieke <strong>publishable/anon key</strong>. Zet nooit de <strong>secret/service_role key</strong> in dit formulier of in GitHub.
+          </p>
+        </details>
+      </div>
+
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-5 text-xs">
         <div>
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">

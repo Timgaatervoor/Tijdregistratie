@@ -35,7 +35,9 @@ export function useEventData() {
   const refresh = useCallback(async () => {
     try {
       let ev = await db.events.toCollection().first();
-      if (!ev) {
+      const isInitialized = typeof window !== 'undefined' && localStorage.getItem('biathlon_db_initialized') === 'true';
+
+      if (!ev && !isInitialized) {
         await initializeSampleData(false);
         ev = await db.events.toCollection().first();
       }
@@ -63,6 +65,10 @@ export function useEventData() {
         db.devices.toCollection().first(),
         syncService.getPendingCount(),
       ]);
+
+      if (ev?.name && typeof document !== 'undefined') {
+        document.title = `${ev.name} - Tijdregistratie Biathlon`;
+      }
 
       setEvent(ev || null);
       setParticipants(pList);

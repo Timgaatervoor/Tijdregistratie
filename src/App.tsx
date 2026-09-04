@@ -81,7 +81,7 @@ export default function App() {
             <span>
               {isSimulatedOffline
                 ? 'GEFORCEERDE OFFLINE MODUS ACTIEF: Apparaat opereert 100% autonoom op lokale IndexedDB'
-                : 'TESTMODUS: Run Biathlon De Haan 2026 Testset actief'}
+                : `TESTMODUS: ${event?.name || 'Run Biathlon De Haan'} Testset actief`}
             </span>
           </div>
           {isSimulatedOffline && (
@@ -163,6 +163,7 @@ export default function App() {
             categories={categories}
             waves={waves}
             event={event}
+            mode={currentTab === 'results' ? 'results' : 'live'}
             onSelectParticipant={handleSelectParticipantFromResult}
           />
         )}
@@ -208,6 +209,10 @@ export default function App() {
           <SettingsView
             event={event}
             deviceConfig={deviceConfig}
+            profiles={raceProfiles}
+            categories={categories}
+            waves={waves}
+            participants={participants}
             onRefresh={refresh}
           />
         )}

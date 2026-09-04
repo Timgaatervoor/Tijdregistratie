@@ -149,6 +149,7 @@ export interface ShootingResult {
   operatorId: string;
   deviceId: string;
   isCorrection?: boolean;
+  isCorrected?: boolean;
   correctionReason?: string;
   syncStatus: SyncStatus;
 }
@@ -285,6 +286,10 @@ export interface RaceResult {
   rankOverall?: number;
   rankCategory?: number;
   rankGender?: number;
+  club?: string;
+  team?: string;
+  gapMs?: number;
+  gapFormatted?: string;
   isPendingShooting?: boolean;
 }
 

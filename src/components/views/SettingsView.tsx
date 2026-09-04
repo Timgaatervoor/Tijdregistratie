@@ -9,42 +9,99 @@ import {
   Clock,
   CheckCircle2,
   AlertTriangle,
+  Layers,
+  Database,
 } from 'lucide-react';
-import type { RaceEvent, DeviceConfig } from '../../types';
+import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
+import { RaceProfileEditor } from './RaceProfileEditor';
+import { EventSetupAndReset } from './EventSetupAndReset';
 
 interface SettingsViewProps {
   event: RaceEvent | null;
   deviceConfig: DeviceConfig | null;
+  profiles?: RaceProfile[];
+  categories?: Category[];
+  waves?: Wave[];
+  participants?: Participant[];
   onRefresh: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   event,
   deviceConfig,
+  profiles = [],
+  categories = [],
+  waves = [],
+  participants = [],
   onRefresh,
 }) => {
+  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'event_setup'>('general');
+
+  // Race Event Settings
+  const [eventName, setEventName] = useState(event?.name || 'Run-Biathlon De Haan 2026');
+  const [eventDate, setEventDate] = useState(event?.date || '2026-09-06');
+  const [eventLocation, setEventLocation] = useState(event?.location || 'De Haan');
+  const [organizer, setOrganizer] = useState(event?.organizer || 'Kids Atletiek De Haan');
   const [penaltySeconds, setPenaltySeconds] = useState(event?.penaltySecondsPerMiss || 20);
+  const [requireStartConfirmation, setRequireStartConfirmation] = useState(event?.requireStartConfirmation ?? true);
+  const [requireFinishConfirmation, setRequireFinishConfirmation] = useState(event?.requireFinishConfirmation ?? true);
+  const [isPublicResultsLive, setIsPublicResultsLive] = useState(event?.isPublicResultsLive ?? true);
+  const [isTestMode, setIsTestMode] = useState(event?.isTestMode ?? true);
+  const [isLocked, setIsLocked] = useState(event?.officialResultsLocked ?? false);
+
+  // Device & Operator Settings
   const [deviceId, setDeviceId] = useState(deviceConfig?.id || 'FINISH-01');
   const [operatorName, setOperatorName] = useState('Jan Peeters');
   const [stationName, setStationName] = useState(deviceConfig?.stationName || 'Finish Hoofdpost');
-  const [isTestMode, setIsTestMode] = useState(event?.isTestMode ?? true);
-  const [isLocked, setIsLocked] = useState(event?.officialResultsLocked ?? false);
   const [savedMessage, setSavedMessage] = useState(false);
+
+  // Synchronize on initial mount without overwriting during active typing
+  const initialLoadRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialLoadRef.current && event) {
+      setEventName(event.name);
+      setEventDate(event.date);
+      setEventLocation(event.location);
+      setOrganizer(event.organizer);
+      setPenaltySeconds(event.penaltySecondsPerMiss || 20);
+      setRequireStartConfirmation(event.requireStartConfirmation ?? true);
+      setRequireFinishConfirmation(event.requireFinishConfirmation ?? true);
+      setIsPublicResultsLive(event.isPublicResultsLive ?? true);
+      setIsTestMode(event.isTestMode ?? true);
+      setIsLocked(event.officialResultsLocked ?? false);
+      initialLoadRef.current = true;
+    }
+  }, [event]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!event) return;
 
-    await db.events.update(event.id, {
+    const currentEvent = (await db.events.toCollection().first()) || event;
+    const eventId = currentEvent?.id || event?.id || 'event-de-haan-2026';
+
+    const updatedEvent: RaceEvent = {
+      id: eventId,
+      name: eventName.trim() || 'Run-Biathlon De Haan',
+      date: eventDate,
+      location: eventLocation.trim() || 'De Haan',
+      organizer: organizer.trim() || 'Kids Atletiek De Haan',
+      status: currentEvent?.status || 'READY',
+      timezone: 'Europe/Brussels',
       penaltySecondsPerMiss: penaltySeconds,
+      requireStartConfirmation,
+      requireFinishConfirmation,
+      isPublicResultsLive,
       isTestMode,
       officialResultsLocked: isLocked,
       officialResultsVersion: isLocked ? 'Definitief 1.0' : 'Voorlopig',
+      createdAt: currentEvent?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    await db.events.put(updatedEvent);
 
     await db.devices.put({
       id: deviceId.trim() || 'FINISH-01',
@@ -59,12 +116,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     await operationService.logAudit(
       'SETTINGS_UPDATED',
-      `Instellingen bijgewerkt: ${penaltySeconds}s straftijd, Testmodus: ${isTestMode}, Resultaten vergrendeld: ${isLocked}`
+      `Wedstrijdinstellingen bijgewerkt: "${eventName}", ${penaltySeconds}s straftijd, Datum: ${eventDate}, Testmodus: ${isTestMode}`
     );
 
+    document.title = `${eventName.trim()} - Tijdregistratie Biathlon`;
     soundService.playSuccess();
     setSavedMessage(true);
-    onRefresh();
+    await onRefresh();
     setTimeout(() => setSavedMessage(false), 3000);
   };
 
@@ -105,17 +163,135 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Instellingen & Parameters
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Wedstrijdregels, straftijden, apparaatidentiteit en officiële vergrendeling
+            Wedstrijdregels, parcoursopbouw (loop/schieten), apparaatidentiteit en officiële vergrendeling
           </p>
+        </div>
+
+        {/* Sub-tab Navigation */}
+        <div className="flex flex-wrap items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setActiveSection('general')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'general'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Algemeen & Tijd</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('profiles')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'profiles'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Wedstrijd Inhoud (Loop / Schiet)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('event_setup')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'event_setup'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Evenement Opzet & Reset (Waves & Lopers)</span>
+          </button>
         </div>
       </div>
 
-      <form onSubmit={handleSaveSettings} className="space-y-6">
+      {activeSection === 'profiles' ? (
+        <RaceProfileEditor
+          profiles={profiles}
+          categories={categories}
+          onRefresh={onRefresh}
+        />
+      ) : activeSection === 'event_setup' ? (
+        <EventSetupAndReset
+          event={event}
+          waves={waves}
+          participants={participants}
+          categories={categories}
+          onRefresh={onRefresh}
+        />
+      ) : (
+        <form onSubmit={handleSaveSettings} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Race Event General Config */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-4 text-xs">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Settings className="w-4 h-4 text-amber-400" /> Wedstrijd Algemeen
+            </h3>
+
+            <div>
+              <label className="text-slate-300 font-semibold block mb-1">
+                Wedstrijdnaam:
+              </label>
+              <input
+                type="text"
+                required
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                placeholder="bv. Run-Biathlon De Haan 2026"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  Wedstrijddatum:
+                </label>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  Locatie:
+                </label>
+                <input
+                  type="text"
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                  placeholder="bv. Sportdomein Haneveld, De Haan"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-slate-300 font-semibold block mb-1">
+                Organiserende Club / Instantie:
+              </label>
+              <input
+                type="text"
+                value={organizer}
+                onChange={(e) => setOrganizer(e.target.value)}
+                placeholder="bv. Kids Atletiek De Haan"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+          </div>
+
           {/* Rules & Biathlon Calculation */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-4 text-xs">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" /> Wedstrijdreglement & Straftijden
+              <Clock className="w-4 h-4 text-amber-400" /> Wedstrijdreglement & Tijdregistratie
             </h3>
 
             <div>
@@ -124,16 +300,47 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </label>
               <input
                 type="number"
+                min="0"
                 value={penaltySeconds}
-                onChange={(e) => setPenaltySeconds(parseInt(e.target.value, 10))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-base font-mono font-bold text-white"
+                onChange={(e) => setPenaltySeconds(parseInt(e.target.value, 10) || 0)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-base font-mono font-bold text-amber-400"
               />
               <span className="text-[11px] text-slate-500 block mt-1">
                 Standaard biathlon tijdstraf: 20 seconden per misser
               </span>
             </div>
 
-            <div className="pt-3 border-t border-slate-800">
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPublicResultsLive}
+                  onChange={(e) => setIsPublicResultsLive(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500"
+                />
+                <div>
+                  <span className="font-bold text-white block">Publieke Live Uitslagen Actief</span>
+                  <span className="text-[11px] text-slate-400">
+                    Toont resultaten op het live leaderboard en publieke schermen
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={requireFinishConfirmation}
+                  onChange={(e) => setRequireFinishConfirmation(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500"
+                />
+                <div>
+                  <span className="font-bold text-white block">Bevestiging bij Finish</span>
+                  <span className="text-[11px] text-slate-400">
+                    Voorkomt per ongeluk direct toewijzen van finish pulsen
+                  </span>
+                </div>
+              </label>
+
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
@@ -152,46 +359,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Device & Operator Identity (Req 31) */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-4 text-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-4 text-xs md:col-span-2">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <Laptop className="w-4 h-4 text-blue-400" /> Toestel- & Operator Identiteit
             </h3>
 
-            <div>
-              <label className="text-slate-300 font-semibold block mb-1">
-                Apparaat Identificatie (Device ID):
-              </label>
-              <input
-                type="text"
-                value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-                placeholder="bv. FINISH-01"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white font-mono font-bold"
-              />
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  Apparaat Identificatie (Device ID):
+                </label>
+                <input
+                  type="text"
+                  value={deviceId}
+                  onChange={(e) => setDeviceId(e.target.value)}
+                  placeholder="bv. FINISH-01"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white font-mono font-bold"
+                />
+              </div>
 
-            <div>
-              <label className="text-slate-300 font-semibold block mb-1">
-                Huidige Operator Naam:
-              </label>
-              <input
-                type="text"
-                value={operatorName}
-                onChange={(e) => setOperatorName(e.target.value)}
-                placeholder="bv. Jan Peeters"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
-              />
-            </div>
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  Huidige Operator Naam:
+                </label>
+                <input
+                  type="text"
+                  value={operatorName}
+                  onChange={(e) => setOperatorName(e.target.value)}
+                  placeholder="bv. Jan Peeters"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
+                />
+              </div>
 
-            <div>
-              <label className="text-slate-300 font-semibold block mb-1">Station Locatie:</label>
-              <input
-                type="text"
-                value={stationName}
-                onChange={(e) => setStationName(e.target.value)}
-                placeholder="bv. Finish Straat Hoofdpost"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
-              />
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Station Locatie:</label>
+                <input
+                  type="text"
+                  value={stationName}
+                  onChange={(e) => setStationName(e.target.value)}
+                  placeholder="bv. Finish Straat Hoofdpost"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -244,6 +453,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 };

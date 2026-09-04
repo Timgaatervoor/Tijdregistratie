@@ -174,6 +174,8 @@ export function calculateRaceResults(
       waveName: wave?.name || 'Geen wave',
       waveId: p.waveId,
       gender: p.gender || 'X',
+      club: p.club,
+      team: p.team,
       status: p.status,
       statusReason: p.statusReason,
       startTime: startRecord?.timestamp,
@@ -215,9 +217,15 @@ export function calculateRaceResults(
     return aFin - bFin;
   });
 
-  // Assign overall ranks
+  // Assign overall ranks & gap to winner
+  const overallWinnerTime = finishers[0]?.officialTimeMs;
   finishers.forEach((item, idx) => {
     item.rankOverall = idx + 1;
+    if (overallWinnerTime !== undefined && item.officialTimeMs !== undefined) {
+      const gap = item.officialTimeMs - overallWinnerTime;
+      item.gapMs = gap;
+      item.gapFormatted = idx === 0 ? '+00:00.0' : `+${formatDuration(gap, true, false)}`;
+    }
   });
 
   // Rank per category

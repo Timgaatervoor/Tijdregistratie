@@ -17,6 +17,7 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { soundService } from '../services/soundService';
 import { syncService } from '../services/syncService';
 import type { RaceEvent, DeviceConfig } from '../types';
+import { InstallDesktopModal } from './InstallDesktopModal';
 
 interface HeaderProps {
   event: RaceEvent | null;
@@ -41,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [showDesktopModal, setShowDesktopModal] = useState(false);
 
   const toggleSound = () => {
     const next = soundService.toggleSound();
@@ -83,8 +85,8 @@ export const Header: React.FC<HeaderProps> = ({
               Failsafe tests & simulatie actief
             </span>
           </div>
-          <span className="text-[11px] font-normal opacity-90 hidden sm:inline">
-            Run Biathlon De Haan
+          <span className="text-[11px] font-normal opacity-90 hidden sm:inline font-mono">
+            {event?.name || 'Run Biathlon De Haan'} {event?.date ? `(${event.date})` : ''}
           </span>
         </div>
       )}
@@ -119,8 +121,14 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2">
               <span>{event?.location || 'De Haan aan Zee'}</span>
-              <span className="hidden md:inline text-slate-600">•</span>
-              <span className="hidden md:inline text-slate-400">Timezone: Europe/Brussels</span>
+              <span className="text-slate-600">•</span>
+              <span className="font-mono text-slate-300">{event?.date || '2026-09-06'}</span>
+              {event?.organizer && (
+                <>
+                  <span className="hidden md:inline text-slate-600">•</span>
+                  <span className="hidden md:inline text-slate-400">{event.organizer}</span>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -226,16 +234,16 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Pre-Race Check</span>
           </button>
 
-          {/* PWA Install Button if available */}
-          {isInstallable && !isInstalled && (
-            <button
-              onClick={install}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-slate-950 hover:bg-amber-400 font-bold text-xs shadow transition"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Installeer PWA</span>
-            </button>
-          )}
+          {/* Desktop App & Local Offline Button */}
+          <button
+            onClick={() => setShowDesktopModal(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition"
+            title="Lokaal opslaan & als zelfstandig programma installeren"
+          >
+            <Laptop className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span className="hidden sm:inline">Desktop App / Lokaal</span>
+            <span className="sm:hidden">Lokaal</span>
+          </button>
         </div>
       </div>
 
@@ -244,6 +252,13 @@ export const Header: React.FC<HeaderProps> = ({
           {syncToast}
         </div>
       )}
+
+      {/* Desktop App & Local Execution Modal */}
+      <InstallDesktopModal
+        isOpen={showDesktopModal}
+        onClose={() => setShowDesktopModal(false)}
+        event={event}
+      />
     </header>
   );
 };

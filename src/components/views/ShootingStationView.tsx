@@ -31,6 +31,14 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   const [editHits, setEditHits] = useState(5);
   const [editReason, setEditReason] = useState('');
 
+  // Duplicate conflict state (Req 21)
+  const [duplicateConflict, setDuplicateConflict] = useState<{
+    existing: ShootingResult;
+    newHits: number;
+    newMisses: number;
+    reason: string;
+  } | null>(null);
+
   const hits = targets.filter(Boolean).length;
   const misses = 5 - hits;
   const penaltyPerMiss = event?.penaltySecondsPerMiss || 20;
@@ -62,12 +70,29 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     else soundService.playWarning();
   };
 
-  const handleRecordShooting = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRecordShooting = async (e: React.FormEvent, forceExtra = false) => {
+    e?.preventDefault?.();
     if (isNaN(parsedBib) || parsedBib <= 0) {
       setFeedback({ text: 'Voer een geldig startnummer in', type: 'warn' });
       soundService.playWarning();
       return;
+    }
+
+    // Check duplicate round (Req 21)
+    if (!forceExtra) {
+      const existing = shootingResults.find(
+        (r) => r.bibNumber === parsedBib && r.round === roundNumber && !r.isCorrected
+      );
+      if (existing) {
+        soundService.playWarning();
+        setDuplicateConflict({
+          existing,
+          newHits: hits,
+          newMisses: misses,
+          reason: '',
+        });
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -102,11 +127,72 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       // Reset form for next runner
       setBibInput('');
       setTargets([true, true, true, true, true]);
+      setDuplicateConflict(null);
       onRefresh();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
       setFeedback({ text: `Fout bij opslaan: ${err?.message}`, type: 'warn' });
       soundService.playError();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Resolve duplicate via Correction (Req 21)
+  const handleResolveConflictCorrection = async () => {
+    if (!duplicateConflict) return;
+    if (!duplicateConflict.reason.trim()) {
+      alert('Een reden van correctie is verplicht (Req 21 & 44)');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const p = participants.find((item) => item.bibNumber === duplicateConflict.existing.bibNumber) || {
+        id: duplicateConflict.existing.participantId,
+        firstName: 'Deelnemer',
+        lastName: `#${duplicateConflict.existing.bibNumber}`,
+        categoryId: '',
+        raceProfileId: '',
+        bibNumber: duplicateConflict.existing.bibNumber,
+        status: 'STARTED',
+        createdAt: '',
+        updatedAt: '',
+      };
+
+      // Mark old as corrected
+      await db.shootingResults.update(duplicateConflict.existing.id, {
+        isCorrected: true,
+        correctionReason: duplicateConflict.reason,
+      });
+
+      // Record corrected shooting
+      await operationService.recordShooting(
+        event?.id || 'event-de-haan-2026',
+        p,
+        duplicateConflict.existing.round,
+        stationName,
+        5,
+        duplicateConflict.newHits,
+        duplicateConflict.newMisses,
+        undefined,
+        true,
+        duplicateConflict.reason
+      );
+
+      soundService.playSuccess();
+      setFeedback({
+        text: `Ronde ${duplicateConflict.existing.round} gecorrigeerd voor Bib #${duplicateConflict.existing.bibNumber} (${duplicateConflict.newHits}/5).`,
+        type: 'success',
+      });
+
+      setBibInput('');
+      setTargets([true, true, true, true, true]);
+      setDuplicateConflict(null);
+      onRefresh();
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (err: any) {
+      setFeedback({ text: `Fout bij correctie: ${err?.message}`, type: 'warn' });
     } finally {
       setIsSubmitting(false);
     }
@@ -437,6 +523,102 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* DUPLICATE SCHIETREGISTRATIE MODAL (Requirement 21) */}
+      {duplicateConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border-2 border-amber-500/70 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">
+                  ⚠ RONDE {duplicateConflict.existing.round} IS REEDS GEREGISTREERD
+                </h3>
+                <span className="text-xs text-amber-300 font-semibold">
+                  Deelnemer Bib #{duplicateConflict.existing.bibNumber} heeft al een registratie voor deze ronde.
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700/60">
+                <span className="text-slate-400 font-bold block mb-1 uppercase tracking-wider text-[10px]">
+                  Bestaande Registratie:
+                </span>
+                <p className="font-mono font-bold text-white text-sm">
+                  {duplicateConflict.existing.hits} hits, {duplicateConflict.existing.misses} missers
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Tijd: {formatLocalTime(duplicateConflict.existing.timestamp, true)}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Stand: {duplicateConflict.existing.station}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-500/40">
+                <span className="text-blue-300 font-bold block mb-1 uppercase tracking-wider text-[10px]">
+                  Nieuwe Registratie:
+                </span>
+                <p className="font-mono font-bold text-emerald-400 text-sm">
+                  {duplicateConflict.newHits} hits, {duplicateConflict.newMisses} missers
+                </p>
+                <p className="text-[11px] text-slate-300 mt-1">
+                  Stand: {stationName}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  Straf: +{duplicateConflict.newMisses * penaltyPerMiss}s
+                </p>
+              </div>
+            </div>
+
+            {/* Optional Correction Reason input */}
+            <div>
+              <label className="text-xs text-slate-300 font-semibold block mb-1">
+                Reden bij correctie (verplicht voor CORRIGEREN):
+              </label>
+              <input
+                type="text"
+                value={duplicateConflict.reason}
+                onChange={(e) =>
+                  setDuplicateConflict({ ...duplicateConflict, reason: e.target.value })
+                }
+                placeholder="bv. Schietkaart herbekeken, doelschijf 2 geteld"
+                className="w-full bg-slate-850 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* 3 Explicit Buttons from Requirement 21 */}
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDuplicateConflict(null)}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition text-center"
+              >
+                ANNULEREN
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResolveConflictCorrection}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-wider transition text-center shadow"
+              >
+                CORRIGEREN
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleRecordShooting(e, true)}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition text-center shadow"
+              >
+                TOEVOEGEN ALS EXTRA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

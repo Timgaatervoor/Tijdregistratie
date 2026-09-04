@@ -19,6 +19,7 @@ interface LiveLeaderboardViewProps {
   categories: Category[];
   waves: Wave[];
   event: RaceEvent | null;
+  mode?: 'live' | 'results';
   onSelectParticipant: (result: RaceResult) => void;
 }
 
@@ -27,11 +28,13 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   categories,
   waves,
   event,
+  mode = 'live',
   onSelectParticipant,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedWave, setSelectedWave] = useState<string>('ALL');
   const [selectedGender, setSelectedGender] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'STARTED' | 'FINISHED'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isKioskMode, setIsKioskMode] = useState<boolean>(false);
 
@@ -40,6 +43,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     if (selectedCategory !== 'ALL' && r.categoryId !== selectedCategory) return false;
     if (selectedWave !== 'ALL' && r.waveId !== selectedWave) return false;
     if (selectedGender !== 'ALL' && r.gender !== selectedGender) return false;
+    if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = r.name.toLowerCase().includes(q);
@@ -69,7 +73,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     });
 
     const csv = headers + rows.join('\n');
-    downloadCsvFile(csv, `live_klassement_${Date.now()}.csv`);
+    downloadCsvFile(csv, `uitslagen_${Date.now()}.csv`);
   };
 
   return (
@@ -80,7 +84,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-4 h-4 text-amber-400" />
             <span className="text-xs font-mono uppercase tracking-widest text-amber-400 font-bold">
-              Live Klassementen
+              {mode === 'results' ? 'Officiële Wedstrijduitslagen' : 'Live Wedstrijdbord (Realtime)'}
             </span>
             {event?.officialResultsLocked ? (
               <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1">
@@ -88,7 +92,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               </span>
             ) : (
               <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold uppercase">
-                Voorlopig Klassement (Live)
+                {mode === 'results' ? 'Voorlopige Uitslag' : 'Live Tussentijden'}
               </span>
             )}
           </div>
@@ -96,7 +100,9 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             {event?.name || 'Run Biathlon De Haan 2026'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Realtime rankings inclusief schietstraftijden (+{event?.penaltySecondsPerMiss || 20}s per misser)
+            {mode === 'results'
+              ? `Eindklassementen inclusief schietstraftijden (+${event?.penaltySecondsPerMiss || 20}s per misser) en categorie-podia`
+              : `Realtime updates tijdens de race: actieve lopers op parcours, live schietbeurten en virtuele tussenstanden`}
           </p>
         </div>
 

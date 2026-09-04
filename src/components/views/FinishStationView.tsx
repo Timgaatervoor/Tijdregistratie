@@ -31,6 +31,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
   const [bibString, setBibString] = useState('');
   const [quickFinish, setQuickFinish] = useState(true);
   const [confirmModalBib, setConfirmModalBib] = useState<number | null>(null);
+  const [capturedTime, setCapturedTime] = useState<{ iso: string; monotonic: number } | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'warn' | 'conflict' } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -39,6 +40,18 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
   // Auto-focus hidden/direct input so keyboard works everywhere
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (confirmModalBib !== null) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          executeFinish(confirmModalBib, false, capturedTime || undefined);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setConfirmModalBib(null);
+          setCapturedTime(null);
+        }
+        return;
+      }
+
       // Don't intercept if user is typing in a modal or another input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
@@ -56,7 +69,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [bibString]);
+  }, [bibString, confirmModalBib, capturedTime]);
 
   const parsedBib = parseInt(bibString, 10);
   const matchedParticipant = !isNaN(parsedBib)
@@ -80,10 +93,14 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
     setBibString('');
   };
 
-  const executeFinish = async (bib: number, isUnknown = false) => {
+  const executeFinish = async (
+    bib: number,
+    isUnknown = false,
+    explicitTime?: { iso: string; monotonic: number }
+  ) => {
     setIsSubmitting(true);
-    const nowIso = new Date().toISOString();
-    const monotonicNow = performance.now();
+    const nowIso = explicitTime?.iso || new Date().toISOString();
+    const monotonicNow = explicitTime?.monotonic !== undefined ? explicitTime.monotonic : performance.now();
 
     try {
       const p = participants.find((item) => item.bibNumber === bib);
@@ -112,6 +129,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
 
       setBibString('');
       setConfirmModalBib(null);
+      setCapturedTime(null);
       onRefresh();
       setTimeout(() => setFeedback(null), 4000);
     } catch (err: any) {
@@ -129,10 +147,15 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
       return;
     }
 
+    // Freeze timestamp T1 immediately on trigger (Requirement 17)
+    const tIso = new Date().toISOString();
+    const tMono = performance.now();
+
     if (!quickFinish) {
+      setCapturedTime({ iso: tIso, monotonic: tMono });
       setConfirmModalBib(parsedBib);
     } else {
-      executeFinish(parsedBib);
+      executeFinish(parsedBib, false, { iso: tIso, monotonic: tMono });
     }
   };
 
@@ -404,31 +427,51 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
         </div>
       </div>
 
-      {/* Confirmation Modal if quickFinish is off */}
+      {/* Confirmation Modal if quickFinish is off (Requirement 17) */}
       {confirmModalBib !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-sm w-full text-center space-y-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Bevestig Finishtijd</h3>
             <div className="text-4xl font-mono font-black text-amber-400">
               Bib #{confirmModalBib}
             </div>
             {matchedParticipant && (
-              <p className="text-sm font-semibold text-slate-200">
-                {matchedParticipant.firstName} {matchedParticipant.lastName}
-              </p>
+              <div className="p-2.5 rounded-xl bg-slate-850 border border-slate-750 text-xs">
+                <span className="font-bold text-white block text-sm">
+                  {matchedParticipant.firstName} {matchedParticipant.lastName}
+                </span>
+                <span className="text-slate-400 font-medium">
+                  {matchedParticipant.categoryName || 'Cat'} • Wave {matchedParticipant.waveName || '1'}
+                </span>
+              </div>
             )}
+
+            {capturedTime && (
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs">
+                <span className="text-emerald-400 font-mono font-black text-base block">
+                  {formatLocalTime(capturedTime.iso, true)}
+                </span>
+                <span className="text-[10px] text-emerald-300 font-semibold mt-0.5 block">
+                  ✓ T1 bevroren bij invoer. Bevestigen veroorzaakt géén vertraging in wedstrijdtijd (Req 17).
+                </span>
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setConfirmModalBib(null)}
-                className="flex-1 py-2.5 rounded-lg bg-slate-800 text-slate-300 font-medium text-xs"
+                onClick={() => {
+                  setConfirmModalBib(null);
+                  setCapturedTime(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
               >
-                Annuleren
+                Annuleren (ESC)
               </button>
               <button
-                onClick={() => executeFinish(confirmModalBib)}
-                className="flex-1 py-2.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs"
+                onClick={() => executeFinish(confirmModalBib, false, capturedTime || undefined)}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow transition"
               >
-                Bevestigen
+                Bevestigen (ENTER)
               </button>
             </div>
           </div>

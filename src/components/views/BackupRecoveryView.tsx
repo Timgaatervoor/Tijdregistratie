@@ -9,6 +9,9 @@ import {
   RotateCcw,
   ShieldCheck,
   History,
+  Laptop,
+  Terminal,
+  FolderDown,
 } from 'lucide-react';
 import type { RaceEvent, EventSnapshot } from '../../types';
 import { db } from '../../db/dexieDb';
@@ -19,6 +22,7 @@ import {
   restoreSnapshot,
   type RecoveryValidation,
 } from '../../services/backupService';
+import { InstallDesktopModal } from '../InstallDesktopModal';
 
 interface BackupRecoveryViewProps {
   event: RaceEvent | null;
@@ -34,6 +38,7 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
   const [validationResult, setValidationResult] = useState<RecoveryValidation | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,6 +116,56 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
           <Download className="w-4 h-4" />
           <span>{isCreatingSnapshot ? 'Bezig met snapshot...' : 'Volledige Back-up Downloaden'}</span>
         </button>
+      </div>
+
+      {/* Local Standalone & Desktop Program Execution Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/30 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-xs font-mono uppercase tracking-widest text-amber-400 font-bold flex items-center gap-1.5">
+              <Laptop className="w-4 h-4" /> Zelfstandig Uitvoerbaar Programma
+            </span>
+            <h3 className="text-lg font-black text-white tracking-tight">
+              Lokaal Opslaan & Als Desktop App Gebruiken
+            </h3>
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              Draai deze tijdregistratie lokaal op uw Windows-, Mac- of Linux-laptop zonder afhankelijk te zijn van internet of externe servers. Alle data wordt 100% lokaal in uw computer opgeslagen.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowInstallModal(true)}
+              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition"
+            >
+              <Laptop className="w-4 h-4" />
+              <span>Installeer als Desktop App</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800 text-xs">
+          <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+            <span className="font-bold text-white block mb-1 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              Methode 1: PWA Desktop Installatie (Aanbevolen)
+            </span>
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Installeer via Chrome/Edge direct als zelfstandige desktop applicatie met eigen snelkoppeling op uw Bureaublad. Werkt 100% offline via Service Worker & Dexie IndexedDB.
+            </p>
+          </div>
+
+          <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+            <span className="font-bold text-white block mb-1 flex items-center gap-1.5">
+              <Terminal className="w-3.5 h-3.5 text-blue-400" />
+              Methode 2: Startscripts (start-windows.bat)
+            </span>
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Export het project naar ZIP (Settings &rarr; Export to ZIP). Dubbelklik op <code className="text-amber-400">start-windows.bat</code> op Windows om het programma standalone lokaal te starten.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Snapshot Verification Card */}
@@ -278,6 +333,12 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
           </div>
         )}
       </div>
+
+      <InstallDesktopModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        event={event}
+      />
     </div>
   );
 };

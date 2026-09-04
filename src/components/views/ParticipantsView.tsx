@@ -593,12 +593,13 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                 <th className="py-3 px-4">Club / Team</th>
                 <th className="py-3 px-4">Stamhoofd ID</th>
                 <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-center w-24">Actie</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500 italic">
+                  <td colSpan={9} className="py-8 text-center text-slate-500 italic">
                     Geen deelnemers gevonden.
                   </td>
                 </tr>
@@ -649,6 +650,20 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                         >
                           {p.status || 'READY'}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectParticipant(p);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-700 text-[11px] font-medium transition shadow-sm"
+                          title="Deelnemer bewerken & details bekijken"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Aanpassen</span>
+                        </button>
                       </td>
                     </tr>
                   );

@@ -215,3 +215,121 @@ export async function initializeSampleData(force = false): Promise<void> {
     details: 'Initialisatie testgegevens Run Biathlon De Haan (200 deelnemers, 10 waves, 3 profielen)',
   });
 }
+
+export async function clearAllParticipants(): Promise<void> {
+  await db.transaction('rw', db.participants, db.auditLogs, async () => {
+    await db.participants.clear();
+    await db.auditLogs.add({
+      id: `audit-clear-participants-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      deviceId: 'RACE-CONTROL',
+      operator: 'System',
+      action: 'PARTICIPANTS_CLEARED',
+      details: 'Alle deelnemers zijn verwijderd.',
+    });
+  });
+}
+
+export async function clearAllWaves(): Promise<void> {
+  await db.transaction('rw', db.waves, db.participants, db.auditLogs, async () => {
+    await db.waves.clear();
+    await db.participants.toCollection().modify({ waveId: undefined });
+    await db.auditLogs.add({
+      id: `audit-clear-waves-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      deviceId: 'RACE-CONTROL',
+      operator: 'System',
+      action: 'WAVES_CLEARED',
+      details: 'Alle waves zijn verwijderd en deelnemers zijn ontkoppeld.',
+    });
+  });
+}
+
+export async function resetTimingAndShooting(): Promise<void> {
+  await db.transaction(
+    'rw',
+    db.timingRecords,
+    db.shootingResults,
+    db.operations,
+    db.conflicts,
+    db.participants,
+    db.auditLogs,
+    async () => {
+      await db.timingRecords.clear();
+      await db.shootingResults.clear();
+      await db.operations.clear();
+      await db.conflicts.clear();
+      await db.participants.toCollection().modify({ status: 'READY', statusReason: undefined });
+      await db.auditLogs.add({
+        id: `audit-reset-results-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        deviceId: 'RACE-CONTROL',
+        operator: 'System',
+        action: 'TIMING_AND_SHOOTING_RESET',
+        details: 'Alle timing- en schietresultaten zijn gewist; deelnemers staan terug op READY.',
+      });
+    }
+  );
+}
+
+export async function resetToBlankEvent(
+  name: string,
+  date: string,
+  location: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  const event: RaceEvent = {
+    id: 'event-de-haan-2026',
+    name: name || 'Run-Biathlon De Haan',
+    date,
+    location: location || 'De Haan',
+    organizer: 'VZW Biathlon Vlaanderen & Gemeente De Haan',
+    status: 'DRAFT',
+    timezone: 'Europe/Brussels',
+    penaltySecondsPerMiss: 20,
+    requireStartConfirmation: false,
+    requireFinishConfirmation: false,
+    isTestMode: false,
+    isPublicResultsLive: false,
+    officialResultsLocked: false,
+    officialResultsVersion: 'Draft',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.transaction(
+    'rw',
+    db.events,
+    db.raceProfiles,
+    db.categories,
+    db.waves,
+    db.participants,
+    db.timingRecords,
+    db.shootingResults,
+    db.operations,
+    db.conflicts,
+    db.auditLogs,
+    async () => {
+      await Promise.all([
+        db.events.clear(),
+        db.raceProfiles.clear(),
+        db.categories.clear(),
+        db.waves.clear(),
+        db.participants.clear(),
+        db.timingRecords.clear(),
+        db.shootingResults.clear(),
+        db.operations.clear(),
+        db.conflicts.clear(),
+      ]);
+      await db.events.put(event);
+      await db.auditLogs.add({
+        id: `audit-blank-event-${Date.now()}`,
+        timestamp: now,
+        deviceId: 'RACE-CONTROL',
+        operator: 'System',
+        action: 'BLANK_EVENT_CREATED',
+        details: `Leeg evenement aangemaakt: ${event.name}.`,
+      });
+    }
+  );
+}

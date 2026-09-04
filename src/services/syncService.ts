@@ -2,6 +2,22 @@ import { db } from '../db/dexieDb';
 
 export type NetworkState = 'ONLINE_SYNCED' | 'OFFLINE_PENDING' | 'SYNCING' | 'SYNC_ERROR';
 
+export interface SyncConfig {
+  enabled: boolean;
+  projectUrl: string;
+  anonKey: string;
+  eventId: string;
+}
+
+const SYNC_CONFIG_KEY = 'biathlon_sync_config';
+
+const defaultConfig: SyncConfig = {
+  enabled: false,
+  projectUrl: '',
+  anonKey: '',
+  eventId: '',
+};
+
 class SyncService {
   private isSimulatedOffline = false;
   private listeners: Array<() => void> = [];
@@ -30,6 +46,49 @@ class SyncService {
 
   public getIsSimulatedOffline(): boolean {
     return this.isSimulatedOffline;
+  }
+
+  public getConfig(): SyncConfig {
+    if (typeof localStorage === 'undefined') return { ...defaultConfig };
+    try {
+      return { ...defaultConfig, ...JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY) || '{}') };
+    } catch {
+      return { ...defaultConfig };
+    }
+  }
+
+  public saveConfig(config: SyncConfig): void {
+    const normalized = {
+      ...config,
+      projectUrl: config.projectUrl.trim().replace(/\/$/, ''),
+      anonKey: config.anonKey.trim(),
+      eventId: config.eventId.trim(),
+    };
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(normalized));
+    }
+    this.triggerChange();
+  }
+
+  public async testConnection(config = this.getConfig()): Promise<{ ok: boolean; error?: string }> {
+    if (!config.projectUrl || !config.anonKey) {
+      return { ok: false, error: 'Supabase Project URL en anon key zijn verplicht.' };
+    }
+
+    try {
+      const response = await fetch(`${config.projectUrl}/rest/v1/`, {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
+        },
+      });
+      if (!response.ok) {
+        return { ok: false, error: `Supabase antwoordde met HTTP ${response.status}.` };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Supabase is niet bereikbaar. Controleer URL en internetverbinding.' };
+    }
   }
 
   public setSimulatedOffline(offline: boolean) {
@@ -74,8 +133,50 @@ class SyncService {
         return { syncedCount: 0 };
       }
 
-      // Mark as syncing then synced (idempotent)
-      for (const op of pending) {
+      const config = this.getConfig();
+      if (!config.enabled) {
+        return { syncedCount: 0, error: 'Online synchronisatie is niet geconfigureerd.' };
+      }
+      if (!config.projectUrl || !config.anonKey) {
+        return { syncedCount: 0, error: 'Supabase Project URL en anon key ontbreken.' };
+      }
+
+      const uploadable = pending.filter(
+        (operation) => !config.eventId || operation.eventId === config.eventId
+      );
+      if (uploadable.length === 0) {
+        return { syncedCount: 0 };
+      }
+
+      const response = await fetch(`${config.projectUrl}/rest/v1/race_operations?on_conflict=operation_id`, {
+        method: 'POST',
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify(
+          uploadable.map((operation) => ({
+            operation_id: operation.operationId,
+            event_id: operation.eventId,
+            participant_id: operation.participantId || null,
+            type: operation.type,
+            device_id: operation.deviceId,
+            operator_id: operation.operatorId,
+            device_timestamp: operation.deviceTimestamp,
+            server_timestamp: operation.serverTimestamp || null,
+            payload: operation.payload,
+            revision: operation.revision,
+          }))
+        ),
+      });
+
+      if (!response.ok) {
+        return { syncedCount: 0, error: `Supabase synchronisatie mislukt (HTTP ${response.status}).` };
+      }
+
+      for (const op of uploadable) {
         await db.operations.update(op.operationId, {
           syncStatus: 'SYNCED',
           serverTimestamp: new Date().toISOString(),

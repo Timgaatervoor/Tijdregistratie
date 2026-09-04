@@ -38,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { isOnline, isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
   const { isInstallable, isInstalled, install } = usePWAInstall();
+  const syncConfigured = syncService.getConfig().enabled;
   const [isSoundOn, setIsSoundOn] = useState(soundService.getSoundEnabled());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -150,7 +151,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                 <Wifi className="w-3.5 h-3.5 text-emerald-400" />
                 <span>
-                  {pendingSyncCount > 0 ? `${pendingSyncCount} in wachtrij` : 'ONLINE & SYNCED'}
+                  {pendingSyncCount > 0
+                    ? `${pendingSyncCount} in wachtrij`
+                    : syncConfigured
+                    ? 'ONLINE & SYNCED'
+                    : 'ONLINE - LOKAAL'}
                 </span>
               </>
             ) : (

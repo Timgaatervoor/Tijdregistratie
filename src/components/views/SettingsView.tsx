@@ -11,11 +11,13 @@ import {
   AlertTriangle,
   Layers,
   Database,
+  Cloud,
 } from 'lucide-react';
 import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
+import { syncService, type SyncConfig } from '../../services/syncService';
 import { RaceProfileEditor } from './RaceProfileEditor';
 import { EventSetupAndReset } from './EventSetupAndReset';
 
@@ -38,7 +40,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   participants = [],
   onRefresh,
 }) => {
-  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'event_setup'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'event_setup' | 'sync'>('general');
 
   // Race Event Settings
   const [eventName, setEventName] = useState(event?.name || 'Run-Biathlon De Haan 2026');
@@ -207,6 +209,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Database className="w-4 h-4" />
             <span>Evenement Opzet & Reset (Waves & Lopers)</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('sync')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'sync'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Cloud className="w-4 h-4" />
+            <span>Online Synchronisatie</span>
+          </button>
         </div>
       </div>
 
@@ -224,6 +239,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           categories={categories}
           onRefresh={onRefresh}
         />
+      ) : activeSection === 'sync' ? (
+        <SyncSettings eventId={event?.id || ''} />
       ) : (
         <form onSubmit={handleSaveSettings} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -454,6 +471,123 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </form>
       )}
+    </div>
+  );
+};
+
+interface SyncSettingsProps {
+  eventId: string;
+}
+
+const SyncSettings: React.FC<SyncSettingsProps> = ({ eventId }) => {
+  const [config, setConfig] = useState<SyncConfig>(() => ({
+    ...syncService.getConfig(),
+    eventId: syncService.getConfig().eventId || eventId,
+  }));
+  const [message, setMessage] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const update = (changes: Partial<SyncConfig>) => {
+    setConfig((current) => ({ ...current, ...changes }));
+    setMessage(null);
+  };
+
+  const save = () => {
+    syncService.saveConfig(config);
+    setMessage('Supabase-instellingen opgeslagen op dit toestel.');
+  };
+
+  const test = async () => {
+    setTesting(true);
+    setMessage(null);
+    const result = await syncService.testConnection(config);
+    setTesting(false);
+    setMessage(result.ok ? 'Verbinding met Supabase werkt.' : result.error || 'Verbinding mislukt.');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-5 text-xs">
+        <div>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-emerald-400" /> Gratis online synchronisatie
+          </h3>
+          <p className="text-slate-400 mt-2 leading-relaxed">
+            Gebruik een Supabase-project als centrale database. De app blijft eerst lokaal opslaan en stuurt alleen de lokale race-operaties door zodra internet beschikbaar is.
+          </p>
+        </div>
+
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            onChange={(event) => update({ enabled: event.target.checked })}
+            className="w-4 h-4 rounded text-amber-500"
+          />
+          <span className="font-bold text-white">Online synchronisatie inschakelen</span>
+        </label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="text-slate-300 font-semibold block mb-1">Supabase Project URL</label>
+            <input
+              type="url"
+              value={config.projectUrl}
+              onChange={(event) => update({ projectUrl: event.target.value })}
+              placeholder="https://jouw-project.supabase.co"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-slate-300 font-semibold block mb-1">Supabase anon public key</label>
+            <input
+              type="password"
+              value={config.anonKey}
+              onChange={(event) => update({ anonKey: event.target.value })}
+              placeholder="eyJ..."
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono"
+            />
+            <span className="text-[11px] text-slate-500 block mt-1">
+              Gebruik alleen de anon/public key, nooit de service_role key.
+            </span>
+          </div>
+
+          <div>
+            <label className="text-slate-300 font-semibold block mb-1">Event-ID</label>
+            <input
+              type="text"
+              value={config.eventId}
+              onChange={(event) => update({ eventId: event.target.value })}
+              placeholder={eventId || 'event-de-haan-2026'}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800">
+          <button
+            type="button"
+            onClick={save}
+            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition"
+          >
+            Instellingen opslaan
+          </button>
+          <button
+            type="button"
+            onClick={test}
+            disabled={testing}
+            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold border border-slate-700 transition disabled:opacity-50"
+          >
+            {testing ? 'Verbinding testen...' : 'Verbinding testen'}
+          </button>
+          {message && <span className="text-emerald-400 font-semibold">{message}</span>}
+        </div>
+      </div>
+
+      <div className="bg-amber-950/30 border border-amber-700/40 rounded-2xl p-5 text-xs text-amber-200">
+        <strong>Eenmalige Supabase-inrichting:</strong> maak in Supabase een tabel `race_operations` met de kolommen uit de projectdocumentatie. De anon key mag in deze app staan; beveilig de tabel met Row Level Security.
+      </div>
     </div>
   );
 };

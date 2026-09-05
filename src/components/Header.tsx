@@ -182,6 +182,12 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-amber-400 font-semibold">{deviceConfig?.id || 'FINISH-01'}</span>
             <span className="text-slate-500">|</span>
             <span>{deviceConfig?.role?.replace('_', ' ') || 'FINISH'}</span>
+            {deviceConfig?.operatorName && (
+              <>
+                <span className="text-slate-500">|</span>
+                <span>{deviceConfig.operatorName}</span>
+              </>
+            )}
           </div>
 
           {/* Clock Offset Warning if > 1s (Req 42) */}

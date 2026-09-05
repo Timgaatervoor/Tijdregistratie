@@ -248,6 +248,7 @@ export interface DeviceConfig {
   id: string;
   name: string;
   role: UserRole;
+  operatorName?: string;
   stationName: string;
   pin?: string;
   isLocked: boolean;

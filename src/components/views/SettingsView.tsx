@@ -56,7 +56,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Device & Operator Settings
   const [deviceId, setDeviceId] = useState(deviceConfig?.id || 'FINISH-01');
-  const [operatorName, setOperatorName] = useState('Jan Peeters');
+  const [operatorName, setOperatorName] = useState(deviceConfig?.operatorName || 'Jan Peeters');
   const [stationName, setStationName] = useState(deviceConfig?.stationName || 'Finish Hoofdpost');
   const [savedMessage, setSavedMessage] = useState(false);
 
@@ -77,6 +77,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       initialLoadRef.current = true;
     }
   }, [event]);
+
+  React.useEffect(() => {
+    if (deviceConfig) {
+      setDeviceId(deviceConfig.id);
+      setOperatorName(deviceConfig.operatorName || 'Jan Peeters');
+      setStationName(deviceConfig.stationName);
+    }
+  }, [deviceConfig]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,16 +113,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     await db.events.put(updatedEvent);
 
+    const activeDeviceId = deviceId.trim() || 'FINISH-01';
+    await db.devices.clear();
     await db.devices.put({
-      id: deviceId.trim() || 'FINISH-01',
-      name: `Tablet ${deviceId}`,
+      id: activeDeviceId,
+      name: `Tablet ${activeDeviceId}`,
       role: 'FINISH_OPERATOR',
+      operatorName: operatorName.trim() || 'Operator',
       stationName,
       isLocked: false,
       clockOffsetMs: 0,
     });
 
-    operationService.setDeviceAndOperator(deviceId, operatorName);
+    operationService.setDeviceAndOperator(activeDeviceId, operatorName.trim() || 'Operator');
 
     await operationService.logAudit(
       'SETTINGS_UPDATED',

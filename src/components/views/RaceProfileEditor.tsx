@@ -183,8 +183,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     setCategoryProfileId(category.raceProfileId || '');
   };
 
-  const handleSaveCategory = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSaveCategory = async () => {
     if (!categoryName.trim() || !categoryCode.trim()) return;
     if (categoryMaxAge !== '' && Number(categoryMaxAge) < categoryMinAge) {
       alert('De maximumleeftijd moet gelijk aan of hoger dan de minimumleeftijd zijn.');
@@ -652,7 +651,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
             </div>
           </div>
 
-          <form onSubmit={handleSaveCategory} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
             <label className="lg:col-span-2 text-slate-300 font-semibold">Naam
               <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="U8 Iedereen" required className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
             </label>
@@ -677,10 +676,10 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
               </select>
             </label>
             <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
-              <button type="submit" className="flex-1 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">Categorie opslaan</button>
+              <button type="button" onClick={handleSaveCategory} className="flex-1 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">Categorie opslaan</button>
               {categoryId !== 'new-category' && <button type="button" onClick={handleDeleteCategory} className="px-4 py-2 rounded-lg bg-red-950/60 text-red-300 border border-red-800">Verwijderen</button>}
             </div>
-          </form>
+          </div>
         </div>
 
         {/* Assigned Categories Card */}

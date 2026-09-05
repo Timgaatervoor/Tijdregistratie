@@ -21,8 +21,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 }) => {
   const [stationName, setStationName] = useState('Stand 1');
   const [simpleMode, setSimpleMode] = useState(() => localStorage.getItem('shooting_simple_mode') === 'true');
-  const [targetCount, setTargetCount] = useState(() => Number(localStorage.getItem('shooting_target_count') || 5));
-  const [pendingSimpleHits, setPendingSimpleHits] = useState<number | null>(null);
+  const targetCount = 5;
   const [bibInput, setBibInput] = useState('');
   const [roundNumber, setRoundNumber] = useState<number>(1);
   const [targets, setTargets] = useState<boolean[]>(() => Array(targetCount).fill(true)); // true = hit, false = miss
@@ -50,13 +49,6 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       }
       return next;
     });
-  };
-
-  const changeTargetCount = (count: number) => {
-    setTargetCount(count);
-    localStorage.setItem('shooting_target_count', String(count));
-    setTargets(Array(count).fill(true));
-    setPendingSimpleHits(null);
   };
 
   // Correction state
@@ -160,7 +152,6 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       // Reset form for next runner
       setBibInput('');
       setTargets(Array(targetCount).fill(true));
-      setPendingSimpleHits(null);
       setDuplicateConflict(null);
       onRefresh();
       setTimeout(() => setFeedback(null), 3500);
@@ -344,16 +335,9 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs text-slate-300 font-bold">
-              Aantal doelen
-              <select
-                value={targetCount}
-                onChange={(event) => changeTargetCount(Number(event.target.value))}
-                className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-white text-base"
-              >
-                {[3, 5, 10].map((count) => <option key={count} value={count}>{count} doelen</option>)}
-              </select>
-            </label>
+            <div className="text-xs text-slate-300 font-bold flex items-center">
+              Activiteit: <span className="ml-1 text-emerald-400">5 doelen</span>
+            </div>
             <div className="text-xs text-slate-300 font-bold">
               Ronde
               <div className="grid grid-cols-2 gap-2 mt-1">
@@ -364,29 +348,32 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {Array.from({ length: targetCount + 1 }, (_, hitCount) => targetCount - hitCount).map((hitCount) => (
+          <div className="grid grid-cols-5 gap-2 sm:gap-3">
+            {targets.map((isHit, index) => (
               <button
-                key={hitCount}
+                key={index}
                 type="button"
-                onClick={() => { setPreset(hitCount); setPendingSimpleHits(hitCount); }}
-                className={`min-h-20 rounded-2xl text-2xl font-black border active:scale-95 transition ${pendingSimpleHits === hitCount ? 'bg-emerald-500 text-slate-950 border-emerald-300' : 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700'}`}
+                onClick={() => toggleTarget(index)}
+                aria-label={`Doel ${index + 1}: ${isHit ? 'raak' : 'gemist'}`}
+                className={`aspect-square rounded-full text-xs sm:text-sm font-black border-4 active:scale-95 transition ${isHit ? 'bg-emerald-500 text-slate-950 border-emerald-300' : 'bg-red-600 text-white border-red-300'}`}
               >
-                {hitCount}/{targetCount}
-                <span className="block text-[10px] uppercase tracking-wider font-bold">
-                  {hitCount === targetCount ? 'Alles raak' : `${targetCount - hitCount} misser${targetCount - hitCount === 1 ? '' : 's'}`}
-                </span>
+                <span className="block text-lg">{index + 1}</span>
+                <span className="block text-[9px] uppercase">{isHit ? 'Raak' : 'Gemist'}</span>
               </button>
             ))}
           </div>
 
+          <p className="text-center text-sm font-bold text-slate-300">
+            {hits}/{targetCount} raak, {misses} gemist
+          </p>
+
           <button
             type="button"
             onClick={() => handleRecordShooting()}
-            disabled={isSubmitting || !bibInput.trim() || pendingSimpleHits === null}
+            disabled={isSubmitting || !bibInput.trim()}
             className="w-full min-h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg active:scale-95 transition disabled:opacity-40"
           >
-            BEVESTIG {pendingSimpleHits === null ? '' : `${pendingSimpleHits}/${targetCount}`}
+            BEVESTIG EN SLA OP
           </button>
 
           {feedback && (

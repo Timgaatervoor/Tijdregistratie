@@ -144,6 +144,7 @@ export default function App() {
             event={event}
             participants={participants}
             shootingResults={shootingResults}
+            raceProfiles={raceProfiles}
             onRefresh={refresh}
           />
         )}

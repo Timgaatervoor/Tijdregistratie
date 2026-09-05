@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
-import type { Participant, ShootingResult, RaceEvent } from '../../types';
+import type { Participant, ShootingResult, RaceEvent, RaceProfile } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
@@ -10,6 +10,7 @@ interface ShootingStationViewProps {
   event: RaceEvent | null;
   participants: Participant[];
   shootingResults: ShootingResult[];
+  raceProfiles: RaceProfile[];
   onRefresh: () => void;
 }
 
@@ -17,6 +18,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   event,
   participants,
   shootingResults,
+  raceProfiles,
   onRefresh,
 }) => {
   const [stationName, setStationName] = useState('Stand 1');
@@ -27,6 +29,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   const [targets, setTargets] = useState<boolean[]>(() => Array(targetCount).fill(true)); // true = hit, false = miss
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'warn' } | null>(null);
+  const [finishNotice, setFinishNotice] = useState(false);
 
   useEffect(() => {
     const loadDeviceIdentity = async () => {
@@ -83,6 +86,16 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   const matchedParticipant = !isNaN(parsedBib)
     ? participants.find((p) => p.bibNumber === parsedBib)
     : undefined;
+
+  const activeProfile = raceProfiles.find((profile) => profile.id === matchedParticipant?.raceProfileId);
+  const shootingLegs = activeProfile?.legs.filter((leg) => leg.type === 'SHOOT') || [];
+  const shootingRounds = shootingLegs.length > 0
+    ? shootingLegs
+    : [{ id: 'fallback-shoot-1', type: 'SHOOT' as const, name: 'Schietproef 1' }, { id: 'fallback-shoot-2', type: 'SHOOT' as const, name: 'Schietproef 2' }];
+  const completedRounds = matchedParticipant
+    ? shootingResults.filter((result) => result.bibNumber === matchedParticipant.bibNumber && !result.isCorrected)
+    : [];
+  const allShootingDone = matchedParticipant !== undefined && completedRounds.length >= shootingRounds.length;
 
   // Toggle individual target circle
   const toggleTarget = (index: number) => {
@@ -162,6 +175,10 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       setBibInput('');
       setTargets(Array(targetCount).fill(true));
       setDuplicateConflict(null);
+      const completedAfterSave = matchedParticipant
+        ? completedRounds.some((result) => result.round === roundNumber) || completedRounds.length + 1 >= shootingRounds.length
+        : false;
+      setFinishNotice(completedAfterSave);
       onRefresh();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
@@ -358,14 +375,27 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               Activiteit: <span className="ml-1 text-emerald-400">5 doelen</span>
             </div>
             <div className="text-xs text-slate-300 font-bold">
-              Ronde
+              Schietproeven
               <div className="grid grid-cols-2 gap-2 mt-1">
-                {[1, 2].map((round) => (
-                  <button key={round} type="button" onClick={() => setRoundNumber(round)} className={`py-3 rounded-xl font-bold border ${roundNumber === round ? 'bg-blue-600 text-white border-blue-400' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>{round}</button>
-                ))}
+                {shootingRounds.map((leg, index) => {
+                  const round = index + 1;
+                  const done = completedRounds.some((result) => result.round === round);
+                  return (
+                    <button key={leg.id} type="button" onClick={() => setRoundNumber(round)} className={`py-2 rounded-xl font-bold border text-left px-2 ${roundNumber === round ? 'bg-blue-600 text-white border-blue-400' : done ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                      <span className="block">{done ? '✓ ' : ''}Proef {round}</span>
+                      <span className="block text-[10px] font-normal truncate">{leg.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
+
+          {matchedParticipant && (
+            <div className={`rounded-xl border p-3 text-center text-sm font-black ${allShootingDone ? 'bg-emerald-950/70 border-emerald-400 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
+              {allShootingDone ? 'Alle schietproeven gedaan - ga naar FINISH' : `${completedRounds.length}/${shootingRounds.length} schietproeven afgewerkt`}
+            </div>
+          )}
 
           <div className="grid grid-cols-5 gap-2 sm:gap-3">
             {targets.map((isHit, index) => (
@@ -398,6 +428,11 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           {feedback && (
             <div className={`p-3 rounded-xl text-sm font-bold text-center ${feedback.type === 'success' ? 'bg-emerald-950/60 text-emerald-300' : 'bg-amber-950/60 text-amber-300'}`}>
               {feedback.text}
+            </div>
+          )}
+          {finishNotice && (
+            <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-lg font-black text-slate-950">
+              Alle schietproeven gedaan - ga naar FINISH
             </div>
           )}
           </div>

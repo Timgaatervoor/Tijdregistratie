@@ -62,6 +62,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Synchronize on initial mount without overwriting during active typing
   const initialLoadRef = React.useRef(false);
+  const deviceConfigLoadRef = React.useRef(false);
   React.useEffect(() => {
     if (!initialLoadRef.current && event) {
       setEventName(event.name);
@@ -79,10 +80,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }, [event]);
 
   React.useEffect(() => {
-    if (deviceConfig) {
+    if (deviceConfig && !deviceConfigLoadRef.current) {
       setDeviceId(deviceConfig.id);
       setOperatorName(deviceConfig.operatorName || 'Jan Peeters');
       setStationName(deviceConfig.stationName);
+      deviceConfigLoadRef.current = true;
     }
   }, [deviceConfig]);
 

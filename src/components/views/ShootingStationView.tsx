@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert } from 'lucide-react';
+import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
 import type { Participant, ShootingResult, RaceEvent } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
@@ -37,6 +37,15 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     };
     loadDeviceIdentity();
   }, []);
+
+  useEffect(() => {
+    if (!simpleMode) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [simpleMode]);
 
   const toggleSimpleMode = () => {
     setSimpleMode((current) => {
@@ -288,23 +297,33 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           <button
             type="button"
             onClick={toggleSimpleMode}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition ${
-              simpleMode
-                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-            }`}
+            title={simpleMode ? 'Terug naar gewone schietstand' : 'Open volledige juryweergave'}
+            aria-label={simpleMode ? 'Terug naar gewone modus' : 'Open volledige modus'}
+            className="w-11 h-11 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center transition"
           >
-            {simpleMode ? 'Eenvoudige modus aan' : 'Eenvoudige modus'}
+            {simpleMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
       {simpleMode && (
-        <div className="bg-slate-950 border border-emerald-500/40 rounded-2xl p-4 sm:p-6 shadow-xl space-y-5 max-w-xl mx-auto min-h-[calc(100vh-10rem)]">
-          <div className="text-center">
+        <div className="fixed inset-0 z-50 w-screen h-[100dvh] overflow-hidden bg-slate-950 p-3 sm:p-5">
+          <div className="mx-auto flex h-full w-full max-w-xl flex-col gap-2 sm:gap-3">
+          <div className="flex items-center justify-between">
+            <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Jury-invoer</span>
             <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Snelle schietproef</h3>
             <p className="text-xs text-slate-400 mt-1">Kies het nummer, het resultaat en bevestig.</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleSimpleMode}
+              title="Terug naar gewone modus"
+              aria-label="Terug naar gewone modus"
+              className="w-11 h-11 shrink-0 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center"
+            >
+              <Minimize2 className="w-5 h-5" />
+            </button>
           </div>
 
           <div className="space-y-3">
@@ -323,14 +342,14 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                   key={number}
                   type="button"
                   onClick={() => setBibInput((current) => `${current}${number}`.slice(0, 4))}
-                  className="min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700"
+                  className="min-h-11 sm:min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700"
                 >
                   {number}
                 </button>
               ))}
-              <button type="button" onClick={() => setBibInput('')} className="min-h-14 rounded-xl bg-red-950/60 border border-red-800 text-red-300 font-bold active:scale-95">Wis</button>
-              <button type="button" onClick={() => setBibInput((current) => `${current}0`.slice(0, 4))} className="min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700">0</button>
-              <button type="button" onClick={() => setBibInput((current) => current.slice(0, -1))} className="min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-xl font-black text-amber-300 active:scale-95">⌫</button>
+              <button type="button" onClick={() => setBibInput('')} className="min-h-11 sm:min-h-14 rounded-xl bg-red-950/60 border border-red-800 text-red-300 font-bold active:scale-95">Wis</button>
+              <button type="button" onClick={() => setBibInput((current) => `${current}0`.slice(0, 4))} className="min-h-11 sm:min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700">0</button>
+              <button type="button" onClick={() => setBibInput((current) => current.slice(0, -1))} className="min-h-11 sm:min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-xl font-black text-amber-300 active:scale-95">⌫</button>
             </div>
           </div>
 
@@ -381,6 +400,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               {feedback.text}
             </div>
           )}
+          </div>
         </div>
       )}
 

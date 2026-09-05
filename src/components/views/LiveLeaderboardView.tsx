@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Trophy,
   Search,
@@ -37,6 +37,27 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'STARTED' | 'FINISHED'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isKioskMode, setIsKioskMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsKioskMode(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleKioskMode = async () => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen?.();
+      return;
+    }
+
+    try {
+      await document.documentElement.requestFullscreen?.();
+    } catch {
+      setIsKioskMode(true);
+    }
+  };
 
   // Filter logic
   const filteredResults = results.filter((r) => {
@@ -114,7 +135,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             <Download className="w-4 h-4" /> CSV Export
           </button>
           <button
-            onClick={() => setIsKioskMode(!isKioskMode)}
+            onClick={toggleKioskMode}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
               isKioskMode
                 ? 'bg-amber-500 text-slate-950'
@@ -128,6 +149,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
       </div>
 
       {/* Filter Toolbar */}
+      {!isKioskMode && (
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex flex-wrap items-center gap-3">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
@@ -180,6 +202,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           <option value="F">Dames</option>
         </select>
       </div>
+      )}
 
       {/* Podium Cards if finishes exist */}
       {finishedPodium.length > 0 && (

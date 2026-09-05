@@ -239,6 +239,7 @@ export default function App() {
         results={results}
         categories={categories}
         waves={waves}
+        profiles={raceProfiles}
         event={event}
       />
 

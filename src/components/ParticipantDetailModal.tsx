@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Crosshair, Flag, Clock, Edit3, ShieldAlert, CheckCircle2, UserCog } from 'lucide-react';
-import type { RaceResult, AuditLog, ParticipantStatus, Participant, Category, Wave } from '../types';
+import type { RaceResult, AuditLog, ParticipantStatus, Participant, Category, Wave, RaceProfile } from '../types';
 import { db } from '../db/dexieDb';
 import { operationService, generateUUID } from '../services/operationService';
 import { formatLocalTime } from '../services/timingEngine';
@@ -13,6 +13,7 @@ interface ParticipantDetailModalProps {
   auditLogs?: AuditLog[];
   categories?: Category[];
   waves?: Wave[];
+  profiles?: RaceProfile[];
   timingRecords?: any[];
   shootingResults?: any[];
   onUpdated: () => void;
@@ -26,6 +27,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   auditLogs = [],
   categories = [],
   waves = [],
+  profiles = [],
   onUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'edit'>('overview');
@@ -44,6 +46,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [editBib, setEditBib] = useState('');
   const [editGender, setEditGender] = useState<'M' | 'F' | 'X'>('M');
   const [editCategoryId, setEditCategoryId] = useState('');
+  const [editProfileId, setEditProfileId] = useState('');
   const [editWaveId, setEditWaveId] = useState('');
   const [editClub, setEditClub] = useState('');
   const [editTeam, setEditTeam] = useState('');
@@ -81,6 +84,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setEditBib(p.bibNumber ? String(p.bibNumber) : '');
     setEditGender(p.gender || 'M');
     setEditCategoryId(p.categoryId || '');
+    setEditProfileId(p.raceProfileId || categories.find((category) => category.id === p.categoryId)?.raceProfileId || '');
     setEditWaveId(p.waveId || '');
     setEditClub(p.club || '');
     setEditTeam(p.team || '');
@@ -225,6 +229,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         bibNumber: parsedBib,
         gender: editGender,
         categoryId: editCategoryId,
+        raceProfileId: editProfileId || categories.find((category) => category.id === editCategoryId)?.raceProfileId || '',
         waveId: editWaveId || undefined,
         club: editClub.trim() || undefined,
         team: editTeam.trim() || undefined,
@@ -681,6 +686,27 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   placeholder="bv. Kids Atletiek De Haan"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">
+                  Wedstrijdprofiel:
+                </label>
+                <select
+                  value={editProfileId}
+                  onChange={(e) => setEditProfileId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
+                >
+                  <option value="">Gebruik profiel van categorie</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-500 block mt-1">
+                  Dit profiel bepaalt de loop- en schietproeven voor deze deelnemer.
+                </span>
               </div>
 
               <div>

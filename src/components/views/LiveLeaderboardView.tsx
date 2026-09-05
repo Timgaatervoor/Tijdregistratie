@@ -10,6 +10,8 @@ import {
   Share2,
   Crosshair,
   Flag,
+  Settings,
+  Clock,
 } from 'lucide-react';
 import type { RaceResult, Category, Wave, RaceEvent } from '../../types';
 import { downloadCsvFile } from '../../services/backupService';
@@ -22,6 +24,22 @@ interface LiveLeaderboardViewProps {
   mode?: 'live' | 'results';
   onSelectParticipant: (result: RaceResult) => void;
 }
+
+interface TvKioskConfig {
+  showPodium: boolean;
+  showClock: boolean;
+  rotateCategories: boolean;
+  rotationSeconds: number;
+  textScale: 'normal' | 'large' | 'extra-large';
+}
+
+const defaultTvKioskConfig: TvKioskConfig = {
+  showPodium: true,
+  showClock: true,
+  rotateCategories: false,
+  rotationSeconds: 15,
+  textScale: 'large',
+};
 
 export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   results,
@@ -37,6 +55,19 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'STARTED' | 'FINISHED'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isKioskMode, setIsKioskMode] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [showKioskSettings, setShowKioskSettings] = useState(false);
+  const [tvConfig, setTvConfig] = useState<TvKioskConfig>(() => {
+    try {
+      return { ...defaultTvKioskConfig, ...JSON.parse(localStorage.getItem('biathlon_tv_kiosk_config') || '{}') };
+    } catch {
+      return defaultTvKioskConfig;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('biathlon_tv_kiosk_config', JSON.stringify(tvConfig));
+  }, [tvConfig]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -58,6 +89,23 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
       setIsKioskMode(true);
     }
   };
+
+  useEffect(() => {
+    if (!isKioskMode || !tvConfig.rotateCategories || categories.length === 0) return;
+    const rotation = window.setInterval(() => {
+      setSelectedCategory((current) => {
+        const currentIndex = categories.findIndex((category) => category.id === current);
+        return categories[(currentIndex + 1) % (categories.length + 1)]?.id || 'ALL';
+      });
+    }, tvConfig.rotationSeconds * 1000);
+    return () => window.clearInterval(rotation);
+  }, [categories, isKioskMode, tvConfig.rotateCategories, tvConfig.rotationSeconds]);
+
+  useEffect(() => {
+    if (!isKioskMode || !tvConfig.showClock) return;
+    const clock = window.setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => window.clearInterval(clock);
+  }, [isKioskMode, tvConfig.showClock]);
 
   // Filter logic
   const filteredResults = results.filter((r) => {
@@ -97,8 +145,15 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     downloadCsvFile(csv, `uitslagen_${Date.now()}.csv`);
   };
 
+  const textScaleClass =
+    isKioskMode && tvConfig.textScale === 'extra-large'
+      ? 'text-[15px]'
+      : isKioskMode && tvConfig.textScale === 'large'
+      ? 'text-[13px]'
+      : 'text-xs';
+
   return (
-    <div className={`space-y-6 ${isKioskMode ? 'p-6 bg-slate-950 min-h-screen' : ''}`}>
+    <div className={`space-y-6 ${textScaleClass} ${isKioskMode ? 'p-6 bg-slate-950 min-h-screen' : ''}`}>
       {/* Top Banner & TV Kiosk Mode Toggle */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -145,8 +200,59 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             <Tv className="w-4 h-4" />
             <span>{isKioskMode ? 'Kiosk Mode Sluiten' : 'TV Kiosk Modus'}</span>
           </button>
+          {isKioskMode && (
+            <button
+              type="button"
+              onClick={() => setShowKioskSettings((current) => !current)}
+              title="TV-weergave instellen"
+              className="p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {isKioskMode && showKioskSettings && (
+        <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-4 flex flex-wrap items-center gap-4 text-xs">
+          <label className="flex items-center gap-2 text-slate-200">
+            <input type="checkbox" checked={tvConfig.showPodium} onChange={(event) => setTvConfig({ ...tvConfig, showPodium: event.target.checked })} />
+            Podium tonen
+          </label>
+          <label className="flex items-center gap-2 text-slate-200">
+            <input type="checkbox" checked={tvConfig.showClock} onChange={(event) => setTvConfig({ ...tvConfig, showClock: event.target.checked })} />
+            Klok tonen
+          </label>
+          <label className="flex items-center gap-2 text-slate-200">
+            <input type="checkbox" checked={tvConfig.rotateCategories} onChange={(event) => setTvConfig({ ...tvConfig, rotateCategories: event.target.checked })} />
+            Categorieën roteren
+          </label>
+          <label className="flex items-center gap-2 text-slate-200">
+            Interval
+            <select value={tvConfig.rotationSeconds} onChange={(event) => setTvConfig({ ...tvConfig, rotationSeconds: Number(event.target.value) })} className="bg-slate-800 border border-slate-700 rounded px-2 py-1">
+              <option value={10}>10 sec.</option>
+              <option value={15}>15 sec.</option>
+              <option value={30}>30 sec.</option>
+              <option value={60}>60 sec.</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-slate-200">
+            Tekst
+            <select value={tvConfig.textScale} onChange={(event) => setTvConfig({ ...tvConfig, textScale: event.target.value as TvKioskConfig['textScale'] })} className="bg-slate-800 border border-slate-700 rounded px-2 py-1">
+              <option value="normal">Normaal</option>
+              <option value="large">Groot</option>
+              <option value="extra-large">Extra groot</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {isKioskMode && tvConfig.showClock && (
+        <div className="flex items-center justify-end gap-2 text-amber-300 font-mono font-bold text-lg">
+          <Clock className="w-5 h-5" />
+          {currentTime.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       {!isKioskMode && (
@@ -205,7 +311,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
       )}
 
       {/* Podium Cards if finishes exist */}
-      {finishedPodium.length > 0 && (
+      {tvConfig.showPodium && finishedPodium.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Silver #2 */}
           {finishedPodium[1] && (

@@ -38,6 +38,7 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
   const [validationResult, setValidationResult] = useState<RecoveryValidation | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState(false);
+  const [restoreIdentityWarning, setRestoreIdentityWarning] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,6 +84,7 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
     try {
       await restoreSnapshot(validationResult.snapshot);
       setRestoreSuccess(true);
+      setRestoreIdentityWarning(true);
       setValidationResult(null);
       onRefresh();
     } catch (err: any) {
@@ -327,9 +329,31 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
         )}
 
         {restoreSuccess && (
-          <div className="p-4 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 font-semibold">
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Database is succesvol hersteld vanuit het back-upbestand!</span>
+          <div className="space-y-3">
+            <div className="p-4 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 font-semibold">
+              <CheckCircle2 className="w-5 h-5" />
+              <span>Database is succesvol hersteld vanuit het back-upbestand!</span>
+            </div>
+            {restoreIdentityWarning && (
+              <div className="p-4 rounded-xl bg-amber-950/50 border border-amber-500/50 text-amber-200 text-xs space-y-2">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <AlertTriangle className="w-5 h-5" />
+                  <span>Controleer de identiteit van deze pc</span>
+                </div>
+                <p>
+                  De backup bevatte ook de toestelinstellingen van de oorspronkelijke pc. Ga nu naar
+                  <strong> Instellingen &gt; Algemeen & Tijd</strong> en pas de <strong>Device ID</strong>,
+                  gebruikersnaam en stationnaam aan voor deze pc. Gebruik op elke pc een unieke Device ID.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setRestoreIdentityWarning(false)}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold"
+                >
+                  Melding gelezen
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

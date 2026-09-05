@@ -593,6 +593,9 @@ with check (true);`}</pre>
           />
           <span className="font-bold text-white">Online synchronisatie inschakelen</span>
         </label>
+        <p className="-mt-3 ml-6 text-[11px] text-amber-300">
+          Opmerking: synchronisatie werkt pas nadat deze optie is aangevinkt en je op "Instellingen opslaan" hebt geklikt.
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">

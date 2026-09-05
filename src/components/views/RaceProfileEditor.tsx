@@ -168,7 +168,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     setCategoryName('');
     setCategoryCode('');
     setCategoryGender('ALL');
-    setCategoryMinAge(6);
+    setCategoryMinAge(1);
     setCategoryMaxAge('');
     setCategoryProfileId(profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id || '');
   };
@@ -178,7 +178,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     setCategoryName(category.name);
     setCategoryCode(category.code);
     setCategoryGender(category.gender);
-    setCategoryMinAge(category.minAge ?? 6);
+    setCategoryMinAge(category.minAge ?? 1);
     setCategoryMaxAge(category.maxAge ?? '');
     setCategoryProfileId(category.raceProfileId || '');
   };
@@ -191,14 +191,19 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     }
 
     const id = categoryId === 'new-category' ? `category-${Date.now()}` : categoryId;
-    await db.categories.put({
-      id,
-      name: categoryName.trim(),
-      code: categoryCode.trim().toUpperCase(),
-      gender: categoryGender,
-      minAge: Math.max(1, categoryMinAge),
-      maxAge: categoryMaxAge === '' ? undefined : Number(categoryMaxAge),
-      raceProfileId: categoryProfileId,
+    await db.transaction('rw', db.categories, db.participants, async () => {
+      await db.categories.put({
+        id,
+        name: categoryName.trim(),
+        code: categoryCode.trim().toUpperCase(),
+        gender: categoryGender,
+        minAge: Math.max(1, categoryMinAge),
+        maxAge: categoryMaxAge === '' ? undefined : Number(categoryMaxAge),
+        raceProfileId: categoryProfileId,
+      });
+      if (categoryProfileId) {
+        await db.participants.where('categoryId').equals(id).modify({ raceProfileId: categoryProfileId });
+      }
     });
     await operationService.logAudit('CATEGORY_UPDATED', `Categorie "${categoryName.trim()}" opgeslagen.`);
     soundService.playSuccess();
@@ -236,17 +241,18 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     // Save profile to Dexie
     await db.raceProfiles.put(updatedProfile);
 
-    // Update categories that belong to this profile
-    for (const cat of categories) {
-      if (assignedCategoryIds.includes(cat.id)) {
-        if (cat.raceProfileId !== profileId) {
+    const currentCategories = await db.categories.toArray();
+    await db.transaction('rw', db.categories, db.participants, async () => {
+      for (const cat of currentCategories) {
+        if (assignedCategoryIds.includes(cat.id)) {
           await db.categories.update(cat.id, { raceProfileId: profileId });
+          await db.participants.where('categoryId').equals(cat.id).modify({ raceProfileId: profileId });
+        } else if (cat.raceProfileId === profileId) {
+          await db.categories.update(cat.id, { raceProfileId: undefined });
+          await db.participants.where('categoryId').equals(cat.id).modify({ raceProfileId: '' });
         }
-      } else if (cat.raceProfileId === profileId) {
-        // Unlinked from this profile
-        await db.categories.update(cat.id, { raceProfileId: undefined });
       }
-    }
+    });
 
     await operationService.logAudit(
       'SETTINGS_UPDATED',

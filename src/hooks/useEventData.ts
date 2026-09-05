@@ -103,10 +103,14 @@ export function useEventData() {
 
     // Poll periodically to catch internal Dexie changes
     const interval = setInterval(refresh, 2000);
+    const syncInterval = setInterval(() => {
+      syncService.syncNow().then(() => refresh());
+    }, 5000);
 
     return () => {
       unsubSync();
       clearInterval(interval);
+      clearInterval(syncInterval);
     };
   }, [refresh]);
 

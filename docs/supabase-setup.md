@@ -62,6 +62,14 @@ Klik eerst op **Verbinding testen** en daarna op **Instellingen opslaan**.
 
 De racegegevens blijven lokaal in IndexedDB. De knop voor synchroniseren uploadt de lokale `RaceOperation`-records naar Supabase. De unieke `operation_id` voorkomt dubbele records.
 
+## Meerdere pc's gebruiken
+
+Open op elke pc dezelfde online app en vul exact dezelfde Supabase Project URL, publishable/anon key en Event-ID in. Geef elke pc in **Instellingen > Algemeen & Tijd** een unieke Device ID, bijvoorbeeld `START-01`, `SHOOT-01` en `FINISH-01`.
+
+De app synchroniseert daarna automatisch ongeveer elke vijf seconden. Lokale acties worden geüpload en acties van andere pc's worden gedownload naar de lokale IndexedDB. De andere pc's moeten dus dezelfde deelnemers, categorieën en waves hebben voordat de wedstrijd start; timing- en schietacties worden daarna gedeeld via `race_operations`.
+
+Laat de browserpagina open tijdens de wedstrijd. Bij tijdelijk netwerkverlies blijft elke pc lokaal werken en wordt de wachtrij later opnieuw verzonden.
+
 ## Gratis alternatief
 
 Google Drive blijft geschikt voor handmatige JSON-back-ups, maar niet als realtime database. Gebruik Supabase voor synchronisatie en Drive eventueel voor back-ups.

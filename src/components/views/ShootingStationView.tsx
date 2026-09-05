@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert } from 'lucide-react';
 import type { Participant, ShootingResult, RaceEvent } from '../../types';
 import { db } from '../../db/dexieDb';
@@ -20,11 +20,30 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   onRefresh,
 }) => {
   const [stationName, setStationName] = useState('Stand 1');
+  const [simpleMode, setSimpleMode] = useState(() => localStorage.getItem('shooting_simple_mode') === 'true');
   const [bibInput, setBibInput] = useState('');
   const [roundNumber, setRoundNumber] = useState<number>(1);
   const [targets, setTargets] = useState<boolean[]>([true, true, true, true, true]); // true = hit, false = miss
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'warn' } | null>(null);
+
+  useEffect(() => {
+    const loadDeviceIdentity = async () => {
+      const device = await db.devices.toCollection().first();
+      if (device) {
+        operationService.setDeviceAndOperator(device.id, device.operatorName || 'Operator');
+      }
+    };
+    loadDeviceIdentity();
+  }, []);
+
+  const toggleSimpleMode = () => {
+    setSimpleMode((current) => {
+      const next = !current;
+      localStorage.setItem('shooting_simple_mode', String(next));
+      return next;
+    });
+  };
 
   // Correction state
   const [editingResult, setEditingResult] = useState<ShootingResult | null>(null);
@@ -260,11 +279,101 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={toggleSimpleMode}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition ${
+              simpleMode
+                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+            }`}
+          >
+            {simpleMode ? 'Eenvoudige modus aan' : 'Eenvoudige modus'}
+          </button>
         </div>
       </div>
 
+      {simpleMode && (
+        <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-4 sm:p-6 shadow-xl space-y-5 max-w-2xl mx-auto">
+          <div className="text-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Jury-invoer</span>
+            <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Snelle schietproef</h3>
+            <p className="text-xs text-slate-400 mt-1">Vul het bibnummer in en tik het resultaat aan.</p>
+          </div>
+
+          <form onSubmit={handleRecordShooting} className="space-y-4">
+            <input
+              type="number"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={bibInput}
+              onChange={(e) => setBibInput(e.target.value)}
+              placeholder="Startnummer"
+              autoFocus
+              className="w-full bg-slate-850 border border-slate-700 rounded-2xl px-4 py-4 text-center text-4xl font-mono font-black text-white focus:outline-none focus:border-emerald-400"
+            />
+            {matchedParticipant && (
+              <p className="text-center text-sm text-emerald-400 font-bold">
+                {matchedParticipant.firstName} {matchedParticipant.lastName}
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {[1, 2].map((round) => (
+                <button
+                  key={round}
+                  type="button"
+                  onClick={() => setRoundNumber(round)}
+                  className={`py-3 rounded-xl font-bold border ${
+                    roundNumber === round
+                      ? 'bg-blue-600 text-white border-blue-400'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  Ronde {round}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[5, 4, 3, 2, 1, 0].map((hitCount) => (
+                <button
+                  key={hitCount}
+                  type="button"
+                  onClick={() => setPreset(hitCount)}
+                  className={`min-h-20 rounded-2xl text-2xl font-black border active:scale-95 transition ${
+                    hits === hitCount
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                      : 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  {hitCount}/5
+                  <span className="block text-[10px] uppercase tracking-wider font-bold">
+                    {hitCount === 5 ? 'Alles raak' : `${5 - hitCount} misser${5 - hitCount === 1 ? '' : 's'}`}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !bibInput.trim()}
+              className="w-full min-h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg active:scale-95 transition disabled:opacity-40"
+            >
+              OPSLAAN {hits}/5
+            </button>
+          </form>
+
+          {feedback && (
+            <div className={`p-3 rounded-xl text-sm font-bold text-center ${feedback.type === 'success' ? 'bg-emerald-950/60 text-emerald-300' : 'bg-amber-950/60 text-amber-300'}`}>
+              {feedback.text}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Touch Input Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${simpleMode ? 'hidden' : ''}`}>
         {/* Left: Interactive Target Board */}
         <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
           <form onSubmit={handleRecordShooting} className="space-y-6">

@@ -35,6 +35,7 @@ interface ParticipantsViewProps {
   participants: Participant[];
   categories: Category[];
   waves: Wave[];
+  profiles: RaceProfile[];
   onRefresh: () => void;
   onSelectParticipant: (participant: Participant) => void;
 }
@@ -43,6 +44,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   participants,
   categories,
   waves,
+  profiles,
   onRefresh,
   onSelectParticipant,
 }) => {
@@ -56,6 +58,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   const [newLastName, setNewLastName] = useState('');
   const [newBib, setNewBib] = useState('');
   const [newCatId, setNewCatId] = useState(categories[0]?.id || '');
+  const [newProfileId, setNewProfileId] = useState(categories[0]?.raceProfileId || profiles[0]?.id || '');
   const [newWaveId, setNewWaveId] = useState(waves[0]?.id || '');
   const [newClub, setNewClub] = useState('');
   const [newGender, setNewGender] = useState<'M' | 'F' | 'X'>('M');
@@ -100,6 +103,11 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
     const bibNumber = !isNaN(parsedBib) && parsedBib > 0 ? parsedBib : undefined;
 
     const selectedCat = categoryMap.get(newCatId);
+    const selectedProfileId = newProfileId || selectedCat?.raceProfileId || '';
+    if (!selectedProfileId) {
+      alert('Kies eerst een wedstrijdprofiel voor deze deelnemer.');
+      return;
+    }
     const now = new Date().toISOString();
 
     const newP: Participant = {
@@ -109,7 +117,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       gender: newGender,
       bibNumber,
       categoryId: newCatId,
-      raceProfileId: selectedCat?.raceProfileId || '',
+      raceProfileId: selectedProfileId,
       waveId: newWaveId || undefined,
       club: newClub.trim() || undefined,
       status: 'READY',
@@ -130,6 +138,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
     setNewLastName('');
     setNewBib('');
     setNewClub('');
+    setNewProfileId(profiles[0]?.id || '');
     onRefresh();
   };
 
@@ -331,6 +340,10 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       setNewCatId(categories[0].id);
     }
   }, [categories, newCatId]);
+
+  useEffect(() => {
+    if (!newProfileId && profiles.length > 0) setNewProfileId(profiles[0].id);
+  }, [profiles, newProfileId]);
 
   // Execute import
   const handleConfirmImport = async () => {
@@ -743,7 +756,12 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                 <label className="text-slate-400 block mb-1">Categorie:</label>
                 <select
                   value={newCatId}
-                  onChange={(e) => setNewCatId(e.target.value)}
+                  onChange={(e) => {
+                    const categoryId = e.target.value;
+                    setNewCatId(categoryId);
+                    const categoryProfileId = categoryMap.get(categoryId)?.raceProfileId;
+                    if (categoryProfileId) setNewProfileId(categoryProfileId);
+                  }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
                 >
                   {categories.map((c) => (
@@ -752,6 +770,27 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Wedstrijdprofiel *:</label>
+                <select
+                  required
+                  value={newProfileId}
+                  onChange={(e) => setNewProfileId(e.target.value)}
+                  className="w-full bg-slate-800 border border-emerald-600/60 rounded-lg px-3 py-2 text-white"
+                >
+                  <option value="">Kies een wedstrijdprofiel...</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>{profile.name}</option>
+                  ))}
+                </select>
+                {profiles.find((profile) => profile.id === newProfileId) && (
+                  <span className="text-[10px] text-emerald-400 block mt-1">
+                    {profiles.find((profile) => profile.id === newProfileId)?.legs.filter((leg) => leg.type === 'RUN').map((leg) => `${leg.distanceMeters || 0}m`).join(' + ') || 'Geen looponderdeel'}{' '}
+                    • {profiles.find((profile) => profile.id === newProfileId)?.legs.filter((leg) => leg.type === 'SHOOT').length || 0} schietproeven
+                  </span>
+                )}
               </div>
 
               <div>

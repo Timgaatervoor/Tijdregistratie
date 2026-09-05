@@ -174,6 +174,7 @@ export default function App() {
             participants={participants}
             categories={categories}
             waves={waves}
+            profiles={raceProfiles}
             onRefresh={refresh}
             onSelectParticipant={setSelectedParticipant}
           />

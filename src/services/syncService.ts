@@ -292,7 +292,11 @@ class SyncService {
       });
 
       if (!response.ok) {
-        return { syncedCount: 0, error: `Supabase synchronisatie mislukt (HTTP ${response.status}).` };
+        const detail = (await response.text()).slice(0, 240);
+        return {
+          syncedCount: 0,
+          error: `Supabase synchronisatie mislukt (HTTP ${response.status}): ${detail}`,
+        };
       }
 
       for (const op of uploadable) {

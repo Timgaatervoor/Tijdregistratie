@@ -220,6 +220,14 @@ export interface EventSnapshot {
     categories: Category[];
     operations: RaceOperation[];
     conflicts: RaceConflict[];
+    auditLogs?: AuditLog[];
+    devices?: DeviceConfig[];
+    syncConfig?: {
+      enabled: boolean;
+      projectUrl: string;
+      anonKey: string;
+      eventId: string;
+    };
   };
 }
 

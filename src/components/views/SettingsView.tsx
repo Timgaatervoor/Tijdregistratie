@@ -562,7 +562,12 @@ with check (true);
 
 create policy "race operations read"
 on public.race_operations for select to anon
-using (true);`}</pre>
+using (true);
+
+create policy "race operations update"
+on public.race_operations for update to anon
+using (true)
+with check (true);`}</pre>
           <p className="mt-3 text-amber-200">
             Gebruik voor de app alleen de publieke <strong>publishable/anon key</strong>. Zet nooit de <strong>secret/service_role key</strong> in dit formulier of in GitHub.
           </p>

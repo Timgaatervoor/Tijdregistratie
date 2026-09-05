@@ -1,5 +1,6 @@
 import { db } from '../db/dexieDb';
 import type { EventSnapshot, RaceEvent } from '../types';
+import { syncService } from './syncService';
 
 export async function calculateSHA256(text: string): Promise<string> {
   if (typeof crypto !== 'undefined' && crypto.subtle) {
@@ -29,6 +30,8 @@ export async function createFullSnapshot(event: RaceEvent): Promise<EventSnapsho
     categories,
     operations,
     conflicts,
+    auditLogs,
+    devices,
   ] = await Promise.all([
     db.participants.toArray(),
     db.timingRecords.toArray(),
@@ -38,6 +41,8 @@ export async function createFullSnapshot(event: RaceEvent): Promise<EventSnapsho
     db.categories.toArray(),
     db.operations.toArray(),
     db.conflicts.toArray(),
+    db.auditLogs.toArray(),
+    db.devices.toArray(),
   ]);
 
   const rawData = {
@@ -50,6 +55,9 @@ export async function createFullSnapshot(event: RaceEvent): Promise<EventSnapsho
     categories,
     operations,
     conflicts,
+    auditLogs,
+    devices,
+    syncConfig: syncService.getConfig(),
   };
 
   const jsonString = JSON.stringify(rawData);
@@ -193,6 +201,7 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       db.operations,
       db.conflicts,
       db.auditLogs,
+      db.devices,
     ],
     async () => {
       // Clear existing
@@ -206,6 +215,8 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
         db.categories.clear(),
         db.operations.clear(),
         db.conflicts.clear(),
+        db.devices.clear(),
+        db.auditLogs.clear(),
       ]);
 
       // Bulk restore
@@ -218,6 +229,12 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       if (data.categories?.length) await db.categories.bulkPut(data.categories);
       if (data.operations?.length) await db.operations.bulkPut(data.operations);
       if (data.conflicts?.length) await db.conflicts.bulkPut(data.conflicts);
+      if (data.auditLogs?.length) await db.auditLogs.bulkPut(data.auditLogs);
+      if (data.devices?.length) await db.devices.bulkPut(data.devices);
+
+      if (data.syncConfig) {
+        syncService.saveConfig(data.syncConfig);
+      }
 
       await db.auditLogs.add({
         id: `audit_${Date.now()}`,

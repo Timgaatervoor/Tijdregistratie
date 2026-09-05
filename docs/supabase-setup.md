@@ -45,6 +45,12 @@ create policy "race operations read for anon"
   on public.race_operations for select
   to anon
   using (true);
+
+create policy "race operations update for anon"
+  on public.race_operations for update
+  to anon
+  using (true)
+  with check (true);
 ```
 
 Voor productie moet dit worden beperkt met Supabase Auth en een event-/organisatiecontrole. Publiceren met alleen de anon key zonder RLS-beperkingen maakt de data openbaar wijzigbaar.

@@ -196,7 +196,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
       name: categoryName.trim(),
       code: categoryCode.trim().toUpperCase(),
       gender: categoryGender,
-      minAge: Math.max(6, categoryMinAge),
+      minAge: Math.max(1, categoryMinAge),
       maxAge: categoryMaxAge === '' ? undefined : Number(categoryMaxAge),
       raceProfileId: categoryProfileId,
     });
@@ -631,7 +631,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
             <div>
               <h4 className="text-sm font-bold text-white uppercase tracking-wider">Leeftijdscategorieën beheren</h4>
               <p className="text-slate-400 mt-1">
-                Maak zelf reeksen aan. Deelnemers vanaf 6 jaar zijn toegestaan; een maximumleeftijd is optioneel.
+                Maak zelf reeksen aan. Deelnemers vanaf 1 jaar zijn toegestaan; een maximumleeftijd is optioneel.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -664,10 +664,10 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
               </select>
             </label>
             <label className="text-slate-300 font-semibold">Min. leeftijd
-              <input type="number" min="6" value={categoryMinAge} onChange={(event) => setCategoryMinAge(Math.max(6, Number(event.target.value)))} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+              <input type="number" min="1" value={categoryMinAge} onChange={(event) => setCategoryMinAge(Math.max(1, Number(event.target.value)))} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
             </label>
             <label className="text-slate-300 font-semibold">Max. leeftijd
-              <input type="number" min="6" value={categoryMaxAge} onChange={(event) => setCategoryMaxAge(event.target.value === '' ? '' : Number(event.target.value))} placeholder="Geen limiet" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+              <input type="number" min="1" value={categoryMaxAge} onChange={(event) => setCategoryMaxAge(event.target.value === '' ? '' : Number(event.target.value))} placeholder="Geen limiet" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
             </label>
             <label className="sm:col-span-2 lg:col-span-3 text-slate-300 font-semibold">Wedstrijdprofiel
               <select value={categoryProfileId} onChange={(event) => setCategoryProfileId(event.target.value)} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">

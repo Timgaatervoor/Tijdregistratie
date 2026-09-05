@@ -41,6 +41,13 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
   const [legs, setLegs] = useState<RaceLegConfig[]>([]);
   const [assignedCategoryIds, setAssignedCategoryIds] = useState<string[]>([]);
   const [savedMessage, setSavedMessage] = useState<boolean>(false);
+  const [categoryId, setCategoryId] = useState('new-category');
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryCode, setCategoryCode] = useState('');
+  const [categoryGender, setCategoryGender] = useState<'M' | 'F' | 'ALL'>('ALL');
+  const [categoryMinAge, setCategoryMinAge] = useState(6);
+  const [categoryMaxAge, setCategoryMaxAge] = useState<number | ''>('');
+  const [categoryProfileId, setCategoryProfileId] = useState('');
 
   const loadProfileIntoForm = (prof: RaceProfile | undefined) => {
     if (prof) {
@@ -154,6 +161,61 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     } else {
       setAssignedCategoryIds([...assignedCategoryIds, catId]);
     }
+  };
+
+  const resetCategoryForm = () => {
+    setCategoryId('new-category');
+    setCategoryName('');
+    setCategoryCode('');
+    setCategoryGender('ALL');
+    setCategoryMinAge(6);
+    setCategoryMaxAge('');
+    setCategoryProfileId(profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id || '');
+  };
+
+  const loadCategoryIntoForm = (category: Category) => {
+    setCategoryId(category.id);
+    setCategoryName(category.name);
+    setCategoryCode(category.code);
+    setCategoryGender(category.gender);
+    setCategoryMinAge(category.minAge ?? 6);
+    setCategoryMaxAge(category.maxAge ?? '');
+    setCategoryProfileId(category.raceProfileId || '');
+  };
+
+  const handleSaveCategory = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!categoryName.trim() || !categoryCode.trim()) return;
+    if (categoryMaxAge !== '' && Number(categoryMaxAge) < categoryMinAge) {
+      alert('De maximumleeftijd moet gelijk aan of hoger dan de minimumleeftijd zijn.');
+      return;
+    }
+
+    const id = categoryId === 'new-category' ? `category-${Date.now()}` : categoryId;
+    await db.categories.put({
+      id,
+      name: categoryName.trim(),
+      code: categoryCode.trim().toUpperCase(),
+      gender: categoryGender,
+      minAge: Math.max(6, categoryMinAge),
+      maxAge: categoryMaxAge === '' ? undefined : Number(categoryMaxAge),
+      raceProfileId: categoryProfileId,
+    });
+    await operationService.logAudit('CATEGORY_UPDATED', `Categorie "${categoryName.trim()}" opgeslagen.`);
+    soundService.playSuccess();
+    resetCategoryForm();
+    await onRefresh();
+  };
+
+  const handleDeleteCategory = async () => {
+    if (categoryId === 'new-category') return;
+    const category = categories.find((item) => item.id === categoryId);
+    if (!category || !confirm(`Categorie "${category.name}" verwijderen? Deelnemers worden niet verwijderd.`)) return;
+    await db.categories.delete(category.id);
+    await operationService.logAudit('CATEGORY_DELETED', `Categorie "${category.name}" verwijderd.`);
+    soundService.playWarning();
+    resetCategoryForm();
+    await onRefresh();
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -562,6 +624,63 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
               );
             })}
           </div>
+        </div>
+
+        {/* Assigned Categories Card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow space-y-4 text-xs">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider">Leeftijdscategorieën beheren</h4>
+              <p className="text-slate-400 mt-1">
+                Maak zelf reeksen aan. Deelnemers vanaf 6 jaar zijn toegestaan; een maximumleeftijd is optioneel.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => loadCategoryIntoForm(category)}
+                  className={`px-2.5 py-1.5 rounded-lg border font-bold ${categoryId === category.id ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  {category.code}
+                </button>
+              ))}
+              <button type="button" onClick={resetCategoryForm} className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">
+                + Nieuwe categorie
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveCategory} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+            <label className="lg:col-span-2 text-slate-300 font-semibold">Naam
+              <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="U8 Iedereen" required className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+            </label>
+            <label className="text-slate-300 font-semibold">Code
+              <input value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)} placeholder="U8" required className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono" />
+            </label>
+            <label className="text-slate-300 font-semibold">Geslacht
+              <select value={categoryGender} onChange={(event) => setCategoryGender(event.target.value as Category['gender'])} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                <option value="ALL">Iedereen</option><option value="M">Jongens/Heren</option><option value="F">Meisjes/Dames</option>
+              </select>
+            </label>
+            <label className="text-slate-300 font-semibold">Min. leeftijd
+              <input type="number" min="6" value={categoryMinAge} onChange={(event) => setCategoryMinAge(Math.max(6, Number(event.target.value)))} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+            </label>
+            <label className="text-slate-300 font-semibold">Max. leeftijd
+              <input type="number" min="6" value={categoryMaxAge} onChange={(event) => setCategoryMaxAge(event.target.value === '' ? '' : Number(event.target.value))} placeholder="Geen limiet" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+            </label>
+            <label className="sm:col-span-2 lg:col-span-3 text-slate-300 font-semibold">Wedstrijdprofiel
+              <select value={categoryProfileId} onChange={(event) => setCategoryProfileId(event.target.value)} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                <option value="">Nog niet gekoppeld</option>
+                {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              </select>
+            </label>
+            <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
+              <button type="submit" className="flex-1 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">Categorie opslaan</button>
+              {categoryId !== 'new-category' && <button type="button" onClick={handleDeleteCategory} className="px-4 py-2 rounded-lg bg-red-950/60 text-red-300 border border-red-800">Verwijderen</button>}
+            </div>
+          </form>
         </div>
 
         {/* Assigned Categories Card */}

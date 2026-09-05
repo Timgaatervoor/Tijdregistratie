@@ -21,9 +21,11 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 }) => {
   const [stationName, setStationName] = useState('Stand 1');
   const [simpleMode, setSimpleMode] = useState(() => localStorage.getItem('shooting_simple_mode') === 'true');
+  const [targetCount, setTargetCount] = useState(() => Number(localStorage.getItem('shooting_target_count') || 5));
+  const [pendingSimpleHits, setPendingSimpleHits] = useState<number | null>(null);
   const [bibInput, setBibInput] = useState('');
   const [roundNumber, setRoundNumber] = useState<number>(1);
-  const [targets, setTargets] = useState<boolean[]>([true, true, true, true, true]); // true = hit, false = miss
+  const [targets, setTargets] = useState<boolean[]>(() => Array(targetCount).fill(true)); // true = hit, false = miss
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'warn' } | null>(null);
 
@@ -41,8 +43,20 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     setSimpleMode((current) => {
       const next = !current;
       localStorage.setItem('shooting_simple_mode', String(next));
+      if (next) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
       return next;
     });
+  };
+
+  const changeTargetCount = (count: number) => {
+    setTargetCount(count);
+    localStorage.setItem('shooting_target_count', String(count));
+    setTargets(Array(count).fill(true));
+    setPendingSimpleHits(null);
   };
 
   // Correction state
@@ -59,7 +73,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   } | null>(null);
 
   const hits = targets.filter(Boolean).length;
-  const misses = 5 - hits;
+  const misses = targetCount - hits;
   const penaltyPerMiss = event?.penaltySecondsPerMiss || 20;
   const totalPenaltySec = misses * penaltyPerMiss;
 
@@ -81,15 +95,15 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     }
   };
 
-  // Quick preset buttons (5/5, 4/5, etc.)
+  // Quick preset buttons for the configured number of targets.
   const setPreset = (hitCount: number) => {
-    const next = Array(5).fill(false).map((_, i) => i < hitCount);
+    const next = Array(targetCount).fill(false).map((_, i) => i < hitCount);
     setTargets(next);
     if (hitCount === 5) soundService.playSuccess();
     else soundService.playWarning();
   };
 
-  const handleRecordShooting = async (e: React.FormEvent, forceExtra = false) => {
+  const handleRecordShooting = async (e?: React.FormEvent, forceExtra = false) => {
     e?.preventDefault?.();
     if (isNaN(parsedBib) || parsedBib <= 0) {
       setFeedback({ text: 'Voer een geldig startnummer in', type: 'warn' });
@@ -131,7 +145,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
         },
         roundNumber,
         stationName,
-        5,
+        targetCount,
         hits,
         misses,
         targets
@@ -139,13 +153,14 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
       soundService.playSuccess();
       setFeedback({
-        text: `Schietronde ${roundNumber} opgeslagen voor Bib #${parsedBib}: ${hits}/5 treffers (+${totalPenaltySec}s straf)`,
+        text: `Schietronde ${roundNumber} opgeslagen voor Bib #${parsedBib}: ${hits}/${targetCount} treffers (+${totalPenaltySec}s straf)`,
         type: 'success',
       });
 
       // Reset form for next runner
       setBibInput('');
-      setTargets([true, true, true, true, true]);
+      setTargets(Array(targetCount).fill(true));
+      setPendingSimpleHits(null);
       setDuplicateConflict(null);
       onRefresh();
       setTimeout(() => setFeedback(null), 3500);
@@ -191,7 +206,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
         p,
         duplicateConflict.existing.round,
         stationName,
-        5,
+        targetCount,
         duplicateConflict.newHits,
         duplicateConflict.newMisses,
         undefined,
@@ -201,12 +216,12 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
       soundService.playSuccess();
       setFeedback({
-        text: `Ronde ${duplicateConflict.existing.round} gecorrigeerd voor Bib #${duplicateConflict.existing.bibNumber} (${duplicateConflict.newHits}/5).`,
+        text: `Ronde ${duplicateConflict.existing.round} gecorrigeerd voor Bib #${duplicateConflict.existing.bibNumber} (${duplicateConflict.newHits}/${targetCount}).`,
         type: 'success',
       });
 
       setBibInput('');
-      setTargets([true, true, true, true, true]);
+      setTargets(Array(targetCount).fill(true));
       setDuplicateConflict(null);
       onRefresh();
       setTimeout(() => setFeedback(null), 3500);
@@ -225,7 +240,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       return;
     }
 
-    const newMisses = 5 - editHits;
+    const newMisses = targetCount - editHits;
     const p = participants.find((item) => item.id === editingResult.participantId);
 
     if (p) {
@@ -234,7 +249,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
         p,
         editingResult.round,
         editingResult.station,
-        5,
+        targetCount,
         editHits,
         newMisses,
         undefined,
@@ -294,75 +309,85 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       </div>
 
       {simpleMode && (
-        <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-4 sm:p-6 shadow-xl space-y-5 max-w-2xl mx-auto">
+        <div className="bg-slate-950 border border-emerald-500/40 rounded-2xl p-4 sm:p-6 shadow-xl space-y-5 max-w-xl mx-auto min-h-[calc(100vh-10rem)]">
           <div className="text-center">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Jury-invoer</span>
             <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Snelle schietproef</h3>
-            <p className="text-xs text-slate-400 mt-1">Vul het bibnummer in en tik het resultaat aan.</p>
+            <p className="text-xs text-slate-400 mt-1">Kies het nummer, het resultaat en bevestig.</p>
           </div>
 
-          <form onSubmit={handleRecordShooting} className="space-y-4">
-            <input
-              type="number"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={bibInput}
-              onChange={(e) => setBibInput(e.target.value)}
-              placeholder="Startnummer"
-              autoFocus
-              className="w-full bg-slate-850 border border-slate-700 rounded-2xl px-4 py-4 text-center text-4xl font-mono font-black text-white focus:outline-none focus:border-emerald-400"
-            />
+          <div className="space-y-3">
+            <div className="w-full min-h-20 rounded-2xl bg-slate-900 border-2 border-emerald-500/60 flex items-center justify-center text-5xl font-mono font-black text-white tracking-widest">
+              {bibInput || '—'}
+            </div>
             {matchedParticipant && (
               <p className="text-center text-sm text-emerald-400 font-bold">
                 {matchedParticipant.firstName} {matchedParticipant.lastName}
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              {[1, 2].map((round) => (
+            <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => (
                 <button
-                  key={round}
+                  key={number}
                   type="button"
-                  onClick={() => setRoundNumber(round)}
-                  className={`py-3 rounded-xl font-bold border ${
-                    roundNumber === round
-                      ? 'bg-blue-600 text-white border-blue-400'
-                      : 'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}
+                  onClick={() => setBibInput((current) => `${current}${number}`.slice(0, 4))}
+                  className="min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700"
                 >
-                  Ronde {round}
+                  {number}
                 </button>
               ))}
+              <button type="button" onClick={() => setBibInput('')} className="min-h-14 rounded-xl bg-red-950/60 border border-red-800 text-red-300 font-bold active:scale-95">Wis</button>
+              <button type="button" onClick={() => setBibInput((current) => `${current}0`.slice(0, 4))} className="min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700">0</button>
+              <button type="button" onClick={() => setBibInput((current) => current.slice(0, -1))} className="min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-xl font-black text-amber-300 active:scale-95">⌫</button>
             </div>
+          </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              {[5, 4, 3, 2, 1, 0].map((hitCount) => (
-                <button
-                  key={hitCount}
-                  type="button"
-                  onClick={() => setPreset(hitCount)}
-                  className={`min-h-20 rounded-2xl text-2xl font-black border active:scale-95 transition ${
-                    hits === hitCount
-                      ? 'bg-emerald-500 text-slate-950 border-emerald-300'
-                      : 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700'
-                  }`}
-                >
-                  {hitCount}/5
-                  <span className="block text-[10px] uppercase tracking-wider font-bold">
-                    {hitCount === 5 ? 'Alles raak' : `${5 - hitCount} misser${5 - hitCount === 1 ? '' : 's'}`}
-                  </span>
-                </button>
-              ))}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs text-slate-300 font-bold">
+              Aantal doelen
+              <select
+                value={targetCount}
+                onChange={(event) => changeTargetCount(Number(event.target.value))}
+                className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-white text-base"
+              >
+                {[3, 5, 10].map((count) => <option key={count} value={count}>{count} doelen</option>)}
+              </select>
+            </label>
+            <div className="text-xs text-slate-300 font-bold">
+              Ronde
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {[1, 2].map((round) => (
+                  <button key={round} type="button" onClick={() => setRoundNumber(round)} className={`py-3 rounded-xl font-bold border ${roundNumber === round ? 'bg-blue-600 text-white border-blue-400' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>{round}</button>
+                ))}
+              </div>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting || !bibInput.trim()}
-              className="w-full min-h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg active:scale-95 transition disabled:opacity-40"
-            >
-              OPSLAAN {hits}/5
-            </button>
-          </form>
+          <div className="grid grid-cols-3 gap-3">
+            {Array.from({ length: targetCount + 1 }, (_, hitCount) => targetCount - hitCount).map((hitCount) => (
+              <button
+                key={hitCount}
+                type="button"
+                onClick={() => { setPreset(hitCount); setPendingSimpleHits(hitCount); }}
+                className={`min-h-20 rounded-2xl text-2xl font-black border active:scale-95 transition ${pendingSimpleHits === hitCount ? 'bg-emerald-500 text-slate-950 border-emerald-300' : 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700'}`}
+              >
+                {hitCount}/{targetCount}
+                <span className="block text-[10px] uppercase tracking-wider font-bold">
+                  {hitCount === targetCount ? 'Alles raak' : `${targetCount - hitCount} misser${targetCount - hitCount === 1 ? '' : 's'}`}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleRecordShooting()}
+            disabled={isSubmitting || !bibInput.trim() || pendingSimpleHits === null}
+            className="w-full min-h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg active:scale-95 transition disabled:opacity-40"
+          >
+            BEVESTIG {pendingSimpleHits === null ? '' : `${pendingSimpleHits}/${targetCount}`}
+          </button>
 
           {feedback && (
             <div className={`p-3 rounded-xl text-sm font-bold text-center ${feedback.type === 'success' ? 'bg-emerald-950/60 text-emerald-300' : 'bg-amber-950/60 text-amber-300'}`}>
@@ -441,7 +466,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                   Tik op doelschijf om te wisselen (Treffer / Misser)
                 </span>
                 <span className="text-xs font-mono font-bold text-amber-400">
-                  {hits}/5 Treffers • {misses} Misser{misses !== 1 ? 's' : ''} (+{totalPenaltySec}s)
+                  {hits}/{targetCount} Treffers • {misses} Misser{misses !== 1 ? 's' : ''} (+{totalPenaltySec}s)
                 </span>
               </div>
 
@@ -499,7 +524,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               disabled={isSubmitting || !bibInput.trim()}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black text-base shadow-xl shadow-blue-500/25 active:scale-98 transition disabled:opacity-40 uppercase tracking-wider"
             >
-              SCHIETBEURT OPSLAAN ({hits}/5 TREFFERS)
+              SCHIETBEURT OPSLAAN ({hits}/{targetCount} TREFFERS)
             </button>
           </form>
 
@@ -608,7 +633,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <span className="font-mono font-bold text-emerald-400 block">
-                          {res.hits}/5 Treffers
+                          {res.hits}/{res.shots} Treffers
                         </span>
                         <span className="text-[10px] text-red-400 font-semibold">
                           +{res.misses * penaltyPerMiss}s straf

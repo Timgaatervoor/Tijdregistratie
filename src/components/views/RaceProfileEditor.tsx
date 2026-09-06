@@ -27,12 +27,14 @@ interface RaceProfileEditorProps {
   profiles: RaceProfile[];
   categories: Category[];
   onRefresh: () => void;
+  onManageCategories: () => void;
 }
 
 export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
   profiles,
   categories,
   onRefresh,
+  onManageCategories,
 }) => {
   const [selectedProfileId, setSelectedProfileId] = useState<string>(
     profiles[0]?.id || 'new-profile'
@@ -46,13 +48,6 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
   const [legs, setLegs] = useState<RaceLegConfig[]>([]);
   const [assignedCategoryIds, setAssignedCategoryIds] = useState<string[]>([]);
   const [savedMessage, setSavedMessage] = useState<boolean>(false);
-  const [categoryId, setCategoryId] = useState('new-category');
-  const [categoryName, setCategoryName] = useState('');
-  const [categoryCode, setCategoryCode] = useState('');
-  const [categoryGender, setCategoryGender] = useState<'M' | 'F' | 'ALL'>('ALL');
-  const [categoryMinAge, setCategoryMinAge] = useState(6);
-  const [categoryMaxAge, setCategoryMaxAge] = useState<number | ''>('');
-  const [categoryProfileIds, setCategoryProfileIds] = useState<string[]>([]);
 
   const loadProfileIntoForm = (prof: RaceProfile | undefined) => {
     if (prof) {
@@ -166,76 +161,6 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     } else {
       setAssignedCategoryIds([...assignedCategoryIds, catId]);
     }
-  };
-
-  const resetCategoryForm = () => {
-    setCategoryId('new-category');
-    setCategoryName('');
-    setCategoryCode('');
-    setCategoryGender('ALL');
-    setCategoryMinAge(1);
-    setCategoryMaxAge('');
-    const defaultProfileId = profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id;
-    setCategoryProfileIds(defaultProfileId ? [defaultProfileId] : []);
-  };
-
-  const loadCategoryIntoForm = (category: Category) => {
-    setCategoryId(category.id);
-    setCategoryName(category.name);
-    setCategoryCode(category.code);
-    setCategoryGender(category.gender);
-    setCategoryMinAge(category.minAge ?? 1);
-    setCategoryMaxAge(category.maxAge ?? '');
-    setCategoryProfileIds(getCategoryProfileIds(category));
-  };
-
-  const handleSaveCategory = async () => {
-    if (!categoryName.trim() || !categoryCode.trim()) return;
-    if (categoryProfileIds.length === 0) {
-      alert('Selecteer minstens één wedstrijdprofiel voor deze leeftijdscategorie.');
-      return;
-    }
-    if (categoryMaxAge !== '' && Number(categoryMaxAge) < categoryMinAge) {
-      alert('De maximumleeftijd moet gelijk aan of hoger dan de minimumleeftijd zijn.');
-      return;
-    }
-
-    const id = categoryId === 'new-category' ? `category-${Date.now()}` : categoryId;
-    const uniqueProfileIds = Array.from(new Set<string>(categoryProfileIds.filter(Boolean)));
-    const existingCategory = categories.find((category) => category.id === id);
-    await db.transaction('rw', db.categories, db.participants, async () => {
-      await db.categories.put({
-        ...existingCategory,
-        id,
-        name: categoryName.trim(),
-        code: categoryCode.trim().toUpperCase(),
-        gender: categoryGender,
-        minAge: Math.max(1, categoryMinAge),
-        maxAge: categoryMaxAge === '' ? undefined : Number(categoryMaxAge),
-        raceProfileIds: uniqueProfileIds,
-        raceProfileId: uniqueProfileIds[0],
-      });
-      await db.participants.where('categoryId').equals(id).modify((participant) => {
-        if (!uniqueProfileIds.includes(participant.raceProfileId)) {
-          participant.raceProfileId = uniqueProfileIds[0] || '';
-        }
-      });
-    });
-    await operationService.logAudit('CATEGORY_UPDATED', `Categorie "${categoryName.trim()}" opgeslagen.`);
-    soundService.playSuccess();
-    resetCategoryForm();
-    await onRefresh();
-  };
-
-  const handleDeleteCategory = async () => {
-    if (categoryId === 'new-category') return;
-    const category = categories.find((item) => item.id === categoryId);
-    if (!category || !confirm(`Categorie "${category.name}" verwijderen? Deelnemers worden niet verwijderd.`)) return;
-    await db.categories.delete(category.id);
-    await operationService.logAudit('CATEGORY_DELETED', `Categorie "${category.name}" verwijderd.`);
-    soundService.playWarning();
-    resetCategoryForm();
-    await onRefresh();
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -676,114 +601,60 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
         </div>
 
         {/* Assigned Categories Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow space-y-4 text-xs">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow space-y-3 text-xs">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 className="text-sm font-bold text-white uppercase tracking-wider">Leeftijdscategorieën beheren</h4>
-              <p className="text-slate-400 mt-1">
-                Maak zelf reeksen aan. Deelnemers vanaf 1 jaar zijn toegestaan; een maximumleeftijd is optioneel.
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-400" /> Leeftijdscategorieën koppelen
+              </h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Selecteer welke bestaande categorieën deze wedstrijdopbouw mogen gebruiken. Een categorie mag bij meerdere profielen horen.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => loadCategoryIntoForm(category)}
-                  className={`px-2.5 py-1.5 rounded-lg border font-bold ${categoryId === category.id ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
-                >
-                  {category.code}
-                </button>
-              ))}
-              <button type="button" onClick={resetCategoryForm} className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">
-                + Nieuwe categorie
+            <button
+              type="button"
+              onClick={onManageCategories}
+              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 font-bold transition"
+            >
+              Leeftijdscategorieën beheren
+            </button>
+          </div>
+
+          {categories.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
+              {categories.map((c) => {
+                const isChecked = assignedCategoryIds.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
+                      isChecked
+                        ? 'bg-amber-500/10 border-amber-500/40 text-white'
+                        : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggleCategory(c.id)}
+                      className="w-4 h-4 rounded text-amber-500"
+                    />
+                    <div>
+                      <span className="font-bold block text-xs">{c.name}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">Code: {c.code}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-center">
+              <p className="text-slate-400">Nog geen leeftijdscategorieën. Je kunt het wedstrijdprofiel wel al opslaan.</p>
+              <button type="button" onClick={onManageCategories} className="mt-2 text-amber-300 hover:text-amber-200 font-bold">
+                Eerste leeftijdscategorie maken
               </button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
-            <label className="lg:col-span-2 text-slate-300 font-semibold">Naam
-              <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="U8 Iedereen" required className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-            </label>
-            <label className="text-slate-300 font-semibold">Code
-              <input value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)} placeholder="U8" required className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono" />
-            </label>
-            <label className="text-slate-300 font-semibold">Geslacht
-              <select value={categoryGender} onChange={(event) => setCategoryGender(event.target.value as Category['gender'])} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
-                <option value="ALL">Iedereen</option><option value="M">Jongens/Heren</option><option value="F">Meisjes/Dames</option>
-              </select>
-            </label>
-            <label className="text-slate-300 font-semibold">Min. leeftijd
-              <input type="number" min="1" value={categoryMinAge} onChange={(event) => setCategoryMinAge(Math.max(1, Number(event.target.value)))} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-            </label>
-            <label className="text-slate-300 font-semibold">Max. leeftijd
-              <input type="number" min="1" value={categoryMaxAge} onChange={(event) => setCategoryMaxAge(event.target.value === '' ? '' : Number(event.target.value))} placeholder="Geen limiet" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-            </label>
-            <fieldset className="sm:col-span-2 lg:col-span-6 rounded-xl border border-slate-700 bg-slate-950/40 p-3">
-              <legend className="px-1 text-slate-300 font-semibold">Toegestane wedstrijdprofielen</legend>
-              <p className="text-[11px] text-slate-500 mb-2">
-                Een leeftijdscategorie mag meerdere profielen gebruiken. Het eerste geselecteerde profiel is de standaardkeuze.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {profiles.map((profile) => {
-                  const checked = categoryProfileIds.includes(profile.id);
-                  return (
-                    <label key={profile.id} className={`flex items-center gap-2 rounded-lg border p-2 cursor-pointer ${checked ? 'border-amber-500/50 bg-amber-500/10 text-white' : 'border-slate-700 bg-slate-800/60 text-slate-400'}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setCategoryProfileIds((current) => checked ? current.filter((id) => id !== profile.id) : [...current, profile.id])}
-                        className="w-4 h-4 rounded text-amber-500"
-                      />
-                      <span className="font-semibold">{profile.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <div className="sm:col-span-2 lg:col-span-6 flex gap-2">
-              <button type="button" onClick={handleSaveCategory} className="flex-1 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">Categorie opslaan</button>
-              {categoryId !== 'new-category' && <button type="button" onClick={handleDeleteCategory} className="px-4 py-2 rounded-lg bg-red-950/60 text-red-300 border border-red-800">Verwijderen</button>}
-            </div>
-          </div>
-        </div>
-
-        {/* Assigned Categories Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow space-y-3 text-xs">
-          <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-amber-400" /> Categorieën die dit Profiel Gebruiken
-          </h4>
-          <p className="text-xs text-slate-400">
-            Vink de leeftijdscategorieën aan die deze specifieke wedstrijdopbouw (afstanden en schietbeurten)
-            mogen gebruiken. Een categorie mag bij meerdere wedstrijdprofielen aangevinkt zijn:
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
-            {categories.map((c) => {
-              const isChecked = assignedCategoryIds.includes(c.id);
-              return (
-                <label
-                  key={c.id}
-                  className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
-                    isChecked
-                      ? 'bg-amber-500/10 border-amber-500/40 text-white'
-                      : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => handleToggleCategory(c.id)}
-                    className="w-4 h-4 rounded text-amber-500"
-                  />
-                  <div>
-                    <span className="font-bold block text-xs">{c.name}</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Code: {c.code}</span>
-                  </div>
-                </label>
-              );
-            })}
-          </div>
+          )}
         </div>
 
         {/* Save Bar */}

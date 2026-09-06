@@ -12,6 +12,7 @@ import {
   Layers,
   Database,
   Cloud,
+  Users,
 } from 'lucide-react';
 import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant, UserRole } from '../../types';
 import { db } from '../../db/dexieDb';
@@ -19,6 +20,7 @@ import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { syncService, type SyncConfig } from '../../services/syncService';
 import { RaceProfileEditor } from './RaceProfileEditor';
+import { AgeCategoriesEditor } from './AgeCategoriesEditor';
 import { EventSetupAndReset } from './EventSetupAndReset';
 
 interface SettingsViewProps {
@@ -40,7 +42,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   participants = [],
   onRefresh,
 }) => {
-  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'event_setup' | 'sync'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'categories' | 'event_setup' | 'sync'>('general');
 
   // Race Event Settings
   const [eventName, setEventName] = useState(event?.name || 'Run-Biathlon De Haan 2026');
@@ -185,7 +187,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Instellingen & Parameters
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Wedstrijdregels, parcoursopbouw (loop/schieten), apparaatidentiteit en officiële vergrendeling
+            Wedstrijdregels, leeftijdscategorieën, parcoursopbouw, apparaatidentiteit en officiële vergrendeling
           </p>
         </div>
 
@@ -215,6 +217,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <Layers className="w-4 h-4" />
             <span>Wedstrijdinhoud</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('categories')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'categories'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Leeftijdscategorieën</span>
           </button>
 
           <button
@@ -250,6 +265,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           profiles={profiles}
           categories={categories}
           onRefresh={onRefresh}
+          onManageCategories={() => setActiveSection('categories')}
+        />
+      ) : activeSection === 'categories' ? (
+        <AgeCategoriesEditor
+          categories={categories}
+          profiles={profiles}
+          onRefresh={onRefresh}
+          onOpenProfiles={() => setActiveSection('profiles')}
         />
       ) : activeSection === 'event_setup' ? (
         <EventSetupAndReset

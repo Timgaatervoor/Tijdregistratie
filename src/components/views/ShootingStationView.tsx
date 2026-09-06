@@ -23,13 +23,12 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 }) => {
   const [stationName, setStationName] = useState('Stand 1');
   const [simpleMode, setSimpleMode] = useState(() => localStorage.getItem('shooting_simple_mode') === 'true');
-  const targetCount = 5;
   const [bibInput, setBibInput] = useState('');
   const [roundNumber, setRoundNumber] = useState<number>(1);
-  const [targets, setTargets] = useState<boolean[]>(() => Array(targetCount).fill(true)); // true = hit, false = miss
+  const [targets, setTargets] = useState<boolean[]>(() => Array(5).fill(true)); // true = hit, false = miss
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'warn' } | null>(null);
-  const [finishNotice, setFinishNotice] = useState(false);
+  const [finishNotice, setFinishNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const loadDeviceIdentity = async () => {
@@ -76,10 +75,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     reason: string;
   } | null>(null);
 
-  const hits = targets.filter(Boolean).length;
-  const misses = targetCount - hits;
   const penaltyPerMiss = event?.penaltySecondsPerMiss || 20;
-  const totalPenaltySec = misses * penaltyPerMiss;
 
   // Matched participant
   const parsedBib = parseInt(bibInput.trim(), 10);
@@ -93,9 +89,41 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     ? shootingLegs
     : [{ id: 'fallback-shoot-1', type: 'SHOOT' as const, name: 'Schietproef 1' }, { id: 'fallback-shoot-2', type: 'SHOOT' as const, name: 'Schietproef 2' }];
   const completedRounds = matchedParticipant
-    ? shootingResults.filter((result) => result.bibNumber === matchedParticipant.bibNumber && !result.isCorrected)
+    ? shootingResults
+        .filter((result) => result.participantId === matchedParticipant.id && !result.isCorrected)
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
     : [];
-  const allShootingDone = matchedParticipant !== undefined && completedRounds.length >= shootingRounds.length;
+  const completedRoundMap = new Map<number, ShootingResult>();
+  completedRounds.forEach((result) => completedRoundMap.set(result.round, result));
+  const completedRoundResults = [...completedRoundMap.values()].sort((a, b) => a.round - b.round);
+  const selectedShootingLeg = shootingRounds[roundNumber - 1];
+  const targetCount = Math.max(1, Number(selectedShootingLeg?.shotCount) || 5);
+  const hits = targets.filter(Boolean).length;
+  const misses = Math.max(0, targetCount - hits);
+  const totalPenaltySec = misses * penaltyPerMiss;
+  const allShootingDone = matchedParticipant !== undefined
+    && shootingRounds.length > 0
+    && shootingRounds.every((_, index) => completedRoundMap.has(index + 1));
+
+  useEffect(() => {
+    setTargets(Array(targetCount).fill(true));
+  }, [matchedParticipant?.id, roundNumber, selectedShootingLeg?.id, targetCount]);
+
+  useEffect(() => {
+    if (!matchedParticipant || shootingRounds.length === 0) return;
+    const nextRound = shootingRounds.findIndex((_, index) => !completedRoundMap.has(index + 1));
+    setRoundNumber(nextRound >= 0 ? nextRound + 1 : shootingRounds.length);
+  }, [matchedParticipant?.id]);
+
+  useEffect(() => {
+    if (bibInput) setFinishNotice(null);
+  }, [bibInput]);
+
+  const selectRound = (round: number) => {
+    setRoundNumber(round);
+    const nextTargetCount = Math.max(1, Number(shootingRounds[round - 1]?.shotCount) || 5);
+    setTargets(Array(nextTargetCount).fill(true));
+  };
 
   // Toggle individual target circle
   const toggleTarget = (index: number) => {
@@ -128,7 +156,9 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     // Check duplicate round (Req 21)
     if (!forceExtra) {
       const existing = shootingResults.find(
-        (r) => r.bibNumber === parsedBib && r.round === roundNumber && !r.isCorrected
+        (r) => (matchedParticipant ? r.participantId === matchedParticipant.id : r.bibNumber === parsedBib)
+          && r.round === roundNumber
+          && !r.isCorrected
       );
       if (existing) {
         soundService.playWarning();
@@ -175,10 +205,13 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       setBibInput('');
       setTargets(Array(targetCount).fill(true));
       setDuplicateConflict(null);
-      const completedAfterSave = matchedParticipant
-        ? completedRounds.some((result) => result.round === roundNumber) || completedRounds.length + 1 >= shootingRounds.length
-        : false;
-      setFinishNotice(completedAfterSave);
+      const completedRoundNumbersAfterSave = new Set(completedRoundMap.keys());
+      completedRoundNumbersAfterSave.add(roundNumber);
+      const completedAfterSave = Boolean(matchedParticipant)
+        && shootingRounds.every((_, index) => completedRoundNumbersAfterSave.has(index + 1));
+      setFinishNotice(completedAfterSave && matchedParticipant
+        ? `Deelnemer #${parsedBib} – ${matchedParticipant.firstName} ${matchedParticipant.lastName} moet naar de FINISH!`
+        : null);
       onRefresh();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
@@ -257,7 +290,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       return;
     }
 
-    const newMisses = targetCount - editHits;
+    const newMisses = editingResult.shots - editHits;
     const p = participants.find((item) => item.id === editingResult.participantId);
 
     if (p) {
@@ -266,7 +299,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
         p,
         editingResult.round,
         editingResult.station,
-        targetCount,
+        editingResult.shots,
         editHits,
         newMisses,
         undefined,
@@ -325,7 +358,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
       {simpleMode && (
         <div className="fixed inset-0 z-50 w-screen h-[100dvh] overflow-hidden bg-slate-950 p-3 sm:p-5">
-          <div className="mx-auto flex h-full w-full max-w-xl flex-col gap-2 sm:gap-3">
+          <div className="mx-auto flex h-full w-full max-w-xl flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
           <div className="flex items-center justify-between">
             <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Jury-invoer</span>
@@ -370,20 +403,24 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-xs text-slate-300 font-bold flex items-center">
-              Activiteit: <span className="ml-1 text-emerald-400">5 doelen</span>
+          <div className="space-y-2">
+            <div className="text-xs text-slate-300 font-bold flex flex-wrap items-center justify-between gap-2">
+              <span>Profiel: <span className="text-emerald-400">{activeProfile?.name || 'Standaard schietproeven'}</span></span>
+              <span>{targetCount} doelen in proef {roundNumber}</span>
             </div>
             <div className="text-xs text-slate-300 font-bold">
-              Schietproeven
-              <div className="grid grid-cols-2 gap-2 mt-1">
+              Alle schietproeven ({shootingRounds.length})
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
                 {shootingRounds.map((leg, index) => {
                   const round = index + 1;
-                  const done = completedRounds.some((result) => result.round === round);
+                  const previousResult = completedRoundMap.get(round);
                   return (
-                    <button key={leg.id} type="button" onClick={() => setRoundNumber(round)} className={`py-2 rounded-xl font-bold border text-left px-2 ${roundNumber === round ? 'bg-blue-600 text-white border-blue-400' : done ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
-                      <span className="block">{done ? '✓ ' : ''}Proef {round}</span>
+                    <button key={leg.id} type="button" onClick={() => selectRound(round)} className={`py-2 rounded-xl font-bold border text-left px-2 ${roundNumber === round ? 'bg-blue-600 text-white border-blue-400' : previousResult ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                      <span className="block">{previousResult ? '✓ ' : ''}Proef {round}</span>
                       <span className="block text-[10px] font-normal truncate">{leg.name}</span>
+                      {previousResult && (
+                        <span className="block text-[10px] mt-1">{previousResult.hits}/{previousResult.shots} raak • {previousResult.misses} mis</span>
+                      )}
                     </button>
                   );
                 })}
@@ -393,7 +430,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
           {matchedParticipant && (
             <div className={`rounded-xl border p-3 text-center text-sm font-black ${allShootingDone ? 'bg-emerald-950/70 border-emerald-400 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
-              {allShootingDone ? 'Alle schietproeven gedaan - ga naar FINISH' : `${completedRounds.length}/${shootingRounds.length} schietproeven afgewerkt`}
+              {allShootingDone ? 'Alle schietproeven gedaan — deze deelnemer moet naar de FINISH!' : `${completedRoundMap.size}/${shootingRounds.length} schietproeven afgewerkt`}
             </div>
           )}
 
@@ -432,7 +469,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           )}
           {finishNotice && (
             <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-lg font-black text-slate-950">
-              Alle schietproeven gedaan - ga naar FINISH
+              {finishNotice}
             </div>
           )}
           </div>
@@ -472,34 +509,67 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
               <div>
                 <label className="text-xs text-slate-400 font-semibold block mb-1">
-                  Schietbeurt:
+                  Schietproeven uit profiel {activeProfile ? `“${activeProfile.name}”` : ''}:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRoundNumber(1)}
-                    className={`py-3 rounded-xl font-bold text-xs uppercase tracking-wider border transition ${
-                      roundNumber === 1
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
-                    }`}
-                  >
-                    Ronde 1 (Liggend)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRoundNumber(2)}
-                    className={`py-3 rounded-xl font-bold text-xs uppercase tracking-wider border transition ${
-                      roundNumber === 2
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
-                    }`}
-                  >
-                    Ronde 2 (Staand)
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {shootingRounds.map((leg, index) => {
+                    const round = index + 1;
+                    const previousResult = completedRoundMap.get(round);
+                    const stance = leg.stance === 'prone' ? 'Liggend' : leg.stance === 'standing' ? 'Staand' : leg.stance === 'free' ? 'Vrij' : '';
+                    return (
+                      <button
+                        key={leg.id}
+                        type="button"
+                        onClick={() => selectRound(round)}
+                        className={`py-3 px-3 rounded-xl font-bold text-xs border transition text-left ${
+                          roundNumber === round
+                            ? 'bg-blue-600 text-white border-blue-500 shadow-md'
+                            : previousResult
+                            ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700'
+                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
+                        }`}
+                      >
+                        <span className="block uppercase tracking-wider">
+                          {previousResult ? '✓ ' : ''}Proef {round}{stance ? ` — ${stance}` : ''}
+                        </span>
+                        <span className="block mt-1 text-[10px] font-normal truncate">{leg.name}</span>
+                        {previousResult && (
+                          <span className="block mt-1 text-[10px] font-bold">
+                            Vorig resultaat: {previousResult.hits}/{previousResult.shots} raak, {previousResult.misses} mis
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
+
+            {matchedParticipant && completedRoundResults.length > 0 && (
+              <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/20 p-3">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Vorige schietresultaten</span>
+                  <span className="text-[11px] text-slate-400">{completedRoundMap.size}/{shootingRounds.length} afgewerkt</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {completedRoundResults.map((result) => (
+                    <div key={`participant-round-${result.id}`} className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs flex items-center justify-between gap-3">
+                      <div>
+                        <span className="font-bold text-white block">Proef {result.round}: {shootingRounds[result.round - 1]?.name || `Schietproef ${result.round}`}</span>
+                        <span className="text-[10px] text-slate-500">{formatLocalTime(result.timestamp, true)} • {result.station}</span>
+                      </div>
+                      <span className="font-mono font-black text-emerald-400 whitespace-nowrap">{result.hits}/{result.shots} raak</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {matchedParticipant && allShootingDone && (
+              <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-base font-black text-slate-950">
+                Alle schietproeven zijn afgewerkt — deze deelnemer moet naar de FINISH!
+              </div>
+            )}
 
             {/* 5 Big Touch Target Circles (Biathlon Stijl) */}
             <div>
@@ -582,6 +652,11 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               <span>{feedback.text}</span>
             </div>
           )}
+          {finishNotice && (
+            <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-base font-black text-slate-950">
+              {finishNotice}
+            </div>
+          )}
         </div>
 
         {/* Right: Recent Shooting Feed with Edit Mode */}
@@ -597,9 +672,9 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                 Correctie voor Bib #{editingResult.bibNumber} (Ronde {editingResult.round})
               </span>
               <div>
-                <label className="text-slate-300 block mb-1">Gewijzigde Treffers (0-5):</label>
+                <label className="text-slate-300 block mb-1">Gewijzigde Treffers (0-{editingResult.shots}):</label>
                 <div className="flex gap-2">
-                  {[5, 4, 3, 2, 1, 0].map((h) => (
+                  {Array.from({ length: editingResult.shots + 1 }, (_, index) => editingResult.shots - index).map((h) => (
                     <button
                       key={`edit-preset-hits-${h}`}
                       type="button"

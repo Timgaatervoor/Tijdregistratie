@@ -162,7 +162,7 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
                 <Terminal className="w-3.5 h-3.5" /> Meegeleverde startbestanden in de map:
               </div>
               <div className="text-slate-300">
-                • <strong className="text-white">start-windows.bat</strong>: Dubbelklikken op Windows om het programma direct offline te starten.
+                • <strong className="text-white">start-windows.bat</strong>: Dubbelklikken op Windows om het programma lokaal te starten.
               </div>
               <div className="text-slate-300">
                 • <strong className="text-white">start-mac-linux.sh</strong>: Startscript voor macOS en Linux.
@@ -170,7 +170,7 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
             </div>
 
             <div className="text-[11px] text-slate-400">
-              U kunt het project eenvoudig downloaden via het AI Studio instellingenmenu bovenaan &rarr; <strong>Export to ZIP</strong> of <strong>GitHub</strong>.
+              Download het volledige project via <strong>Export to ZIP</strong> of <strong>GitHub</strong> en pak de ZIP eerst uit. Node.js is vereist; alleen bij de eerste start is internet nodig om de programmaonderdelen te installeren.
             </div>
           </div>
 

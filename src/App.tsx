@@ -58,6 +58,7 @@ export default function App() {
 
   const { isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
   const [currentTab, setCurrentTab] = useState<ActiveTab>(getInitialTab);
+  const [isLeaderboardKiosk, setIsLeaderboardKiosk] = useState(false);
 
   // Modals state
   const [showPreRaceModal, setShowPreRaceModal] = useState(false);
@@ -148,7 +149,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950">
       {/* Test Mode / Simulated Offline Banner */}
-      {(event?.isTestMode || isSimulatedOffline) && (
+      {!isLeaderboardKiosk && (event?.isTestMode || isSimulatedOffline) && (
         <div className="bg-amber-500 text-slate-950 px-4 py-1.5 text-xs font-black uppercase tracking-wider flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 stroke-[2.5]" />
@@ -170,28 +171,34 @@ export default function App() {
       )}
 
       {/* Global Header */}
-      <Header
-        event={event}
-        deviceConfig={deviceConfig}
-        pendingSyncCount={pendingSyncCount}
-        onOpenPreRaceCheck={() => setShowPreRaceModal(true)}
-        onOpenPrint={() => setShowPrintModal(true)}
-        onUnlockDevice={handleUnlockDevice}
-        isTestMode={event?.isTestMode ?? false}
-      />
+      {!isLeaderboardKiosk && (
+        <Header
+          event={event}
+          deviceConfig={deviceConfig}
+          pendingSyncCount={pendingSyncCount}
+          onOpenPreRaceCheck={() => setShowPreRaceModal(true)}
+          onOpenPrint={() => setShowPrintModal(true)}
+          onUnlockDevice={handleUnlockDevice}
+          isTestMode={event?.isTestMode ?? false}
+        />
+      )}
 
       {/* Main Tab Navigation */}
-      <Navigation
-        activeTab={displayedTab}
-        onSelectTab={setCurrentTab}
-        conflictCount={unresolvedConflictsCount}
-        attentionCount={attentionCount}
-        deviceConfig={deviceConfig}
-        isTestMode={event?.isTestMode ?? false}
-      />
+      {!isLeaderboardKiosk && (
+        <Navigation
+          activeTab={displayedTab}
+          onSelectTab={setCurrentTab}
+          conflictCount={unresolvedConflictsCount}
+          attentionCount={attentionCount}
+          deviceConfig={deviceConfig}
+          isTestMode={event?.isTestMode ?? false}
+        />
+      )}
 
       {/* Main Content View */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 pb-16">
+      <main className={isLeaderboardKiosk
+        ? 'flex-1 w-full'
+        : 'flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 pb-16'}>
         {displayedTab === 'event' && (
           <EventDashboardView
             event={event}
@@ -243,6 +250,7 @@ export default function App() {
             event={event}
             mode={displayedTab === 'results' ? 'results' : 'live'}
             onSelectParticipant={handleSelectParticipantFromResult}
+            onKioskModeChange={setIsLeaderboardKiosk}
           />
         )}
 

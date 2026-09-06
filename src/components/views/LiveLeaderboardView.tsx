@@ -23,12 +23,14 @@ interface LiveLeaderboardViewProps {
   event: RaceEvent | null;
   mode?: 'live' | 'results';
   onSelectParticipant: (result: RaceResult) => void;
+  onKioskModeChange?: (isKioskMode: boolean) => void;
 }
 
 interface TvKioskConfig {
   showPodium: boolean;
   showClock: boolean;
   rotateCategories: boolean;
+  categoryIds: string[];
   rotationSeconds: number;
   textScale: 'normal' | 'large' | 'extra-large';
 }
@@ -37,6 +39,7 @@ const defaultTvKioskConfig: TvKioskConfig = {
   showPodium: true,
   showClock: true,
   rotateCategories: false,
+  categoryIds: [],
   rotationSeconds: 15,
   textScale: 'large',
 };
@@ -48,6 +51,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   event,
   mode = 'live',
   onSelectParticipant,
+  onKioskModeChange,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedWave, setSelectedWave] = useState<string>('ALL');
@@ -59,15 +63,31 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   const [showKioskSettings, setShowKioskSettings] = useState(false);
   const [tvConfig, setTvConfig] = useState<TvKioskConfig>(() => {
     try {
-      return { ...defaultTvKioskConfig, ...JSON.parse(localStorage.getItem('biathlon_tv_kiosk_config') || '{}') };
+      const storedConfig = JSON.parse(localStorage.getItem('biathlon_tv_kiosk_config') || '{}');
+      return {
+        ...defaultTvKioskConfig,
+        ...storedConfig,
+        categoryIds: Array.isArray(storedConfig.categoryIds) ? storedConfig.categoryIds : [],
+      };
     } catch {
       return defaultTvKioskConfig;
     }
   });
 
+  const availableCategoryIds = categories.map((category) => category.id);
+  const configuredCategoryIds = tvConfig.categoryIds.filter((id) => availableCategoryIds.includes(id));
+  const rotationCategoryIds = tvConfig.categoryIds.length === 0 ? availableCategoryIds : configuredCategoryIds;
+  const rotationCategoryKey = rotationCategoryIds.join('|');
+
   useEffect(() => {
     localStorage.setItem('biathlon_tv_kiosk_config', JSON.stringify(tvConfig));
   }, [tvConfig]);
+
+  useEffect(() => {
+    onKioskModeChange?.(isKioskMode);
+  }, [isKioskMode, onKioskModeChange]);
+
+  useEffect(() => () => onKioskModeChange?.(false), [onKioskModeChange]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -78,28 +98,58 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   }, []);
 
   const toggleKioskMode = async () => {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen?.();
+    if (isKioskMode) {
+      if (document.fullscreenElement) await document.exitFullscreen?.();
+      setIsKioskMode(false);
+      setShowKioskSettings(false);
       return;
     }
 
     try {
-      await document.documentElement.requestFullscreen?.();
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        setIsKioskMode(true);
+      }
     } catch {
       setIsKioskMode(true);
     }
   };
 
   useEffect(() => {
-    if (!isKioskMode || !tvConfig.rotateCategories || categories.length === 0) return;
+    if (!isKioskMode || !tvConfig.rotateCategories || rotationCategoryIds.length === 0) return;
+
+    setSelectedCategory((current) => (
+      rotationCategoryIds.includes(current) ? current : rotationCategoryIds[0]
+    ));
+
     const rotation = window.setInterval(() => {
       setSelectedCategory((current) => {
-        const currentIndex = categories.findIndex((category) => category.id === current);
-        return categories[(currentIndex + 1) % (categories.length + 1)]?.id || 'ALL';
+        const currentIndex = rotationCategoryIds.indexOf(current);
+        return rotationCategoryIds[(currentIndex + 1) % rotationCategoryIds.length];
       });
-    }, tvConfig.rotationSeconds * 1000);
+    }, Math.max(5, tvConfig.rotationSeconds) * 1000);
     return () => window.clearInterval(rotation);
-  }, [categories, isKioskMode, tvConfig.rotateCategories, tvConfig.rotationSeconds]);
+  }, [isKioskMode, rotationCategoryKey, tvConfig.rotateCategories, tvConfig.rotationSeconds]);
+
+  const toggleRotationCategory = (categoryId: string) => {
+    setTvConfig((current) => {
+      const selectedIds = current.categoryIds.length === 0
+        ? availableCategoryIds
+        : current.categoryIds.filter((id) => availableCategoryIds.includes(id));
+
+      if (selectedIds.includes(categoryId) && selectedIds.length === 1) return current;
+
+      const nextIds = selectedIds.includes(categoryId)
+        ? selectedIds.filter((id) => id !== categoryId)
+        : availableCategoryIds.filter((id) => selectedIds.includes(id) || id === categoryId);
+
+      return {
+        ...current,
+        categoryIds: nextIds.length === availableCategoryIds.length ? [] : nextIds,
+      };
+    });
+  };
 
   useEffect(() => {
     if (!isKioskMode || !tvConfig.showClock) return;
@@ -155,8 +205,10 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   return (
     <div className={`space-y-6 ${textScaleClass} ${isKioskMode ? 'p-6 bg-slate-950 min-h-screen' : ''}`}>
       {/* Top Banner & TV Kiosk Mode Toggle */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
-        <div>
+      <div className={isKioskMode
+        ? 'flex items-center justify-end gap-2'
+        : 'bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4'}>
+        {!isKioskMode && <div>
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-4 h-4 text-amber-400" />
             <span className="text-xs font-mono uppercase tracking-widest text-amber-400 font-bold">
@@ -180,15 +232,25 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               ? `Eindklassementen inclusief schietstraftijden (+${event?.penaltySecondsPerMiss || 20}s per misser) en categorie-podia`
               : `Realtime updates tijdens de race: actieve lopers op parcours, live schietbeurten en virtuele tussenstanden`}
           </p>
-        </div>
+        </div>}
 
         <div className="flex items-center gap-2.5">
-          <button
+          {!isKioskMode && <button
             onClick={handleExportCsv}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-medium transition"
           >
             <Download className="w-4 h-4" /> CSV Export
-          </button>
+          </button>}
+          {isKioskMode && (
+            <button
+              type="button"
+              onClick={() => setShowKioskSettings((current) => !current)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 text-xs font-bold transition"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Instellingen</span>
+            </button>
+          )}
           <button
             onClick={toggleKioskMode}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
@@ -198,23 +260,14 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             }`}
           >
             <Tv className="w-4 h-4" />
-            <span>{isKioskMode ? 'Kiosk Mode Sluiten' : 'TV Kiosk Modus'}</span>
+            <span>{isKioskMode ? 'Kiosk verlaten' : 'TV Kiosk Modus'}</span>
           </button>
-          {isKioskMode && (
-            <button
-              type="button"
-              onClick={() => setShowKioskSettings((current) => !current)}
-              title="TV-weergave instellen"
-              className="p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </div>
 
       {isKioskMode && showKioskSettings && (
-        <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-4 flex flex-wrap items-center gap-4 text-xs">
+        <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-4 space-y-4 text-xs">
+          <div className="flex flex-wrap items-center gap-4">
           <label className="flex items-center gap-2 text-slate-200">
             <input type="checkbox" checked={tvConfig.showPodium} onChange={(event) => setTvConfig({ ...tvConfig, showPodium: event.target.checked })} />
             Podium tonen
@@ -244,6 +297,33 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               <option value="extra-large">Extra groot</option>
             </select>
           </label>
+          </div>
+
+          <fieldset className="border-t border-slate-800 pt-3">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <legend className="font-bold text-slate-200">Categorieën in de rotatie</legend>
+              <button
+                type="button"
+                onClick={() => setTvConfig((current) => ({ ...current, categoryIds: [] }))}
+                className="text-amber-300 hover:text-amber-200 font-semibold"
+              >
+                Alle selecteren
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {categories.map((category) => (
+                <label key={`kiosk-category-${category.id}`} className="flex items-center gap-2 rounded-lg bg-slate-800/70 border border-slate-700 px-3 py-2 text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={rotationCategoryIds.includes(category.id)}
+                    onChange={() => toggleRotationCategory(category.id)}
+                  />
+                  <span>{category.name}</span>
+                </label>
+              ))}
+            </div>
+            {categories.length === 0 && <p className="text-slate-500">Er zijn nog geen categorieën ingesteld.</p>}
+          </fieldset>
         </div>
       )}
 

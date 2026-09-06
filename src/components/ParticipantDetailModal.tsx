@@ -66,22 +66,33 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
   // Synchronize or load full participant record
   useEffect(() => {
+    let cancelled = false;
+
     async function loadParticipant() {
       if (participant) {
+        if (cancelled) return;
         setCurrentParticipant(participant);
         initForm(participant);
       } else if (result?.participantId) {
         const found = await db.participants.get(result.participantId);
-        if (found) {
+        if (found && !cancelled) {
           setCurrentParticipant(found);
           initForm(found);
         }
       }
     }
+
     if (shouldShow) {
       loadParticipant();
+    } else {
+      setCurrentParticipant(null);
+      setActiveTab('overview');
     }
-  }, [participant, result, shouldShow]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [participant?.id, result?.participantId, shouldShow]);
 
   const initForm = (p: Participant) => {
     setEditFirstName(p.firstName || '');
@@ -258,6 +269,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       };
 
       await db.participants.update(currentParticipant.id, updatedData);
+      setCurrentParticipant({ ...currentParticipant, ...updatedData });
 
       // Cascade update bib number to related timing records and shooting results if bib changed
       if (isBibChanged && parsedBib) {

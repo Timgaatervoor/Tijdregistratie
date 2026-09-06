@@ -13,6 +13,8 @@ import {
   Database,
   Cloud,
   Users,
+  HardDriveDownload,
+  FlaskConical,
 } from 'lucide-react';
 import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant, UserRole } from '../../types';
 import { db } from '../../db/dexieDb';
@@ -22,6 +24,8 @@ import { syncService, type SyncConfig } from '../../services/syncService';
 import { RaceProfileEditor } from './RaceProfileEditor';
 import { AgeCategoriesEditor } from './AgeCategoriesEditor';
 import { EventSetupAndReset } from './EventSetupAndReset';
+import { BackupRecoveryView } from './BackupRecoveryView';
+import { SimulatorView } from './SimulatorView';
 
 interface SettingsViewProps {
   event: RaceEvent | null;
@@ -42,7 +46,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   participants = [],
   onRefresh,
 }) => {
-  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'categories' | 'event_setup' | 'sync'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'categories' | 'event_setup' | 'sync' | 'backup' | 'tests'>('general');
 
   // Race Event Settings
   const [eventName, setEventName] = useState(event?.name || 'Run-Biathlon De Haan 2026');
@@ -257,6 +261,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Cloud className="w-4 h-4" />
             <span>Online Synchronisatie</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('backup')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'backup'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <HardDriveDownload className="w-4 h-4" />
+            <span>Back-up & herstel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('tests')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeSection === 'tests'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <FlaskConical className="w-4 h-4" />
+            <span>Tests</span>
+          </button>
         </div>
       </div>
 
@@ -283,6 +313,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         />
       ) : activeSection === 'sync' ? (
         <SyncSettings eventId={event?.id || ''} />
+      ) : activeSection === 'backup' ? (
+        <BackupRecoveryView event={event} onRefresh={onRefresh} />
+      ) : activeSection === 'tests' ? (
+        event?.isTestMode ? (
+          <SimulatorView onRefresh={onRefresh} />
+        ) : (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-xl">
+            <FlaskConical className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+            <h3 className="text-lg font-black text-white">Tests zijn beschikbaar in testmodus</h3>
+            <p className="text-xs text-slate-400 mt-2">
+              Schakel testmodus in bij Algemeen & Tijd om de robuustheidstests en wedstrijdsimulator te gebruiken.
+            </p>
+            <button type="button" onClick={() => setActiveSection('general')} className="mt-4 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-black">
+              Naar Algemeen & Tijd
+            </button>
+          </div>
+        )
       ) : (
         <form onSubmit={handleSaveSettings} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -9,9 +9,7 @@ import {
   Activity,
   Trophy,
   AlertTriangle,
-  HardDriveDownload,
   Settings,
-  FlaskConical,
   ChevronDown,
   Lock,
 } from 'lucide-react';
@@ -27,9 +25,7 @@ export type ActiveTab =
   | 'live'
   | 'results'
   | 'attention'
-  | 'backup'
-  | 'settings'
-  | 'simulator';
+  | 'settings';
 
 interface NavigationProps {
   activeTab: ActiveTab;
@@ -37,7 +33,6 @@ interface NavigationProps {
   conflictCount: number;
   attentionCount: number;
   deviceConfig: DeviceConfig | null;
-  isTestMode: boolean;
 }
 
 const lockedTabByRole: Record<UserRole, ActiveTab> = {
@@ -68,9 +63,7 @@ const tabConfig: Record<ActiveTab, TabConfig> = {
   live: { label: 'Live uitslagen', icon: Activity },
   results: { label: 'Einduitslagen', icon: Trophy },
   attention: { label: 'Controle', icon: AlertTriangle },
-  backup: { label: 'Back-up & herstel', icon: HardDriveDownload },
   settings: { label: 'Instellingen', icon: Settings },
-  simulator: { label: 'Tests', icon: FlaskConical },
 };
 
 const standardButtonClasses = (active: boolean) =>
@@ -103,7 +96,6 @@ export const Navigation: React.FC<NavigationProps> = ({
   conflictCount,
   attentionCount,
   deviceConfig,
-  isTestMode,
 }) => {
   const problemCount = conflictCount + attentionCount;
   const lockedTab = deviceConfig?.isLocked ? getLockedTabForRole(deviceConfig.role) : null;
@@ -161,9 +153,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     'live',
     'results',
     'attention',
-    'backup',
     'settings',
-    ...(isTestMode ? (['simulator'] as ActiveTab[]) : []),
   ];
 
   const renderMenu = (label: string, tabs: ActiveTab[]) => {
@@ -209,9 +199,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         <div className="h-6 w-px bg-slate-700 mx-1" aria-hidden="true" />
         {renderMenu('Uitslagen', ['live', 'results'])}
         {renderTabButton('attention')}
-        <div className="ml-auto">
-          {renderMenu('Beheer', ['backup', 'settings', ...(isTestMode ? (['simulator'] as ActiveTab[]) : [])])}
-        </div>
+        <div className="ml-auto">{renderTabButton('settings')}</div>
       </div>
     </nav>
   );

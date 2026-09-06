@@ -13,8 +13,6 @@ import { LiveLeaderboardView } from './components/views/LiveLeaderboardView';
 import { ParticipantsView } from './components/views/ParticipantsView';
 import { WavesView } from './components/views/WavesView';
 import { AttentionView } from './components/views/AttentionView';
-import { BackupRecoveryView } from './components/views/BackupRecoveryView';
-import { SimulatorView } from './components/views/SimulatorView';
 import { SettingsView } from './components/views/SettingsView';
 
 // Modals
@@ -29,7 +27,7 @@ import { db } from './db/dexieDb';
 
 const validTabs = new Set<ActiveTab>([
   'event', 'participants', 'waves', 'start', 'shooting', 'finish',
-  'live', 'results', 'attention', 'backup', 'settings', 'simulator',
+  'live', 'results', 'attention', 'settings',
 ]);
 
 const getInitialTab = (): ActiveTab => {
@@ -80,15 +78,13 @@ export default function App() {
   const missingShootingCount = [...finishedBibs].filter((bib) => !shootingBibs.has(bib)).length;
   const attentionCount = unknownBibCount + missingStartCount + missingShootingCount;
   const lockedTab = deviceConfig?.isLocked ? getLockedTabForRole(deviceConfig.role) : null;
-  const displayedTab = lockedTab || (!event?.isTestMode && currentTab === 'simulator' ? 'event' : currentTab);
+  const displayedTab = lockedTab || currentTab;
 
   React.useEffect(() => {
     if (deviceConfig?.isLocked) {
       setCurrentTab(getLockedTabForRole(deviceConfig.role));
-    } else if (!event?.isTestMode && currentTab === 'simulator') {
-      setCurrentTab('event');
     }
-  }, [deviceConfig?.isLocked, deviceConfig?.role, event?.isTestMode, currentTab]);
+  }, [deviceConfig?.isLocked, deviceConfig?.role]);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -191,7 +187,6 @@ export default function App() {
           conflictCount={unresolvedConflictsCount}
           attentionCount={attentionCount}
           deviceConfig={deviceConfig}
-          isTestMode={event?.isTestMode ?? false}
         />
       )}
 
@@ -285,12 +280,6 @@ export default function App() {
             onSelectParticipant={setSelectedParticipant}
           />
         )}
-
-        {displayedTab === 'backup' && (
-          <BackupRecoveryView event={event} onRefresh={refresh} />
-        )}
-
-        {displayedTab === 'simulator' && event?.isTestMode && <SimulatorView onRefresh={refresh} />}
 
         {displayedTab === 'settings' && (
           <SettingsView

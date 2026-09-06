@@ -248,12 +248,14 @@ export async function clearAllWaves(): Promise<void> {
 export async function resetTimingAndShooting(): Promise<void> {
   await db.transaction(
     'rw',
-    db.timingRecords,
-    db.shootingResults,
-    db.operations,
-    db.conflicts,
-    db.participants,
-    db.auditLogs,
+    [
+      db.timingRecords,
+      db.shootingResults,
+      db.operations,
+      db.conflicts,
+      db.participants,
+      db.auditLogs,
+    ],
     async () => {
       await db.timingRecords.clear();
       await db.shootingResults.clear();
@@ -299,16 +301,18 @@ export async function resetToBlankEvent(
 
   await db.transaction(
     'rw',
-    db.events,
-    db.raceProfiles,
-    db.categories,
-    db.waves,
-    db.participants,
-    db.timingRecords,
-    db.shootingResults,
-    db.operations,
-    db.conflicts,
-    db.auditLogs,
+    [
+      db.events,
+      db.raceProfiles,
+      db.categories,
+      db.waves,
+      db.participants,
+      db.timingRecords,
+      db.shootingResults,
+      db.operations,
+      db.conflicts,
+      db.auditLogs,
+    ],
     async () => {
       await Promise.all([
         db.events.clear(),

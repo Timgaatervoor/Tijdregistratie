@@ -154,7 +154,7 @@ export const PreRaceCheckModal: React.FC<PreRaceCheckModalProps> = ({
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Pre-Race System Check</h2>
+              <h2 className="text-lg font-bold text-white">Voorcontrole wedstrijd</h2>
               <p className="text-xs text-slate-400">
                 Systeemcontrole vóór de wedstrijd officieel LIVE gaat
               </p>
@@ -209,7 +209,7 @@ export const PreRaceCheckModal: React.FC<PreRaceCheckModalProps> = ({
                 <span className="text-base font-bold text-white">{participantCount}</span>
               </div>
               <div className="bg-slate-900/80 p-2 rounded">
-                <span className="text-slate-400 block">Waves</span>
+                <span className="text-slate-400 block">Startgroepen</span>
                 <span className="text-base font-bold text-white">{safeWaves.length}</span>
               </div>
               <div className="bg-slate-900/80 p-2 rounded">

@@ -7,10 +7,11 @@ import {
   VolumeX,
   Maximize,
   Minimize,
-  Download,
   Clock,
   Laptop,
   CheckCircle2,
+  Printer,
+  LockOpen,
 } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -19,12 +20,23 @@ import { syncService } from '../services/syncService';
 import type { RaceEvent, DeviceConfig } from '../types';
 import { InstallDesktopModal } from './InstallDesktopModal';
 
+const roleLabels: Record<DeviceConfig['role'], string> = {
+  ADMIN: 'Beheerder',
+  RACE_DIRECTOR: 'Wedstrijdleider',
+  REGISTRATION: 'Inschrijving',
+  START_OPERATOR: 'Startpost',
+  SHOOTING_OPERATOR: 'Schietpost',
+  FINISH_OPERATOR: 'Finishpost',
+  VIEWER: 'Live weergave',
+};
+
 interface HeaderProps {
   event: RaceEvent | null;
   deviceConfig: DeviceConfig | null;
   pendingSyncCount: number;
   onOpenPreRaceCheck: () => void;
   onOpenPrint: () => void;
+  onUnlockDevice: () => void;
   isTestMode: boolean;
 }
 
@@ -34,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   pendingSyncCount,
   onOpenPreRaceCheck,
   onOpenPrint,
+  onUnlockDevice,
   isTestMode,
 }) => {
   const { isOnline, isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
@@ -77,21 +90,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 text-slate-100">
-      {/* Test mode banner (Req 62) */}
-      {isTestMode && (
-        <div className="bg-amber-500 text-slate-950 px-4 py-1 text-xs font-bold tracking-wider flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span>🧪 TEST MODE — Testresultaten beïnvloeden de officiële productie niet</span>
-            <span className="bg-amber-600/60 px-2 py-0.5 rounded text-[11px] font-mono">
-              Failsafe tests & simulatie actief
-            </span>
-          </div>
-          <span className="text-[11px] font-normal opacity-90 hidden sm:inline font-mono">
-            {event?.name || 'Run Biathlon De Haan'} {event?.date ? `(${event.date})` : ''}
-          </span>
-        </div>
-      )}
-
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
         {/* Brand & Event Title */}
         <div className="flex items-center gap-3">
@@ -154,7 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {pendingSyncCount > 0
                     ? `${pendingSyncCount} in wachtrij`
                     : syncConfigured
-                    ? 'ONLINE & SYNCED'
+                    ? 'ONLINE & GESYNCHRONISEERD'
                     : 'ONLINE - LOKAAL'}
                 </span>
               </>
@@ -181,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Laptop className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-amber-400 font-semibold">{deviceConfig?.id || 'FINISH-01'}</span>
             <span className="text-slate-500">|</span>
-            <span>{deviceConfig?.role?.replace('_', ' ') || 'FINISH'}</span>
+            <span>{deviceConfig ? roleLabels[deviceConfig.role] : 'Finishpost'}</span>
             {deviceConfig?.operatorName && (
               <>
                 <span className="text-slate-500">|</span>
@@ -189,6 +187,18 @@ export const Header: React.FC<HeaderProps> = ({
               </>
             )}
           </div>
+
+          {deviceConfig?.isLocked && (
+            <button
+              type="button"
+              onClick={onUnlockDevice}
+              title="Toestel ontgrendelen met beheerderscode"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-950/60 border border-amber-600/50 text-amber-300 hover:bg-amber-900/60 transition text-xs font-semibold"
+            >
+              <LockOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ontgrendelen</span>
+            </button>
+          )}
 
           {/* Clock Offset Warning if > 1s (Req 42) */}
           {Math.abs(clockOffset) > 1000 && (
@@ -202,17 +212,19 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Simulated Offline Toggle */}
-          <button
-            onClick={toggleSimulatedOffline}
-            title={isSimulatedOffline ? 'Simulatie offline uitschakelen' : 'Simuleer offline netwerk'}
-            className={`px-2 py-1 rounded text-xs font-medium border transition ${
-              isSimulatedOffline
-                ? 'bg-amber-600 border-amber-500 text-slate-950 font-bold'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            {isSimulatedOffline ? 'Sim: Offline Aan' : 'Simuleer Offline'}
-          </button>
+          {isTestMode && !deviceConfig?.isLocked && (
+            <button
+              onClick={toggleSimulatedOffline}
+              title={isSimulatedOffline ? 'Offline simulatie uitschakelen' : 'Offline netwerk simuleren'}
+              className={`px-2 py-1 rounded text-xs font-medium border transition ${
+                isSimulatedOffline
+                  ? 'bg-amber-600 border-amber-500 text-slate-950 font-bold'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {isSimulatedOffline ? 'Offline simulatie aan' : 'Offline simuleren'}
+            </button>
+          )}
 
           {/* Sound Toggle (Req 52) */}
           <button
@@ -237,24 +249,40 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Pre-Race Check Button (Req 66) */}
-          <button
-            onClick={onOpenPreRaceCheck}
-            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-950/60 border border-blue-600/40 text-blue-300 hover:bg-blue-900/60 transition text-xs font-semibold"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-            <span>Pre-Race Check</span>
-          </button>
+          {!deviceConfig?.isLocked && (
+            <button
+              onClick={onOpenPreRaceCheck}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-950/60 border border-blue-600/40 text-blue-300 hover:bg-blue-900/60 transition text-xs font-semibold"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden lg:inline">Voorcontrole</span>
+            </button>
+          )}
+
+          {!deviceConfig?.isLocked && (
+            <button
+              type="button"
+              onClick={onOpenPrint}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
+              title="Startlijsten, startnummers en noodformulieren afdrukken"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Afdrukken</span>
+            </button>
+          )}
 
           {/* Desktop App & Local Offline Button */}
-          <button
-            onClick={() => setShowDesktopModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition"
-            title="Lokaal opslaan & als zelfstandig programma installeren"
-          >
-            <Laptop className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span className="hidden sm:inline">Desktop App / Lokaal</span>
-            <span className="sm:hidden">Lokaal</span>
-          </button>
+          {!deviceConfig?.isLocked && (
+            <button
+              onClick={() => setShowDesktopModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition"
+              title="Lokaal opslaan en als zelfstandig programma installeren"
+            >
+              <Laptop className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="hidden sm:inline">Lokale app</span>
+              <span className="sm:hidden">Lokaal</span>
+            </button>
+          )}
         </div>
       </div>
 

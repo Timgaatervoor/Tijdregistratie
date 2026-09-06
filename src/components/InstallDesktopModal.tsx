@@ -79,7 +79,7 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
             Lokaal Opslaan & Als Desktop App Gebruiken
           </h2>
           <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-            U kunt dit tijdregistratiesysteem op <strong>twee manieren</strong> lokaal op uw laptop of computer als een zelfstandig programma laten draaien zonder internetverbinding:
+            U kunt dit tijdregistratiesysteem op <strong>twee manieren</strong> lokaal als zelfstandig programma gebruiken. Onderaan kunt u daarnaast een afzonderlijke gegevensback-up bewaren.
           </p>
         </div>
 
@@ -195,11 +195,11 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
             </div>
           </div>
 
-          {/* Method 3: Local Database Backup (.json) */}
+          {/* Separate local database backup (.json) */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1 max-w-md">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-emerald-400" /> Lokale Database Bewaren op Harde Schijf / USB
+                <HardDrive className="w-4 h-4 text-emerald-400" /> Gegevensback-up bewaren op harde schijf of USB
               </h3>
               <p className="text-slate-300">
                 Sla alle huidige deelnemers, waves, categorieën en geregistreerde tijden op als een veilig lokaal <code className="text-amber-400">.json</code> bestand op uw computer.

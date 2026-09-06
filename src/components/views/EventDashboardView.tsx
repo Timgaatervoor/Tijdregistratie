@@ -69,7 +69,7 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs font-mono uppercase tracking-widest text-emerald-400 font-bold">
-              Command Center
+              Wedstrijdoverzicht
             </span>
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight">
@@ -182,7 +182,7 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-400" /> Waves & Startvolgorde
+                <Clock className="w-4 h-4 text-amber-400" /> Startgroepen & startvolgorde
               </h3>
               <button
                 onClick={() => onNavigate('waves')}

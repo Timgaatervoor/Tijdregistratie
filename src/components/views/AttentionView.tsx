@@ -38,7 +38,6 @@ export const AttentionView: React.FC<AttentionViewProps> = ({
   const unresolvedConflicts = conflicts.filter((c) => !c.resolvedAt);
 
   // Anomaly checks
-  const participantMap = new Map<string, Participant>(participants.map((p) => [p.id, p]));
   const bibMap = new Map<number, Participant>(
     participants.filter((p) => p.bibNumber !== undefined).map((p) => [p.bibNumber!, p])
   );
@@ -89,7 +88,7 @@ export const AttentionView: React.FC<AttentionViewProps> = ({
             Conflicten, Afwijkingen & Auditlog
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            {unresolvedConflicts.length} onopgeloste conflicten • {unknownBibRecords.length} onbekende noodtijden
+            {unresolvedConflicts.length} onopgeloste conflicten • {unknownBibRecords.length + finishedWithoutStart.length + finishedWithoutShooting.length} afwijkingen
           </p>
         </div>
 
@@ -115,7 +114,7 @@ export const AttentionView: React.FC<AttentionViewProps> = ({
             }`}
           >
             <AlertTriangle className="w-4 h-4" />
-            <span>Afwijkingen ({unknownBibRecords.length + finishedWithoutStart.length})</span>
+            <span>Afwijkingen ({unknownBibRecords.length + finishedWithoutStart.length + finishedWithoutShooting.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('audit')}
@@ -246,6 +245,40 @@ export const AttentionView: React.FC<AttentionViewProps> = ({
                       </div>
                       <span className="text-xs text-red-400 font-semibold">Starttijd ontbreekt</span>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Finished without shooting result */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow space-y-3">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Crosshair className="w-4 h-4 text-blue-400" /> Gefinisht Zonder Schietresultaat
+            </h3>
+            {finishedWithoutShooting.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-3">
+                Alle gefinishte deelnemers hebben een geregistreerde schietbeurt
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {finishedWithoutShooting.map((bib) => {
+                  const participant = bibMap.get(bib);
+                  return (
+                    <button
+                      key={`fwo-shooting-${bib}`}
+                      type="button"
+                      onClick={() => participant && onSelectParticipant(participant)}
+                      className="w-full p-3 bg-slate-850 rounded-xl border border-slate-750 flex items-center justify-between text-xs text-left hover:bg-slate-800 transition"
+                    >
+                      <span>
+                        <span className="font-mono font-bold text-white block">Bib #{bib}</span>
+                        <span className="text-slate-400 block text-[11px]">
+                          {participant ? `${participant.firstName} ${participant.lastName}` : 'Onbekende atleet'}
+                        </span>
+                      </span>
+                      <span className="text-xs text-blue-300 font-semibold">Schietresultaat ontbreekt</span>
+                    </button>
                   );
                 })}
               </div>

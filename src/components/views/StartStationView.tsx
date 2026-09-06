@@ -351,7 +351,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            <Users className="w-4 h-4" /> Massastart (Wave)
+            <Users className="w-4 h-4" /> Massastart (startgroep)
           </button>
           <button
             type="button"
@@ -400,7 +400,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                 Modus 1: Mass Start
               </span>
               <h3 className="text-2xl font-black text-white tracking-tight mt-0.5">
-                Wave Massastart
+                Massastart per startgroep
               </h3>
               <p className="text-xs text-slate-400">
                 Alle deelnemers uit de geselecteerde wave krijgen synchroon exact dezelfde starttijd.
@@ -408,7 +408,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="text-xs text-slate-400 font-semibold">Wave:</label>
+              <label className="text-xs text-slate-400 font-semibold">Startgroep:</label>
               <select
                 value={selectedWave?.id || ''}
                 onChange={(e) => setSelectedWaveId(e.target.value)}

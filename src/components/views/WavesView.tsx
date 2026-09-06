@@ -188,10 +188,10 @@ export const WavesView: React.FC<WavesViewProps> = ({
             <Layers className="w-4 h-4" /> Startgroepen & Tijdschema
           </span>
           <h2 className="text-2xl font-black text-white tracking-tight mt-0.5">
-            Waves & Startindeling
+            Startgroepen & startindeling
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            {waves.length} waves ingesteld • Starturen aanpassen, uitstellen en deelnemers indelen
+            {waves.length} startgroepen ingesteld • Starturen aanpassen, uitstellen en deelnemers indelen
           </p>
         </div>
 
@@ -203,7 +203,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
           }}
           className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition uppercase tracking-wider"
         >
-          <Plus className="w-4 h-4" /> Nieuwe Wave Toevoegen
+          <Plus className="w-4 h-4" /> Nieuwe startgroep
         </button>
       </div>
 
@@ -355,7 +355,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition"
                 >
                   <Users className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Deelnemers in Wave ({waveParticipants.length})</span>
+                  <span>Deelnemers in startgroep ({waveParticipants.length})</span>
                 </button>
 
                 <div className="flex items-center justify-between gap-2 text-xs">
@@ -408,7 +408,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
             <form onSubmit={handleSaveEditWave} className="space-y-4">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Naam van de Wave:</label>
+                <label className="text-slate-300 font-semibold block mb-1">Naam van de startgroep:</label>
                 <input
                   type="text"
                   required
@@ -490,7 +490,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Plus className="w-4 h-4 text-amber-400" /> Nieuwe Wave Toevoegen
+                <Plus className="w-4 h-4 text-amber-400" /> Nieuwe startgroep
               </h3>
               <button
                 onClick={() => setShowAddModal(false)}

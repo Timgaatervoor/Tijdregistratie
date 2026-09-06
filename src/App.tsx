@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useEventData } from './hooks/useEventData';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { Header } from './components/Header';
-import { Navigation, type ActiveTab } from './components/Navigation';
+import { Navigation, getLockedTabForRole, type ActiveTab } from './components/Navigation';
 
 // Views
 import { EventDashboardView } from './components/views/EventDashboardView';
@@ -25,6 +25,18 @@ import { ParticipantDetailModal } from './components/ParticipantDetailModal';
 
 import type { RaceConflict, Participant, RaceResult } from './types';
 import { AlertTriangle } from 'lucide-react';
+import { db } from './db/dexieDb';
+
+const validTabs = new Set<ActiveTab>([
+  'event', 'participants', 'waves', 'start', 'shooting', 'finish',
+  'live', 'results', 'attention', 'backup', 'settings', 'simulator',
+]);
+
+const getInitialTab = (): ActiveTab => {
+  if (typeof window === 'undefined') return 'event';
+  const hashTab = window.location.hash.replace(/^#/, '') as ActiveTab;
+  return validTabs.has(hashTab) ? hashTab : 'event';
+};
 
 export default function App() {
   const {
@@ -45,7 +57,7 @@ export default function App() {
   } = useEventData();
 
   const { isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
-  const [currentTab, setCurrentTab] = useState<ActiveTab>('event');
+  const [currentTab, setCurrentTab] = useState<ActiveTab>(getInitialTab);
 
   // Modals state
   const [showPreRaceModal, setShowPreRaceModal] = useState(false);
@@ -54,6 +66,68 @@ export default function App() {
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
   const unresolvedConflictsCount = conflicts.filter((c) => !c.resolvedAt).length;
+  const activeTimingRecords = timingRecords.filter((record) => !record.isReversed);
+  const unknownBibCount = activeTimingRecords.filter((record) => record.isUnknownBib).length;
+  const startedBibs = new Set(
+    activeTimingRecords.filter((record) => record.type === 'START').map((record) => record.bibNumber)
+  );
+  const finishedBibs = new Set(
+    activeTimingRecords.filter((record) => record.type === 'FINISH').map((record) => record.bibNumber)
+  );
+  const shootingBibs = new Set(shootingResults.map((result) => result.bibNumber));
+  const missingStartCount = [...finishedBibs].filter((bib) => !startedBibs.has(bib)).length;
+  const missingShootingCount = [...finishedBibs].filter((bib) => !shootingBibs.has(bib)).length;
+  const attentionCount = unknownBibCount + missingStartCount + missingShootingCount;
+  const lockedTab = deviceConfig?.isLocked ? getLockedTabForRole(deviceConfig.role) : null;
+  const displayedTab = lockedTab || (!event?.isTestMode && currentTab === 'simulator' ? 'event' : currentTab);
+
+  React.useEffect(() => {
+    if (deviceConfig?.isLocked) {
+      setCurrentTab(getLockedTabForRole(deviceConfig.role));
+    } else if (!event?.isTestMode && currentTab === 'simulator') {
+      setCurrentTab('event');
+    }
+  }, [deviceConfig?.isLocked, deviceConfig?.role, event?.isTestMode, currentTab]);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const nextHash = `#${currentTab}`;
+      if (window.location.hash !== nextHash) {
+        window.history.pushState(null, '', nextHash);
+      }
+    }
+  }, [currentTab]);
+
+  React.useEffect(() => {
+    const restoreTabFromHistory = () => {
+      const hashTab = window.location.hash.replace(/^#/, '') as ActiveTab;
+      if (validTabs.has(hashTab)) setCurrentTab(hashTab);
+    };
+    window.addEventListener('popstate', restoreTabFromHistory);
+    window.addEventListener('hashchange', restoreTabFromHistory);
+    return () => {
+      window.removeEventListener('popstate', restoreTabFromHistory);
+      window.removeEventListener('hashchange', restoreTabFromHistory);
+    };
+  }, []);
+
+  const handleUnlockDevice = async () => {
+    if (!deviceConfig?.isLocked) return;
+    if (deviceConfig.pin) {
+      const enteredPin = window.prompt('Voer de beheerderscode in om dit toestel te ontgrendelen:');
+      if (enteredPin === null) return;
+      if (enteredPin !== deviceConfig.pin) {
+        window.alert('Onjuiste beheerderscode. Het toestel blijft vergrendeld.');
+        return;
+      }
+    } else if (!window.confirm('Wilt u dit toestel ontgrendelen en alle menu’s opnieuw tonen?')) {
+      return;
+    }
+
+    await db.devices.update(deviceConfig.id, { isLocked: false });
+    await refresh();
+    setCurrentTab('event');
+  };
 
   const handleSelectParticipantFromResult = (result: RaceResult) => {
     const p = participants.find((item) => item.id === result.participantId);
@@ -102,20 +176,23 @@ export default function App() {
         pendingSyncCount={pendingSyncCount}
         onOpenPreRaceCheck={() => setShowPreRaceModal(true)}
         onOpenPrint={() => setShowPrintModal(true)}
+        onUnlockDevice={handleUnlockDevice}
         isTestMode={event?.isTestMode ?? false}
       />
 
       {/* Main Tab Navigation */}
       <Navigation
-        activeTab={currentTab}
+        activeTab={displayedTab}
         onSelectTab={setCurrentTab}
         conflictCount={unresolvedConflictsCount}
-        attentionCount={0}
+        attentionCount={attentionCount}
+        deviceConfig={deviceConfig}
+        isTestMode={event?.isTestMode ?? false}
       />
 
       {/* Main Content View */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 pb-16">
-        {currentTab === 'event' && (
+        {displayedTab === 'event' && (
           <EventDashboardView
             event={event}
             participants={participants}
@@ -129,7 +206,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'start' && (
+        {displayedTab === 'start' && (
           <StartStationView
             event={event}
             waves={waves}
@@ -139,7 +216,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'shooting' && (
+        {displayedTab === 'shooting' && (
           <ShootingStationView
             event={event}
             participants={participants}
@@ -149,7 +226,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'finish' && (
+        {displayedTab === 'finish' && (
           <FinishStationView
             event={event}
             participants={participants}
@@ -158,18 +235,18 @@ export default function App() {
           />
         )}
 
-        {(currentTab === 'live' || currentTab === 'results') && (
+        {(displayedTab === 'live' || displayedTab === 'results') && (
           <LiveLeaderboardView
             results={results}
             categories={categories}
             waves={waves}
             event={event}
-            mode={currentTab === 'results' ? 'results' : 'live'}
+            mode={displayedTab === 'results' ? 'results' : 'live'}
             onSelectParticipant={handleSelectParticipantFromResult}
           />
         )}
 
-        {currentTab === 'participants' && (
+        {displayedTab === 'participants' && (
           <ParticipantsView
             participants={participants}
             categories={categories}
@@ -180,7 +257,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'waves' && (
+        {displayedTab === 'waves' && (
           <WavesView
             waves={waves}
             categories={categories}
@@ -189,7 +266,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'attention' && (
+        {displayedTab === 'attention' && (
           <AttentionView
             conflicts={conflicts}
             participants={participants}
@@ -201,13 +278,13 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'backup' && (
+        {displayedTab === 'backup' && (
           <BackupRecoveryView event={event} onRefresh={refresh} />
         )}
 
-        {currentTab === 'simulator' && <SimulatorView onRefresh={refresh} />}
+        {displayedTab === 'simulator' && event?.isTestMode && <SimulatorView onRefresh={refresh} />}
 
-        {currentTab === 'settings' && (
+        {displayedTab === 'settings' && (
           <SettingsView
             event={event}
             deviceConfig={deviceConfig}

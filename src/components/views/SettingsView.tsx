@@ -13,7 +13,7 @@ import {
   Database,
   Cloud,
 } from 'lucide-react';
-import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant } from '../../types';
+import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant, UserRole } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
@@ -58,6 +58,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deviceId, setDeviceId] = useState(deviceConfig?.id || 'FINISH-01');
   const [operatorName, setOperatorName] = useState(deviceConfig?.operatorName || 'Jan Peeters');
   const [stationName, setStationName] = useState(deviceConfig?.stationName || 'Finish Hoofdpost');
+  const [deviceRole, setDeviceRole] = useState<UserRole>(deviceConfig?.role || 'FINISH_OPERATOR');
+  const [deviceLocked, setDeviceLocked] = useState(deviceConfig?.isLocked ?? false);
+  const [devicePin, setDevicePin] = useState(deviceConfig?.pin || '');
   const [savedMessage, setSavedMessage] = useState(false);
 
   // Synchronize on initial mount without overwriting during active typing
@@ -84,6 +87,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setDeviceId(deviceConfig.id);
       setOperatorName(deviceConfig.operatorName || 'Jan Peeters');
       setStationName(deviceConfig.stationName);
+      setDeviceRole(deviceConfig.role);
+      setDeviceLocked(deviceConfig.isLocked);
+      setDevicePin(deviceConfig.pin || '');
       deviceConfigLoadRef.current = true;
     }
   }, [deviceConfig]);
@@ -120,11 +126,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     await db.devices.put({
       id: activeDeviceId,
       name: `Tablet ${activeDeviceId}`,
-      role: 'FINISH_OPERATOR',
+      role: deviceRole,
       operatorName: operatorName.trim() || 'Operator',
-      stationName,
-      isLocked: false,
-      clockOffsetMs: 0,
+      stationName: stationName.trim() || 'Wedstrijdpost',
+      pin: devicePin.trim() || undefined,
+      isLocked: deviceLocked,
+      clockOffsetMs: deviceConfig?.clockOffsetMs || 0,
     });
 
     operationService.setDeviceAndOperator(activeDeviceId, operatorName.trim() || 'Operator');
@@ -207,7 +214,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Wedstrijd Inhoud (Loop / Schiet)</span>
+            <span>Wedstrijdinhoud</span>
           </button>
 
           <button
@@ -220,7 +227,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>Evenement Opzet & Reset (Waves & Lopers)</span>
+            <span>Gevarenzone & reset</span>
           </button>
 
           <button
@@ -249,7 +256,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           event={event}
           waves={waves}
           participants={participants}
-          categories={categories}
           onRefresh={onRefresh}
         />
       ) : activeSection === 'sync' ? (
@@ -394,7 +400,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <Laptop className="w-4 h-4 text-blue-400" /> Toestel- & Operator Identiteit
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="text-slate-300 font-semibold block mb-1">
                   Apparaat Identificatie (Device ID):
@@ -406,6 +412,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   placeholder="bv. FINISH-01"
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white font-mono font-bold"
                 />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Rol van dit toestel:</label>
+                <select
+                  value={deviceRole}
+                  onChange={(event) => setDeviceRole(event.target.value as UserRole)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white font-semibold"
+                >
+                  <option value="ADMIN">Beheerder</option>
+                  <option value="RACE_DIRECTOR">Wedstrijdleider</option>
+                  <option value="REGISTRATION">Inschrijving</option>
+                  <option value="START_OPERATOR">Startpost</option>
+                  <option value="SHOOTING_OPERATOR">Schietpost</option>
+                  <option value="FINISH_OPERATOR">Finishpost</option>
+                  <option value="VIEWER">Alleen live uitslagen</option>
+                </select>
               </div>
 
               <div>
@@ -430,6 +453,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   placeholder="bv. Finish Straat Hoofdpost"
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
                 />
+              </div>
+
+              <label className="sm:col-span-2 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deviceLocked}
+                  onChange={(event) => setDeviceLocked(event.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-amber-500"
+                />
+                <span>
+                  <strong className="block text-white">Vergrendel toestel op toegewezen post</strong>
+                  <span className="block mt-0.5 text-[11px] text-slate-400">
+                    Na opslaan ziet de operator alleen het scherm dat bij de gekozen rol hoort.
+                  </span>
+                </span>
+              </label>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Beheerderscode:</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  value={devicePin}
+                  onChange={(event) => setDevicePin(event.target.value)}
+                  placeholder="Optioneel, bv. 2468"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white font-mono"
+                />
+                <span className="text-[11px] text-slate-500 block mt-1">Nodig om een vergrendelde post te openen.</span>
               </div>
             </div>
           </div>

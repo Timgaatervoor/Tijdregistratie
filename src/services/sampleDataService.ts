@@ -125,16 +125,16 @@ export async function initializeSampleData(force = false): Promise<void> {
 
   // 3. 10 Categories
   const categories: Category[] = [
-    { id: 'cat-u8-m', name: 'U8 Jongens', code: 'U8-J', gender: 'M', minAge: 6, maxAge: 7, raceProfileId: 'profile-kids', bibRangeStart: 1, bibRangeEnd: 29 },
-    { id: 'cat-u8-f', name: 'U8 Meisjes', code: 'U8-M', gender: 'F', minAge: 6, maxAge: 7, raceProfileId: 'profile-kids', bibRangeStart: 30, bibRangeEnd: 59 },
-    { id: 'cat-u10-m', name: 'U10 Jongens', code: 'U10-J', gender: 'M', minAge: 8, maxAge: 9, raceProfileId: 'profile-kids', bibRangeStart: 60, bibRangeEnd: 89 },
-    { id: 'cat-u10-f', name: 'U10 Meisjes', code: 'U10-M', gender: 'F', minAge: 8, maxAge: 9, raceProfileId: 'profile-kids', bibRangeStart: 90, bibRangeEnd: 119 },
-    { id: 'cat-u12', name: 'U12 Jeugd', code: 'U12', gender: 'ALL', minAge: 10, maxAge: 11, raceProfileId: 'profile-junior', bibRangeStart: 120, bibRangeEnd: 159 },
-    { id: 'cat-u14', name: 'U14 Cadetten', code: 'U14', gender: 'ALL', minAge: 12, maxAge: 13, raceProfileId: 'profile-junior', bibRangeStart: 160, bibRangeEnd: 199 },
-    { id: 'cat-adult-m', name: 'Volwassenen Heren Comp.', code: 'HEREN-COMP', gender: 'M', minAge: 18, raceProfileId: 'profile-adult', bibRangeStart: 200, bibRangeEnd: 259 },
-    { id: 'cat-adult-f', name: 'Volwassenen Dames Comp.', code: 'DAMES-COMP', gender: 'F', minAge: 18, raceProfileId: 'profile-adult', bibRangeStart: 260, bibRangeEnd: 319 },
-    { id: 'cat-rec-m', name: 'Recreatief Heren', code: 'REC-H', gender: 'M', minAge: 16, raceProfileId: 'profile-adult', bibRangeStart: 320, bibRangeEnd: 359 },
-    { id: 'cat-rec-f', name: 'Recreatief Dames', code: 'REC-D', gender: 'F', minAge: 16, raceProfileId: 'profile-adult', bibRangeStart: 360, bibRangeEnd: 399 },
+    { id: 'cat-u8-m', name: 'U8 Jongens', code: 'U8-J', gender: 'M', minAge: 6, maxAge: 7, raceProfileIds: ['profile-kids'], raceProfileId: 'profile-kids', bibRangeStart: 1, bibRangeEnd: 29 },
+    { id: 'cat-u8-f', name: 'U8 Meisjes', code: 'U8-M', gender: 'F', minAge: 6, maxAge: 7, raceProfileIds: ['profile-kids'], raceProfileId: 'profile-kids', bibRangeStart: 30, bibRangeEnd: 59 },
+    { id: 'cat-u10-m', name: 'U10 Jongens', code: 'U10-J', gender: 'M', minAge: 8, maxAge: 9, raceProfileIds: ['profile-kids'], raceProfileId: 'profile-kids', bibRangeStart: 60, bibRangeEnd: 89 },
+    { id: 'cat-u10-f', name: 'U10 Meisjes', code: 'U10-M', gender: 'F', minAge: 8, maxAge: 9, raceProfileIds: ['profile-kids'], raceProfileId: 'profile-kids', bibRangeStart: 90, bibRangeEnd: 119 },
+    { id: 'cat-u12', name: 'U12 Jeugd', code: 'U12', gender: 'ALL', minAge: 10, maxAge: 11, raceProfileIds: ['profile-junior'], raceProfileId: 'profile-junior', bibRangeStart: 120, bibRangeEnd: 159 },
+    { id: 'cat-u14', name: 'U14 Cadetten', code: 'U14', gender: 'ALL', minAge: 12, maxAge: 13, raceProfileIds: ['profile-junior'], raceProfileId: 'profile-junior', bibRangeStart: 160, bibRangeEnd: 199 },
+    { id: 'cat-adult-m', name: 'Volwassenen Heren Comp.', code: 'HEREN-COMP', gender: 'M', minAge: 18, raceProfileIds: ['profile-adult'], raceProfileId: 'profile-adult', bibRangeStart: 200, bibRangeEnd: 259 },
+    { id: 'cat-adult-f', name: 'Volwassenen Dames Comp.', code: 'DAMES-COMP', gender: 'F', minAge: 18, raceProfileIds: ['profile-adult'], raceProfileId: 'profile-adult', bibRangeStart: 260, bibRangeEnd: 319 },
+    { id: 'cat-rec-m', name: 'Recreatief Heren', code: 'REC-H', gender: 'M', minAge: 16, raceProfileIds: ['profile-adult'], raceProfileId: 'profile-adult', bibRangeStart: 320, bibRangeEnd: 359 },
+    { id: 'cat-rec-f', name: 'Recreatief Dames', code: 'REC-D', gender: 'F', minAge: 16, raceProfileIds: ['profile-adult'], raceProfileId: 'profile-adult', bibRangeStart: 360, bibRangeEnd: 399 },
   ];
 
   // 4. 10 Waves
@@ -179,7 +179,7 @@ export async function initializeSampleData(force = false): Promise<void> {
       club,
       team: club,
       categoryId: category.id,
-      raceProfileId: category.raceProfileId,
+      raceProfileId: category.raceProfileIds[0] || category.raceProfileId || 'profile-adult',
       bibNumber: bibCounter++,
       waveId: wave.id,
       notes: i === 0 ? 'Titelverdediger 2025' : undefined,

@@ -1,6 +1,7 @@
 import { db } from '../db/dexieDb';
 import type { EventSnapshot, RaceEvent } from '../types';
 import { syncService } from './syncService';
+import { getCategoryProfileIds } from './categoryProfileService';
 
 export async function calculateSHA256(text: string): Promise<string> {
   if (typeof crypto !== 'undefined' && crypto.subtle) {
@@ -226,7 +227,14 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       if (data.shootingResults?.length) await db.shootingResults.bulkPut(data.shootingResults);
       if (data.waves?.length) await db.waves.bulkPut(data.waves);
       if (data.profiles?.length) await db.raceProfiles.bulkPut(data.profiles);
-      if (data.categories?.length) await db.categories.bulkPut(data.categories);
+      if (data.categories?.length) {
+        await db.categories.bulkPut(
+          data.categories.map((category) => {
+            const raceProfileIds = getCategoryProfileIds(category);
+            return { ...category, raceProfileIds, raceProfileId: raceProfileIds[0] };
+          })
+        );
+      }
       if (data.operations?.length) await db.operations.bulkPut(data.operations);
       if (data.conflicts?.length) await db.conflicts.bulkPut(data.conflicts);
       if (data.auditLogs?.length) await db.auditLogs.bulkPut(data.auditLogs);

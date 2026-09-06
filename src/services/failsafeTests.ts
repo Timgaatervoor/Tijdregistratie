@@ -1,7 +1,8 @@
 import { db } from '../db/dexieDb';
 import { operationService, generateUUID } from './operationService';
 import { validateAndMapRows, combineSheets, type RawParsedRow, type SheetInfo } from './stamhoofdParser';
-import type { Participant } from '../types';
+import { categoryUsesProfile, getCategoryProfileIds, withCategoryProfiles } from './categoryProfileService';
+import type { Category, Participant } from '../types';
 
 export interface TestResult {
   id: string;
@@ -480,6 +481,33 @@ export async function runFailsafeTestSuite(): Promise<TestResult[]> {
       }
 
       return `3 rijen uit 2 tabbladen samengevoegd; categorie-fallback naar tabbladnaam ('Kids U10') en expliciete reeks ('M40') gevalideerd`;
+    }
+  );
+
+  // Test 16: één leeftijdscategorie kan meerdere wedstrijdprofielen gebruiken
+  await runTest(
+    'test-16',
+    'Categorie met meerdere wedstrijdprofielen',
+    'Een leeftijdscategorie bewaart meerdere toegestane profielen zonder bestaande koppelingen te overschrijven',
+    async () => {
+      const category: Category = {
+        id: 'cat-multi-profile-test',
+        name: 'U12 Test',
+        code: 'U12-T',
+        gender: 'ALL',
+        minAge: 10,
+        maxAge: 11,
+        raceProfileIds: ['profile-short', 'profile-long'],
+        raceProfileId: 'profile-short',
+      };
+      const profileIds = getCategoryProfileIds(category);
+      if (profileIds.length !== 2) throw new Error(`Verwacht 2 profielen, kreeg ${profileIds.length}`);
+      if (!categoryUsesProfile(category, 'profile-short') || !categoryUsesProfile(category, 'profile-long')) {
+        throw new Error('Niet alle wedstrijdprofielen zijn gekoppeld');
+      }
+      const updated = withCategoryProfiles(category, [...profileIds, 'profile-relay']);
+      if (getCategoryProfileIds(updated).length !== 3) throw new Error('Derde profiel kon niet worden toegevoegd');
+      return 'Categorie behoudt 3 onafhankelijke wedstrijdprofielkoppelingen';
     }
   );
 

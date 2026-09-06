@@ -7,6 +7,7 @@ import type {
   RaceProfile,
   RaceResult,
 } from '../types';
+import { getDefaultCategoryProfileId } from './categoryProfileService';
 
 /**
  * Format milliseconds into HH:mm:ss.SSS or mm:ss.SSS
@@ -131,7 +132,7 @@ export function calculateRaceResults(
   const computed: RaceResult[] = participants.map((p) => {
     const cat = categoryMap.get(p.categoryId);
     const wave = p.waveId ? waveMap.get(p.waveId) : undefined;
-    const profile = profileMap.get(p.raceProfileId) || profileMap.get(cat?.raceProfileId || '');
+    const profile = profileMap.get(p.raceProfileId) || profileMap.get(getDefaultCategoryProfileId(cat));
     const penaltyPerMiss = profile?.penaltySecondsPerMiss ?? penaltySecondsPerMissDefault;
 
     const startRecord = p.bibNumber ? startMap.get(p.bibNumber) : undefined;

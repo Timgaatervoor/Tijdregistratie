@@ -3,7 +3,7 @@
 ## Entiteiten & Collecties
 - **events**: Event configuratie, status (DRAFT -> PREPARATION -> READY -> LIVE -> PAUSED -> FINISHED -> ARCHIVED).
 - **raceProfiles**: Parcours configuratie (RUN legs, SHOOT legs, PENALTY regels).
-- **categories**: Categorieën (U8, U10, U12, U14, Dames, Heren, Recreatief, etc.).
+- **categories**: Leeftijdscategorieën (U8, U10, U12, U14, enz.) met `raceProfileIds`, een lijst van alle toegestane wedstrijdprofielen. `raceProfileId` blijft als standaardprofiel aanwezig voor oudere back-ups.
 - **waves**: Startwaves met scheduledTime, actualStartTime, maxParticipants.
 - **participants**: Deelnemers (bibNumber, externalId, namen, club, status, waveId, etc.).
 - **timingRecords**: Start en finish records (timestamp, monotonicMs, type: START / FINISH).

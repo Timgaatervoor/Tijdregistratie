@@ -17,6 +17,11 @@ import type { RaceProfile, RaceLegConfig, Category, LegType, ShootingStance } fr
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
+import {
+  categoryUsesProfile,
+  getCategoryProfileIds,
+  withCategoryProfiles,
+} from '../../services/categoryProfileService';
 
 interface RaceProfileEditorProps {
   profiles: RaceProfile[];
@@ -47,7 +52,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
   const [categoryGender, setCategoryGender] = useState<'M' | 'F' | 'ALL'>('ALL');
   const [categoryMinAge, setCategoryMinAge] = useState(6);
   const [categoryMaxAge, setCategoryMaxAge] = useState<number | ''>('');
-  const [categoryProfileId, setCategoryProfileId] = useState('');
+  const [categoryProfileIds, setCategoryProfileIds] = useState<string[]>([]);
 
   const loadProfileIntoForm = (prof: RaceProfile | undefined) => {
     if (prof) {
@@ -58,7 +63,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
       setPenaltyLaps(prof.penaltyLapsPerMiss || 1);
       setLegs(prof.legs || []);
       const assigned = categories
-        .filter((c) => c.raceProfileId === prof.id)
+        .filter((category) => categoryUsesProfile(category, prof.id))
         .map((c) => c.id);
       setAssignedCategoryIds(assigned);
     } else {
@@ -170,7 +175,8 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     setCategoryGender('ALL');
     setCategoryMinAge(1);
     setCategoryMaxAge('');
-    setCategoryProfileId(profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id || '');
+    const defaultProfileId = profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id;
+    setCategoryProfileIds(defaultProfileId ? [defaultProfileId] : []);
   };
 
   const loadCategoryIntoForm = (category: Category) => {
@@ -180,30 +186,40 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     setCategoryGender(category.gender);
     setCategoryMinAge(category.minAge ?? 1);
     setCategoryMaxAge(category.maxAge ?? '');
-    setCategoryProfileId(category.raceProfileId || '');
+    setCategoryProfileIds(getCategoryProfileIds(category));
   };
 
   const handleSaveCategory = async () => {
     if (!categoryName.trim() || !categoryCode.trim()) return;
+    if (categoryProfileIds.length === 0) {
+      alert('Selecteer minstens één wedstrijdprofiel voor deze leeftijdscategorie.');
+      return;
+    }
     if (categoryMaxAge !== '' && Number(categoryMaxAge) < categoryMinAge) {
       alert('De maximumleeftijd moet gelijk aan of hoger dan de minimumleeftijd zijn.');
       return;
     }
 
     const id = categoryId === 'new-category' ? `category-${Date.now()}` : categoryId;
+    const uniqueProfileIds = Array.from(new Set<string>(categoryProfileIds.filter(Boolean)));
+    const existingCategory = categories.find((category) => category.id === id);
     await db.transaction('rw', db.categories, db.participants, async () => {
       await db.categories.put({
+        ...existingCategory,
         id,
         name: categoryName.trim(),
         code: categoryCode.trim().toUpperCase(),
         gender: categoryGender,
         minAge: Math.max(1, categoryMinAge),
         maxAge: categoryMaxAge === '' ? undefined : Number(categoryMaxAge),
-        raceProfileId: categoryProfileId,
+        raceProfileIds: uniqueProfileIds,
+        raceProfileId: uniqueProfileIds[0],
       });
-      if (categoryProfileId) {
-        await db.participants.where('categoryId').equals(id).modify({ raceProfileId: categoryProfileId });
-      }
+      await db.participants.where('categoryId').equals(id).modify((participant) => {
+        if (!uniqueProfileIds.includes(participant.raceProfileId)) {
+          participant.raceProfileId = uniqueProfileIds[0] || '';
+        }
+      });
     });
     await operationService.logAudit('CATEGORY_UPDATED', `Categorie "${categoryName.trim()}" opgeslagen.`);
     soundService.playSuccess();
@@ -242,14 +258,27 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     await db.raceProfiles.put(updatedProfile);
 
     const currentCategories = await db.categories.toArray();
+    const fallbackProfileId =
+      profiles.find((profile) => profile.id !== profileId && profile.isDefault)?.id ||
+      profiles.find((profile) => profile.id !== profileId)?.id;
     await db.transaction('rw', db.categories, db.participants, async () => {
       for (const cat of currentCategories) {
+        const currentProfileIds = getCategoryProfileIds(cat);
+        let nextProfileIds = currentProfileIds;
         if (assignedCategoryIds.includes(cat.id)) {
-          await db.categories.update(cat.id, { raceProfileId: profileId });
-          await db.participants.where('categoryId').equals(cat.id).modify({ raceProfileId: profileId });
-        } else if (cat.raceProfileId === profileId) {
-          await db.categories.update(cat.id, { raceProfileId: undefined });
-          await db.participants.where('categoryId').equals(cat.id).modify({ raceProfileId: '' });
+          nextProfileIds = [...new Set([...currentProfileIds, profileId])];
+        } else {
+          nextProfileIds = currentProfileIds.filter((id) => id !== profileId);
+          if (nextProfileIds.length === 0 && fallbackProfileId) nextProfileIds = [fallbackProfileId];
+        }
+
+        await db.categories.put(withCategoryProfiles(cat, nextProfileIds));
+        if (!assignedCategoryIds.includes(cat.id) && currentProfileIds.includes(profileId)) {
+          await db.participants.where('categoryId').equals(cat.id).modify((participant) => {
+            if (participant.raceProfileId === profileId) {
+              participant.raceProfileId = nextProfileIds[0] || '';
+            }
+          });
         }
       }
     });
@@ -274,8 +303,23 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
       return;
     }
 
-    await db.raceProfiles.delete(profToDelete.id);
-    await db.categories.where('raceProfileId').equals(profToDelete.id).modify({ raceProfileId: undefined });
+    const currentCategories = await db.categories.toArray();
+    const fallbackProfileId =
+      profiles.find((profile) => profile.id !== profToDelete.id && profile.isDefault)?.id ||
+      profiles.find((profile) => profile.id !== profToDelete.id)?.id;
+    await db.transaction('rw', db.raceProfiles, db.categories, db.participants, async () => {
+      await db.raceProfiles.delete(profToDelete.id);
+      for (const category of currentCategories) {
+        const nextProfileIds = getCategoryProfileIds(category).filter((id) => id !== profToDelete.id);
+        if (nextProfileIds.length === 0 && fallbackProfileId) nextProfileIds.push(fallbackProfileId);
+        await db.categories.put(withCategoryProfiles(category, nextProfileIds));
+        await db.participants.where('categoryId').equals(category.id).modify((participant) => {
+          if (participant.raceProfileId === profToDelete.id) {
+            participant.raceProfileId = nextProfileIds[0] || '';
+          }
+        });
+      }
+    });
 
     await operationService.logAudit(
       'SETTINGS_UPDATED',
@@ -675,13 +719,29 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
             <label className="text-slate-300 font-semibold">Max. leeftijd
               <input type="number" min="1" value={categoryMaxAge} onChange={(event) => setCategoryMaxAge(event.target.value === '' ? '' : Number(event.target.value))} placeholder="Geen limiet" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
             </label>
-            <label className="sm:col-span-2 lg:col-span-3 text-slate-300 font-semibold">Wedstrijdprofiel
-              <select value={categoryProfileId} onChange={(event) => setCategoryProfileId(event.target.value)} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
-                <option value="">Nog niet gekoppeld</option>
-                {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
-              </select>
-            </label>
-            <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
+            <fieldset className="sm:col-span-2 lg:col-span-6 rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+              <legend className="px-1 text-slate-300 font-semibold">Toegestane wedstrijdprofielen</legend>
+              <p className="text-[11px] text-slate-500 mb-2">
+                Een leeftijdscategorie mag meerdere profielen gebruiken. Het eerste geselecteerde profiel is de standaardkeuze.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {profiles.map((profile) => {
+                  const checked = categoryProfileIds.includes(profile.id);
+                  return (
+                    <label key={profile.id} className={`flex items-center gap-2 rounded-lg border p-2 cursor-pointer ${checked ? 'border-amber-500/50 bg-amber-500/10 text-white' : 'border-slate-700 bg-slate-800/60 text-slate-400'}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setCategoryProfileIds((current) => checked ? current.filter((id) => id !== profile.id) : [...current, profile.id])}
+                        className="w-4 h-4 rounded text-amber-500"
+                      />
+                      <span className="font-semibold">{profile.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <div className="sm:col-span-2 lg:col-span-6 flex gap-2">
               <button type="button" onClick={handleSaveCategory} className="flex-1 px-4 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">Categorie opslaan</button>
               {categoryId !== 'new-category' && <button type="button" onClick={handleDeleteCategory} className="px-4 py-2 rounded-lg bg-red-950/60 text-red-300 border border-red-800">Verwijderen</button>}
             </div>
@@ -695,7 +755,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
           </h4>
           <p className="text-xs text-slate-400">
             Vink de leeftijdscategorieën aan die deze specifieke wedstrijdopbouw (afstanden en schietbeurten)
-            moeten afleggen:
+            mogen gebruiken. Een categorie mag bij meerdere wedstrijdprofielen aangevinkt zijn:
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">

@@ -337,6 +337,7 @@ export default function App() {
         shootingResults={shootingResults}
         categories={categories}
         waves={waves}
+        profiles={raceProfiles}
         onClose={() => setSelectedParticipant(null)}
         onUpdated={refresh}
       />

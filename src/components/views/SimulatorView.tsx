@@ -218,7 +218,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ onRefresh }) => {
             </div>
           ) : (
             <div className="p-8 text-center text-slate-500 text-xs italic bg-slate-850/50 rounded-xl border border-slate-800">
-              Klik op "Voer Failsafe Tests Uit" om de 14 robuustheidsscenario's tegen de lokale database te testen.
+              Klik op "Voer Failsafe Tests Uit" om de ingebouwde robuustheidsscenario's tegen de lokale database te testen.
             </div>
           )}
         </div>

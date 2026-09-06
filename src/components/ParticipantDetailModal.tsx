@@ -4,6 +4,11 @@ import type { RaceResult, AuditLog, ParticipantStatus, Participant, Category, Wa
 import { db } from '../db/dexieDb';
 import { operationService, generateUUID } from '../services/operationService';
 import { formatLocalTime } from '../services/timingEngine';
+import {
+  getCategoryProfileIds,
+  getDefaultCategoryProfileId,
+  getProfilesForCategory,
+} from '../services/categoryProfileService';
 
 interface ParticipantDetailModalProps {
   isOpen?: boolean;
@@ -84,7 +89,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setEditBib(p.bibNumber ? String(p.bibNumber) : '');
     setEditGender(p.gender || 'M');
     setEditCategoryId(p.categoryId || '');
-    setEditProfileId(p.raceProfileId || categories.find((category) => category.id === p.categoryId)?.raceProfileId || '');
+    setEditProfileId(p.raceProfileId || getDefaultCategoryProfileId(categories.find((category) => category.id === p.categoryId)));
     setEditWaveId(p.waveId || '');
     setEditClub(p.club || '');
     setEditTeam(p.team || '');
@@ -188,6 +193,18 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       return;
     }
 
+    const selectedCategory = categories.find((category) => category.id === editCategoryId);
+    const selectedProfileId = editProfileId || getDefaultCategoryProfileId(selectedCategory);
+    const allowedProfileIds = getCategoryProfileIds(selectedCategory);
+    if (!selectedProfileId) {
+      setEditError('Kies een wedstrijdprofiel voor deze deelnemer.');
+      return;
+    }
+    if (allowedProfileIds.length > 0 && !allowedProfileIds.includes(selectedProfileId)) {
+      setEditError('Dit wedstrijdprofiel is niet gekoppeld aan de gekozen leeftijdscategorie.');
+      return;
+    }
+
     const parsedBib = editBib.trim() ? parseInt(editBib.trim(), 10) : undefined;
     if (editBib.trim() && (isNaN(parsedBib!) || parsedBib! <= 0)) {
       setEditError('Startnummer moet een geldig positief getal zijn.');
@@ -229,7 +246,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         bibNumber: parsedBib,
         gender: editGender,
         categoryId: editCategoryId,
-        raceProfileId: editProfileId || categories.find((category) => category.id === editCategoryId)?.raceProfileId || '',
+        raceProfileId: selectedProfileId,
         waveId: editWaveId || undefined,
         club: editClub.trim() || undefined,
         team: editTeam.trim() || undefined,
@@ -644,7 +661,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </label>
                 <select
                   value={editCategoryId}
-                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  onChange={(e) => {
+                    const nextCategoryId = e.target.value;
+                    setEditCategoryId(nextCategoryId);
+                    setEditProfileId(getDefaultCategoryProfileId(categories.find((category) => category.id === nextCategoryId)));
+                  }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 >
                   {categories.map((c) => (
@@ -697,8 +718,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   onChange={(e) => setEditProfileId(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 >
-                  <option value="">Gebruik profiel van categorie</option>
-                  {profiles.map((profile) => (
+                  <option value="">Kies een toegestaan profiel...</option>
+                  {getProfilesForCategory(profiles, categories.find((category) => category.id === editCategoryId)).map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
                     </option>

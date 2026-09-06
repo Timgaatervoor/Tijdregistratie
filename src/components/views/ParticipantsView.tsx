@@ -30,6 +30,11 @@ import {
   type ParticipantImportCandidate,
 } from '../../services/stamhoofdParser';
 import { downloadCsvFile } from '../../services/backupService';
+import {
+  getCategoryProfileIds,
+  getDefaultCategoryProfileId,
+  getProfilesForCategory,
+} from '../../services/categoryProfileService';
 
 interface ParticipantsViewProps {
   participants: Participant[];
@@ -58,7 +63,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   const [newLastName, setNewLastName] = useState('');
   const [newBib, setNewBib] = useState('');
   const [newCatId, setNewCatId] = useState(categories[0]?.id || '');
-  const [newProfileId, setNewProfileId] = useState(categories[0]?.raceProfileId || profiles[0]?.id || '');
+  const [newProfileId, setNewProfileId] = useState(getDefaultCategoryProfileId(categories[0]) || profiles[0]?.id || '');
   const [newWaveId, setNewWaveId] = useState(waves[0]?.id || '');
   const [newClub, setNewClub] = useState('');
   const [newGender, setNewGender] = useState<'M' | 'F' | 'X'>('M');
@@ -80,6 +85,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   // Category & Wave maps
   const categoryMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
   const waveMap = new Map<string, Wave>(waves.map((w) => [w.id, w]));
+  const newParticipantProfiles = getProfilesForCategory(profiles, categoryMap.get(newCatId));
 
   // Filtered participants
   const filtered = participants.filter((p) => {
@@ -103,9 +109,14 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
     const bibNumber = !isNaN(parsedBib) && parsedBib > 0 ? parsedBib : undefined;
 
     const selectedCat = categoryMap.get(newCatId);
-    const selectedProfileId = newProfileId || selectedCat?.raceProfileId || '';
+    const selectedProfileId = newProfileId || getDefaultCategoryProfileId(selectedCat);
     if (!selectedProfileId) {
       alert('Kies eerst een wedstrijdprofiel voor deze deelnemer.');
+      return;
+    }
+    const allowedProfileIds = getCategoryProfileIds(selectedCat);
+    if (allowedProfileIds.length > 0 && !allowedProfileIds.includes(selectedProfileId)) {
+      alert('Dit wedstrijdprofiel is niet gekoppeld aan de gekozen leeftijdscategorie.');
       return;
     }
     const now = new Date().toISOString();
@@ -387,6 +398,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
         name: 'Algemeen',
         code: 'ALG',
         gender: 'ALL',
+        raceProfileIds: [defaultProfileId],
         raceProfileId: defaultProfileId,
         bibRangeStart: 1,
         bibRangeEnd: 999,
@@ -442,6 +454,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
           name: cleanCatName,
           code: cleanCode,
           gender: c.gender === 'F' ? 'F' : c.gender === 'M' ? 'M' : 'ALL',
+          raceProfileIds: [defaultProfileId],
           raceProfileId: defaultProfileId,
         };
         await db.categories.put(newCat);
@@ -456,8 +469,8 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       const assignedBib = c.bibNumber || nextBib++;
       const categoryId = matchedCategory?.id || currentCategories[0]?.id || 'cat-general';
       const raceProfileId =
-        matchedCategory?.raceProfileId ||
-        currentCategories[0]?.raceProfileId ||
+        getDefaultCategoryProfileId(matchedCategory) ||
+        getDefaultCategoryProfileId(currentCategories[0]) ||
         defaultProfileId;
 
       newParticipants.push({
@@ -759,7 +772,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   onChange={(e) => {
                     const categoryId = e.target.value;
                     setNewCatId(categoryId);
-                    const categoryProfileId = categoryMap.get(categoryId)?.raceProfileId;
+                    const categoryProfileId = getDefaultCategoryProfileId(categoryMap.get(categoryId));
                     if (categoryProfileId) setNewProfileId(categoryProfileId);
                   }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
@@ -781,7 +794,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   className="w-full bg-slate-800 border border-emerald-600/60 rounded-lg px-3 py-2 text-white"
                 >
                   <option value="">Kies een wedstrijdprofiel...</option>
-                  {profiles.map((profile) => (
+                  {newParticipantProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>{profile.name}</option>
                   ))}
                 </select>

@@ -69,7 +69,10 @@ export interface Category {
   gender: 'M' | 'F' | 'ALL';
   minAge?: number;
   maxAge?: number;
-  raceProfileId: string;
+  /** Alle wedstrijdprofielen die deelnemers uit deze categorie mogen gebruiken. */
+  raceProfileIds: string[];
+  /** Eerste/standaard profiel; behouden voor compatibiliteit met oudere back-ups. */
+  raceProfileId?: string;
   defaultWaveId?: string;
   bibRangeStart?: number;
   bibRangeEnd?: number;

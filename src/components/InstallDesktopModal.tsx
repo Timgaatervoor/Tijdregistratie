@@ -157,15 +157,26 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
               Wilt u het programma als een compleet lokaal pakket op een laptop of USB-stick meenemen?
             </p>
 
-            <a
-              href="https://github.com/Timgaatervoor/Tijdregistratie/archive/refs/heads/main.zip"
-              target="_blank"
-              rel="noreferrer"
-              className="w-fit px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition"
-            >
-              <Download className="w-4 h-4 stroke-[2.5]" />
-              <span>Download via GitHub (.zip)</span>
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href="https://github.com/Timgaatervoor/Tijdregistratie/archive/refs/heads/main.zip"
+                target="_blank"
+                rel="noreferrer"
+                className="w-fit px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition"
+              >
+                <Download className="w-4 h-4 stroke-[2.5]" />
+                <span>Download via GitHub (.zip)</span>
+              </a>
+              <a
+                href="https://nodejs.org/en/download"
+                target="_blank"
+                rel="noreferrer"
+                className="w-fit px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs flex items-center gap-2 shadow transition"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Node.js installeren</span>
+              </a>
+            </div>
 
             <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 font-mono text-[11px] text-slate-300 space-y-1.5">
               <div className="flex items-center gap-1.5 text-amber-400 font-bold">
@@ -180,7 +191,7 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
             </div>
 
             <div className="text-[11px] text-slate-400">
-              Download het volledige project via <strong>Export to ZIP</strong> of <strong>GitHub</strong> en pak de ZIP eerst uit. Node.js is vereist; alleen bij de eerste start is internet nodig om de programmaonderdelen te installeren.
+              Download het volledige project via <strong>Export to ZIP</strong> of <strong>GitHub</strong> en pak de ZIP eerst uit. Ontbreekt Node.js, dan vraagt <strong>start-windows.bat</strong> toestemming om de LTS-versie automatisch te installeren. Alleen bij de eerste start is internet nodig.
             </div>
           </div>
 

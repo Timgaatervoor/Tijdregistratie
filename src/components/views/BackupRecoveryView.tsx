@@ -164,7 +164,7 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
               Methode 2: Startscripts (start-windows.bat)
             </span>
             <p className="text-slate-400 text-[11px] leading-relaxed">
-              Export het volledige project naar ZIP en pak het eerst uit. Dubbelklik daarna op <code className="text-amber-400">start-windows.bat</code>. Node.js is vereist; bij de eerste start worden de benodigde onderdelen via internet geïnstalleerd.
+              Export het volledige project naar ZIP en pak het eerst uit. Dubbelklik daarna op <code className="text-amber-400">start-windows.bat</code>. Als Node.js ontbreekt, vraagt het startscript toestemming om Node.js LTS automatisch te installeren.
             </p>
           </div>
         </div>

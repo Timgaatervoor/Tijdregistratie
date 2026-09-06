@@ -157,6 +157,16 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
               Wilt u het programma als een compleet lokaal pakket op een laptop of USB-stick meenemen?
             </p>
 
+            <a
+              href="https://github.com/Timgaatervoor/Tijdregistratie/archive/refs/heads/main.zip"
+              target="_blank"
+              rel="noreferrer"
+              className="w-fit px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition"
+            >
+              <Download className="w-4 h-4 stroke-[2.5]" />
+              <span>Download via GitHub (.zip)</span>
+            </a>
+
             <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 font-mono text-[11px] text-slate-300 space-y-1.5">
               <div className="flex items-center gap-1.5 text-amber-400 font-bold">
                 <Terminal className="w-3.5 h-3.5" /> Meegeleverde startbestanden in de map:

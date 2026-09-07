@@ -1,5 +1,4 @@
-import { DevicePairingPanel } from '../DevicePairingPanel';
-import { ClockStatus } from '../ClockStatus';
+import { OnlineSyncSettings } from '../OnlineSyncSettings';
 import React, { useState } from 'react';
 import {
   Settings,
@@ -22,7 +21,6 @@ import type { RaceEvent, DeviceConfig, RaceProfile, Category, Wave, Participant,
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
-import { syncService, type SyncConfig } from '../../services/syncService';
 import { RaceProfileEditor } from './RaceProfileEditor';
 import { AgeCategoriesEditor } from './AgeCategoriesEditor';
 import { EventSetupAndReset } from './EventSetupAndReset';
@@ -314,7 +312,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onRefresh={onRefresh}
         />
       ) : activeSection === 'sync' ? (
-        <div className="space-y-4"><ClockStatus /><DevicePairingPanel onJoined={onRefresh} /><SyncSettings eventId={event?.id || ''} /></div>
+        <OnlineSyncSettings eventId={event?.id || ''} eventName={event?.name || ''} onJoined={onRefresh} />
       ) : activeSection === 'backup' ? (
         <BackupRecoveryView event={event} onRefresh={onRefresh} />
       ) : activeSection === 'tests' ? (
@@ -607,180 +605,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </form>
       )}
-    </div>
-  );
-};
-
-interface SyncSettingsProps {
-  eventId: string;
-}
-
-const SyncSettings: React.FC<SyncSettingsProps> = ({ eventId }) => {
-  const [config, setConfig] = useState<SyncConfig>(() => ({
-    ...syncService.getConfig(),
-    eventId: syncService.getConfig().eventId || eventId,
-  }));
-  const [message, setMessage] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-
-  const update = (changes: Partial<SyncConfig>) => {
-    setConfig((current) => ({ ...current, ...changes }));
-    setMessage(null);
-  };
-
-  const save = () => {
-    syncService.saveConfig(config);
-    setMessage('Supabase-instellingen opgeslagen op dit toestel.');
-  };
-
-  const test = async () => {
-    setTesting(true);
-    setMessage(null);
-    const result = await syncService.testConnection(config);
-    setTesting(false);
-    setMessage(result.ok ? 'Verbinding met Supabase werkt.' : result.error || 'Verbinding mislukt.');
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-blue-950/30 border border-blue-700/40 rounded-2xl p-6 text-xs text-slate-200 space-y-4">
-        <div>
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Cloud className="w-4 h-4 text-blue-400" /> Synchronisatie instellen in 5 stappen
-          </h3>
-          <p className="text-slate-400 mt-1">
-            Supabase is de gratis online database. De app bewaart elke actie eerst lokaal en synchroniseert daarna de wachtrij.
-          </p>
-        </div>
-
-        <ol className="list-decimal list-inside space-y-2 text-slate-300">
-          <li>Maak een gratis project aan op <strong className="text-white">supabase.com</strong>.</li>
-          <li>Open in Supabase <strong className="text-white">SQL Editor</strong>, maak een nieuwe query en voer de SQL hieronder uit.</li>
-          <li>Open <strong className="text-white">Project Settings &gt; API</strong> en kopieer de Project URL en de <strong className="text-white">Publishable key</strong> (of legacy anon public key).</li>
-          <li>Vul die gegevens hieronder in, gebruik het Event-ID van dit evenement: <code className="text-amber-300">{eventId}</code>, en klik op <strong className="text-white">Verbinding testen</strong>. Gebruik op andere toestellen dezelfde evenementback-up.</li>
-          <li>Krijg je “Verbinding met Supabase werkt”, klik dan op <strong className="text-white">Instellingen opslaan</strong>.</li>
-        </ol>
-
-        <details className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
-          <summary className="cursor-pointer text-amber-300 font-bold">SQL voor de tabel race_operations tonen</summary>
-          <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed text-slate-300">{`create table public.race_operations (
-  operation_id text primary key,
-  event_id text not null,
-  participant_id text,
-  type text not null,
-  device_id text not null,
-  operator_id text not null,
-  device_timestamp timestamptz not null,
-  server_timestamp timestamptz,
-  payload jsonb not null default '{}'::jsonb,
-  revision integer not null default 1,
-  created_at timestamptz not null default now()
-);
-
-alter table public.race_operations enable row level security;
-
-create policy "race operations insert"
-on public.race_operations for insert to anon
-with check (true);
-
-create policy "race operations read"
-on public.race_operations for select to anon
-using (true);
-
-create policy "race operations update"
-on public.race_operations for update to anon
-using (true)
-with check (true);`}</pre>
-          <p className="mt-3 text-amber-200">
-            Gebruik voor de app alleen de publieke <strong>publishable/anon key</strong>. Zet nooit de <strong>secret/service_role key</strong> in dit formulier of in GitHub.
-          </p>
-        </details>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-5 text-xs">
-        <div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <Cloud className="w-4 h-4 text-emerald-400" /> Gratis online synchronisatie
-          </h3>
-          <p className="text-slate-400 mt-2 leading-relaxed">
-            Gebruik een Supabase-project als centrale database. De app blijft eerst lokaal opslaan en stuurt alleen de lokale race-operaties door zodra internet beschikbaar is.
-          </p>
-        </div>
-
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={config.enabled}
-            onChange={(event) => update({ enabled: event.target.checked })}
-            className="w-4 h-4 rounded text-amber-500"
-          />
-          <span className="font-bold text-white">Online synchronisatie inschakelen</span>
-        </label>
-        <p className="-mt-3 ml-6 text-[11px] text-amber-300">
-          Opmerking: synchronisatie werkt pas nadat deze optie is aangevinkt en je op "Instellingen opslaan" hebt geklikt.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="text-slate-300 font-semibold block mb-1">Supabase Project URL</label>
-            <input
-              type="url"
-              value={config.projectUrl}
-              onChange={(event) => update({ projectUrl: event.target.value })}
-              placeholder="https://jouw-project.supabase.co"
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-slate-300 font-semibold block mb-1">Supabase anon public key</label>
-            <input
-              type="password"
-              value={config.anonKey}
-              onChange={(event) => update({ anonKey: event.target.value })}
-              placeholder="eyJ..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono"
-            />
-            <span className="text-[11px] text-slate-500 block mt-1">
-              Gebruik alleen de anon/public key, nooit de service_role key.
-            </span>
-          </div>
-
-          <div>
-            <label className="text-slate-300 font-semibold block mb-1">Event-ID</label>
-            <input
-              type="text"
-              value={config.eventId}
-              onChange={(event) => update({ eventId: event.target.value })}
-              placeholder={eventId || 'event-de-haan-2026'}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800">
-          <button
-            type="button"
-            onClick={save}
-            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition"
-          >
-            Instellingen opslaan
-          </button>
-          <button
-            type="button"
-            onClick={test}
-            disabled={testing}
-            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold border border-slate-700 transition disabled:opacity-50"
-          >
-            {testing ? 'Verbinding testen...' : 'Verbinding testen'}
-          </button>
-          {message && <span className="text-emerald-400 font-semibold">{message}</span>}
-        </div>
-      </div>
-
-      <div className="bg-amber-950/30 border border-amber-700/40 rounded-2xl p-5 text-xs text-amber-200">
-        <strong>Eenmalige Supabase-inrichting:</strong> maak in Supabase een tabel `race_operations` met de kolommen uit de projectdocumentatie. De anon key mag in deze app staan; beveilig de tabel met Row Level Security.
-      </div>
     </div>
   );
 };

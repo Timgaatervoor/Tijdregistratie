@@ -827,7 +827,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   type="text"
                   value={newClub}
                   onChange={(e) => setNewClub(e.target.value)}
-                  placeholder="bv. Kustatletiek De Haan"
+                  placeholder="Naam van de club"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>

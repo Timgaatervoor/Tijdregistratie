@@ -141,7 +141,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 space-y-3">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
         <span className="text-sm font-semibold tracking-wider font-mono">
-          Run Biathlon De Haan Timing laden...
+          Biathlon Tijdregistratie laden...
         </span>
       </div>
     );
@@ -159,7 +159,7 @@ export default function App() {
             <span>
               {isSimulatedOffline
                 ? 'GEFORCEERDE OFFLINE MODUS ACTIEF: Apparaat opereert 100% autonoom op lokale IndexedDB'
-                : `TESTMODUS: ${event?.name || 'Run Biathlon De Haan'} Testset actief`}
+                : `TESTMODUS: ${event?.name || 'Biathlon Tijdregistratie'} Testset actief`}
             </span>
           </div>
           {isSimulatedOffline && (

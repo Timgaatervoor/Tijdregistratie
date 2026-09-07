@@ -81,10 +81,10 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({
             </span>
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight">
-            {event?.name || 'Run Biathlon De Haan 2026'}
+            {event?.name || 'Nieuw evenement'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Locatie: {event?.location || 'De Haan'} • Straf per misser: {event?.penaltySecondsPerMiss || 20} sec
+            Locatie: {event?.location || 'Locatie nog niet ingesteld'} • Straf per misser: {event?.penaltySecondsPerMiss || 20} sec
           </p>
         </div>
 

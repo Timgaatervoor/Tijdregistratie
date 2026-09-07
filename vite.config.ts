@@ -20,7 +20,7 @@ export default defineConfig(() => {
         includeAssets: ['apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
           id: base,
-          name: 'Run Biathlon De Haan Timing',
+          name: 'Biathlon Tijdregistratie',
           short_name: 'BiathlonTime',
           description: 'Professioneel offline-first tijdregistratiesysteem voor biathlon wedstrijden',
           theme_color: '#0f172a',

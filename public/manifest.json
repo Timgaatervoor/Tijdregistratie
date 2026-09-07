@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "Run Biathlon De Haan Timing",
+  "name": "Biathlon Tijdregistratie",
   "short_name": "BiathlonTime",
   "description": "Professioneel offline-first tijdregistratiesysteem voor biathlon",
   "start_url": "./",

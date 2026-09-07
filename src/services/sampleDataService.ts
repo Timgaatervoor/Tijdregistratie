@@ -22,11 +22,7 @@ const BELGIAN_LAST_NAMES = [
   'Coppens', 'Verhoeven', 'Van Dyck', 'Smet', 'Segers', 'Van de Velde', 'Van Acker', 'Vermeire'
 ];
 
-const CLUBS = [
-  'Kustatletiek De Haan', 'AV Oostende', 'Houtland Atletiekclub', 'MACW Diksmuide',
-  'Olympic Brugge', 'FLAC Roeselare', 'Duinlopers Wenduine', 'Biathlon Team Vlaanderen',
-  'Triatlon Club Kust', 'Zandlopers Blankenberge'
-];
+const CLUBS = ['Voorbeeldclub A', 'Voorbeeldclub B', 'Voorbeeldclub C'];
 
 export async function initializeSampleData(force = false): Promise<void> {
   const existingEvents = await db.events.count();
@@ -51,16 +47,16 @@ export async function initializeSampleData(force = false): Promise<void> {
     ]);
   }
 
-  const eventId = 'event-de-haan-2026';
+  const eventId = generateUUID();
   const now = new Date().toISOString();
 
   // 1. Event
   const defaultEvent: RaceEvent = {
     id: eventId,
-    name: 'Run Biathlon De Haan 2026',
-    date: '2026-09-19',
-    location: 'Sport- en Recreatiecentrum De Haan aan Zee',
-    organizer: 'VZW Biathlon Vlaanderen & Gemeente De Haan',
+    name: 'Voorbeeldevenement',
+    date: new Date().toLocaleDateString('en-CA'),
+    location: 'Voorbeeldlocatie',
+    organizer: '',
     status: 'READY',
     timezone: 'Europe/Brussels',
     penaltySecondsPerMiss: 20,
@@ -215,7 +211,7 @@ export async function initializeSampleData(force = false): Promise<void> {
     deviceId: 'RACE-CONTROL',
     operator: 'System',
     action: 'INIT_SAMPLE_DATA',
-    details: 'Initialisatie testgegevens Run Biathlon De Haan (200 deelnemers, 10 waves, 3 profielen)',
+    details: 'Initialisatie fictieve testgegevens (200 deelnemers, 10 waves, 3 profielen)',
   });
 }
 
@@ -282,25 +278,7 @@ export async function resetToBlankEvent(
   date: string,
   location: string
 ): Promise<void> {
-  const now = new Date().toISOString();
-  const event: RaceEvent = {
-    id: generateUUID(),
-    name: name || 'Run-Biathlon De Haan',
-    date,
-    location: location || 'De Haan',
-    organizer: 'VZW Biathlon Vlaanderen & Gemeente De Haan',
-    status: 'DRAFT',
-    timezone: 'Europe/Brussels',
-    penaltySecondsPerMiss: 20,
-    requireStartConfirmation: false,
-    requireFinishConfirmation: false,
-    isTestMode: false,
-    isPublicResultsLive: false,
-    officialResultsLocked: false,
-    officialResultsVersion: 'Draft',
-    createdAt: now,
-    updatedAt: now,
-  };
+  const event = blankEvent(name, date, location);
 
   // Stop new cloud requests before clearing local data. Existing responses are
   // also checked against the active event inside syncService's transactions.
@@ -337,4 +315,34 @@ export async function resetToBlankEvent(
       await db.events.put(event);
     }
   );
+}
+
+function blankEvent(name: string, date: string, location: string): RaceEvent {
+  const now = new Date().toISOString();
+  const event: RaceEvent = {
+    id: generateUUID(),
+    name: name.trim() || 'Nieuw evenement',
+    date,
+    location: location.trim(),
+    organizer: '',
+    status: 'DRAFT',
+    timezone: 'Europe/Brussels',
+    penaltySecondsPerMiss: 20,
+    requireStartConfirmation: false,
+    requireFinishConfirmation: false,
+    isTestMode: false,
+    isPublicResultsLive: false,
+    officialResultsLocked: false,
+    officialResultsVersion: 'Draft',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return event;
+}
+
+export async function initializeEmptyEvent(): Promise<void> {
+  await db.transaction('rw', db.events, async () => {
+    if (await db.events.count() === 0) await db.events.add(blankEvent('', '', ''));
+  });
 }

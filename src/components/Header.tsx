@@ -104,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-                {event?.name || 'Run Biathlon De Haan'}
+                {event?.name || 'Biathlon Tijdregistratie'}
               </h1>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
@@ -119,9 +119,9 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2">
-              <span>{event?.location || 'De Haan aan Zee'}</span>
+              <span>{event?.location || 'Locatie nog niet ingesteld'}</span>
               <span className="text-slate-600">•</span>
-              <span className="font-mono text-slate-300">{event?.date || '2026-09-06'}</span>
+              <span className="font-mono text-slate-300">{event?.date || 'Datum nog niet ingesteld'}</span>
               {event?.organizer && (
                 <>
                   <span className="hidden md:inline text-slate-600">•</span>

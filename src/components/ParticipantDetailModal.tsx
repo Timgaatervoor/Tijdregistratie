@@ -746,7 +746,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   type="text"
                   value={editClub}
                   onChange={(e) => setEditClub(e.target.value)}
-                  placeholder="bv. Kids Atletiek De Haan"
+                  placeholder="Naam van je organisatie"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 />
               </div>

@@ -236,7 +236,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           </div>
           <p className="text-amber-300 font-bold">{profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle leeftijdscategorieën' : categories.find(c => c.id === selectedCategory)?.name}</p>
           <h2 className="text-2xl font-black text-white tracking-tight">
-            {event?.name || 'Run Biathlon De Haan 2026'}
+            {event?.name || 'Nieuw evenement'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             {mode === 'results'

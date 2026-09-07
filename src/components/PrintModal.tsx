@@ -139,10 +139,10 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           <div className="border-b-2 border-slate-700 pb-3 mb-4 flex items-center justify-between text-slate-800 print:text-black">
             <div>
               <h1 className="text-xl font-bold text-white print:text-black uppercase tracking-wider">
-                {event?.name || 'Run Biathlon De Haan'}
+                {event?.name || 'Biathlon Tijdregistratie'}
               </h1>
               <p className="text-xs text-slate-400 print:text-slate-600">
-                Locatie: {event?.location || 'De Haan'} • Datum: {event?.date || '2026-09-19'} • Document:{' '}
+                Locatie: {event?.location || 'Locatie nog niet ingesteld'} • Datum: {event?.date || 'Datum nog niet ingesteld'} • Document:{' '}
                 {printMode.toUpperCase()}
               </p>
             </div>

@@ -49,10 +49,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [activeSection, setActiveSection] = useState<'general' | 'profiles' | 'categories' | 'event_setup' | 'sync' | 'backup' | 'tests'>('general');
 
   // Race Event Settings
-  const [eventName, setEventName] = useState(event?.name || 'Run-Biathlon De Haan 2026');
-  const [eventDate, setEventDate] = useState(event?.date || '2026-09-06');
-  const [eventLocation, setEventLocation] = useState(event?.location || 'De Haan');
-  const [organizer, setOrganizer] = useState(event?.organizer || 'Kids Atletiek De Haan');
+  const [eventName, setEventName] = useState(event?.name || '');
+  const [eventDate, setEventDate] = useState(event?.date || '');
+  const [eventLocation, setEventLocation] = useState(event?.location || '');
+  const [organizer, setOrganizer] = useState(event?.organizer || '');
   const [penaltySeconds, setPenaltySeconds] = useState(event?.penaltySecondsPerMiss || 20);
   const [requireStartConfirmation, setRequireStartConfirmation] = useState(event?.requireStartConfirmation ?? true);
   const [requireFinishConfirmation, setRequireFinishConfirmation] = useState(event?.requireFinishConfirmation ?? true);
@@ -62,8 +62,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Device & Operator Settings
   const [deviceId, setDeviceId] = useState(deviceConfig?.id || 'FINISH-01');
-  const [operatorName, setOperatorName] = useState(deviceConfig?.operatorName || 'Jan Peeters');
-  const [stationName, setStationName] = useState(deviceConfig?.stationName || 'Finish Hoofdpost');
+  const [operatorName, setOperatorName] = useState(deviceConfig?.operatorName || '');
+  const [stationName, setStationName] = useState(deviceConfig?.stationName || '');
   const [deviceRole, setDeviceRole] = useState<UserRole>(deviceConfig?.role || 'FINISH_OPERATOR');
   const [deviceLocked, setDeviceLocked] = useState(deviceConfig?.isLocked ?? false);
   const [devicePin, setDevicePin] = useState(deviceConfig?.pin || '');
@@ -91,7 +91,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   React.useEffect(() => {
     if (deviceConfig && !deviceConfigLoadRef.current) {
       setDeviceId(deviceConfig.id);
-      setOperatorName(deviceConfig.operatorName || 'Jan Peeters');
+      setOperatorName(deviceConfig.operatorName || '');
       setStationName(deviceConfig.stationName);
       setDeviceRole(deviceConfig.role);
       setDeviceLocked(deviceConfig.isLocked);
@@ -108,10 +108,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     const updatedEvent: RaceEvent = {
       id: eventId,
-      name: eventName.trim() || 'Run-Biathlon De Haan',
+      name: eventName.trim() || 'Nieuw evenement',
       date: eventDate,
-      location: eventLocation.trim() || 'De Haan',
-      organizer: organizer.trim() || 'Kids Atletiek De Haan',
+      location: eventLocation.trim(),
+      organizer: organizer.trim(),
       status: currentEvent?.status || 'READY',
       timezone: 'Europe/Brussels',
       penaltySecondsPerMiss: penaltySeconds,
@@ -133,7 +133,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       id: activeDeviceId,
       name: `Tablet ${activeDeviceId}`,
       role: deviceRole,
-      operatorName: operatorName.trim() || 'Operator',
+      operatorName: operatorName.trim(),
       stationName: stationName.trim() || 'Wedstrijdpost',
       pin: devicePin.trim() || undefined,
       isLocked: deviceLocked,
@@ -348,7 +348,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 required
                 value={eventName}
                 onChange={(e) => setEventName(e.target.value)}
-                placeholder="bv. Run-Biathlon De Haan 2026"
+                placeholder="Naam van je evenement"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-amber-400"
               />
             </div>
@@ -374,7 +374,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type="text"
                   value={eventLocation}
                   onChange={(e) => setEventLocation(e.target.value)}
-                  placeholder="bv. Sportdomein Haneveld, De Haan"
+                  placeholder="bv. Gemeentelijk sportpark"
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
@@ -388,7 +388,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="text"
                 value={organizer}
                 onChange={(e) => setOrganizer(e.target.value)}
-                placeholder="bv. Kids Atletiek De Haan"
+                placeholder="Naam van je organisatie"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-amber-400"
               />
             </div>
@@ -509,7 +509,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type="text"
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
-                  placeholder="bv. Jan Peeters"
+                  placeholder="Naam van de medewerker"
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
                 />
               </div>
@@ -520,7 +520,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type="text"
                   value={stationName}
                   onChange={(e) => setStationName(e.target.value)}
-                  placeholder="bv. Finish Straat Hoofdpost"
+                  placeholder="bv. Finishpost"
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white"
                 />
               </div>

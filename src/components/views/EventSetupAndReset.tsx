@@ -24,9 +24,9 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
   onRefresh,
 }) => {
   const [showBlankEventModal, setShowBlankEventModal] = useState(false);
-  const [blankName, setBlankName] = useState('Run-Biathlon De Haan 2026');
-  const [blankDate, setBlankDate] = useState('2026-09-06');
-  const [blankLocation, setBlankLocation] = useState('De Haan');
+  const [blankName, setBlankName] = useState('');
+  const [blankDate, setBlankDate] = useState('');
+  const [blankLocation, setBlankLocation] = useState('');
 
   const handleResetTimingOnly = async () => {
     if (!confirm('Weet u zeker dat u ALLE start-, schiet- en finishtijden wilt resetten?\n\nDeelnemers en startgroepen blijven behouden.')) return;

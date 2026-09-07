@@ -1,12 +1,14 @@
+import { effectiveShooting, shootingPenalty } from '../../services/shootingRules';
 import React, { useEffect, useState } from 'react';
 import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
-import type { Participant, ShootingResult, RaceEvent, RaceProfile } from '../../types';
+import type { Category, Participant, ShootingResult, RaceEvent, RaceProfile } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
 
 interface ShootingStationViewProps {
+  categories: Category[];
   event: RaceEvent | null;
   participants: Participant[];
   shootingResults: ShootingResult[];
@@ -15,6 +17,7 @@ interface ShootingStationViewProps {
 }
 
 export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
+  categories,
   event,
   participants,
   shootingResults,
@@ -89,7 +92,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     ? shootingLegs
     : [{ id: 'fallback-shoot-1', type: 'SHOOT' as const, name: 'Schietproef 1' }, { id: 'fallback-shoot-2', type: 'SHOOT' as const, name: 'Schietproef 2' }];
   const completedRounds = matchedParticipant
-    ? shootingResults
+    ? effectiveShooting(shootingResults).effective
         .filter((result) => result.participantId === matchedParticipant.id && !result.isCorrected)
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
     : [];
@@ -100,7 +103,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   const targetCount = Math.max(1, Number(selectedShootingLeg?.shotCount) || 5);
   const hits = targets.filter(Boolean).length;
   const misses = Math.max(0, targetCount - hits);
-  const totalPenaltySec = misses * penaltyPerMiss;
+  const totalPenaltySec = shootingPenalty(activeProfile, roundNumber, misses, penaltyPerMiss).seconds;
   const allShootingDone = matchedParticipant !== undefined
     && shootingRounds.length > 0
     && shootingRounds.every((_, index) => completedRoundMap.has(index + 1));
@@ -243,12 +246,6 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
         createdAt: '',
         updatedAt: '',
       };
-
-      // Mark old as corrected
-      await db.shootingResults.update(duplicateConflict.existing.id, {
-        isCorrected: true,
-        correctionReason: duplicateConflict.reason,
-      });
 
       // Record corrected shooting
       await operationService.recordShooting(
@@ -498,7 +495,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                 {matchedParticipant ? (
                   <span className="text-xs text-emerald-400 font-semibold mt-1 block">
                     ✓ {matchedParticipant.firstName} {matchedParticipant.lastName} (
-                    {matchedParticipant.categoryName || 'Cat'})
+                    {categories.find(c => c.id === matchedParticipant.categoryId)?.name || 'Cat'})
                   </span>
                 ) : bibInput ? (
                   <span className="text-xs text-amber-400 font-semibold mt-1 block">

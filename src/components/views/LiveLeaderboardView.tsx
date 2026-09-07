@@ -667,8 +667,9 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                               : 'bg-slate-800 text-slate-400'
                           }`}
                         >
-                          {r.status}
+                          {r.resultIssues?.length ? 'VOORLOPIG' : r.status}
                         </span>
+                        {r.resultIssues?.map(issue => <span key={issue} className="block text-amber-300 text-xs">{issue}</span>)}
                       </td>
                     </tr>
                   );

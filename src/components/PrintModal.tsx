@@ -1,3 +1,4 @@
+import { RealQrCode } from './RealQrCode';
 import React, { useState } from 'react';
 import { Printer, Download, X, QrCode, FileText, CheckSquare } from 'lucide-react';
 import type { Participant, Wave, Category, RaceEvent } from '../types';
@@ -209,7 +210,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           {/* Mode 2: Bib cards with QR token (Req 13) */}
           {printMode === 'bibs' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-              {sortedParticipants.slice(0, 30).map((p) => {
+              {sortedParticipants.map((p) => {
                 const cat = categoryMap.get(p.categoryId)?.name || '-';
                 const wave = p.waveId ? waveMap.get(p.waveId)?.name || '-' : '-';
                 return (
@@ -218,7 +219,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                     className="p-5 border-2 border-slate-700 print:border-black rounded-xl bg-slate-800/40 print:bg-white text-center flex flex-col justify-between break-inside-avoid"
                   >
                     <div className="text-[10px] font-bold text-slate-400 print:text-slate-600 uppercase tracking-widest mb-1">
-                      RUN BIATHLON DE HAAN 2026
+                      {event?.name || 'Wedstrijd'}
                     </div>
                     <div className="text-6xl font-black font-mono tracking-tight text-white print:text-black py-2">
                       {p.bibNumber || '---'}
@@ -237,8 +238,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                           </div>
                         )}
                       </div>
-                      <div className="w-14 h-14 bg-white p-1 rounded border border-slate-300 shrink-0 flex flex-col items-center justify-center">
-                        <QrCode className="w-10 h-10 text-slate-900" />
+                      <div className="w-28 h-28 bg-white p-1 rounded border border-slate-300 shrink-0 flex flex-col items-center justify-center">
+                        {p.stamhoofdTicketUrl || p.stamhoofdTicketSecret || p.bibNumber ? <RealQrCode value={p.stamhoofdTicketUrl || p.stamhoofdTicketSecret || String(p.bibNumber)} size={96} /> : <span>Geen code</span>}
                         <span className="text-[8px] font-mono text-slate-900">#{(p.bibNumber || 0).toString().padStart(3, '0')}</span>
                       </div>
                     </div>

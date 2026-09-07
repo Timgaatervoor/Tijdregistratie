@@ -38,6 +38,7 @@ export const ConflictResolverModal: React.FC<ConflictResolverModalProps> = ({
     setError(null);
 
     try {
+      if ((await db.events.get(conflict.eventId))?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld.');
       const chosenRecord = selectedWinner === 'A' ? recA : recB;
       const discardedRecord = selectedWinner === 'A' ? recB : recA;
 
@@ -69,6 +70,8 @@ export const ConflictResolverModal: React.FC<ConflictResolverModalProps> = ({
           conflictId: conflict.id,
           bibNumber: conflict.bibNumber,
           selectedWinner,
+          discardedRecordId: discardedRecord.id,
+          chosenRecordId: chosenRecord.id,
           chosenTime: chosenRecord.timestamp,
           reason,
         },
@@ -153,7 +156,7 @@ export const ConflictResolverModal: React.FC<ConflictResolverModalProps> = ({
               </div>
               <div className="text-xs text-slate-400 space-y-0.5">
                 <div>Operator: {recA.operatorId || 'Onbekend'}</div>
-                <div>Status: {recA.type || 'FINISH'}</div>
+                <div>Status: {'type' in recA ? recA.type : 'SHOOTING'}</div>
               </div>
             </div>
 
@@ -181,7 +184,7 @@ export const ConflictResolverModal: React.FC<ConflictResolverModalProps> = ({
               </div>
               <div className="text-xs text-slate-400 space-y-0.5">
                 <div>Operator: {recB.operatorId || 'Onbekend'}</div>
-                <div>Status: {recB.type || 'FINISH'}</div>
+                <div>Status: {'type' in recB ? recB.type : 'SHOOTING'}</div>
               </div>
             </div>
           </div>

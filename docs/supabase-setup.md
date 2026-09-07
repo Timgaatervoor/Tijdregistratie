@@ -1,5 +1,7 @@
 # Supabase online synchronisatie
 
+Voor centrale tijd en het toevoegen van extra pc's via een eenmalige koppellink: volg na de basisinstallatie [Centrale tijd en extra pc's](reliability.md) en voer de aanvullende SQL uit.
+
 ## 1. Maak een gratis project
 
 Maak een project aan op https://supabase.com. Gebruik in de app de **Project URL** en de **anon public key** uit `Project Settings > API`.

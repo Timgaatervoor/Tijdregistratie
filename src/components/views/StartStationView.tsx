@@ -1,3 +1,4 @@
+import { raceClock } from '../../services/raceClock';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   PlayCircle,
@@ -99,61 +100,12 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
           setCountdown(null);
           soundService.playSuccess();
 
-          const nowIso = new Date().toISOString();
+          const nowIso = raceClock.nowISO();
           const monotonicNow = performance.now();
 
-          const updatedParticipants: Participant[] = [];
-          const newTimingRecords: TimingRecord[] = [];
-
-          for (const p of waveParticipants) {
-            if (p.status === 'FINISHED') continue; // Don't reset already finished
-
-            updatedParticipants.push({
-              ...p,
-              status: 'STARTED',
-              updatedAt: nowIso,
-            });
-
-            if (p.bibNumber) {
-              newTimingRecords.push({
-                id: generateUUID(),
-                eventId: selectedWave.eventId,
-                participantId: p.id,
-                bibNumber: p.bibNumber,
-                type: 'START',
-                timestamp: nowIso,
-                monotonicMs: monotonicNow,
-                clockOffsetMs: 0,
-                deviceId: operationService.getDeviceId(),
-                operatorId: operationService.getOperator(),
-                isConfirmed: true,
-                syncStatus: 'LOCAL_ONLY',
-              });
-            }
-          }
-
-          // Update Wave
-          await db.waves.update(selectedWave.id, {
-            status: 'STARTED',
-            actualStartTime: nowIso,
-          });
-
-          // Save records & participants in IndexedDB
-          if (updatedParticipants.length > 0) {
-            await db.participants.bulkPut(updatedParticipants);
-          }
-          if (newTimingRecords.length > 0) {
-            await db.timingRecords.bulkPut(newTimingRecords);
-          }
-
-          // Log operation & audit
-          await operationService.logAudit(
-            'WAVE_STARTED',
-            `Wave "${selectedWave.name}" gestart om ${formatLocalTime(nowIso, true)} met ${newTimingRecords.length} deelnemers`
-          );
-
+          await operationService.recordMassWaveStart(selectedWave.eventId, selectedWave.id, selectedWave.waveNumber, waveParticipants, nowIso);
           setFeedbackMsg({
-            text: `Wave "${selectedWave.name}" succesvol gestart! ${newTimingRecords.length} deelnemers onderweg.`,
+            text: `Wave "${selectedWave.name}" succesvol gestart! ${waveParticipants.filter(p => p.bibNumber).length} deelnemers onderweg.`,
             type: 'success',
           });
           setIsStarting(false);
@@ -170,7 +122,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     if (isNaN(bib) || bib <= 0) return;
 
     const p = participants.find((item) => item.bibNumber === bib);
-    const nowIso = new Date().toISOString();
+    const nowIso = raceClock.nowISO();
 
     await operationService.recordStart(
       await getActiveEventId(),
@@ -218,10 +170,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
 
     if (existingStart) {
       // Update existing record
-      await db.timingRecords.update(existingStart.id, {
-        timestamp: targetIso,
-        reversedReason: manualReason ? `Manueel gecorrigeerd: ${manualReason}` : 'Manuele correctie starttijd',
-      });
+      await operationService.correctTimingRecord(existingStart.id, targetIso, manualReason || 'Manuele correctie starttijd');
       await operationService.logAudit(
         'START_CORRECTED',
         `Starttijd voor Bib #${parsedManualBib} gewijzigd naar ${manualTimeInput}. Reden: ${manualReason || 'Geen'}`,
@@ -278,10 +227,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     today.setHours(hh, mm, ss, 0);
     const newIso = today.toISOString();
 
-    await db.timingRecords.update(editingRecord.id, {
-      timestamp: newIso,
-      reversedReason: `Gecorrigeerd naar ${editNewTime}: ${editReason}`,
-    });
+    await operationService.correctTimingRecord(editingRecord.id, newIso, editReason);
 
     await operationService.logAudit(
       'START_TIME_MODIFIED',
@@ -302,18 +248,8 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     const reason = prompt('Reden voor annuleren van start (verplicht):');
     if (!reason || !reason.trim()) return;
 
-    await db.timingRecords.update(recordId, {
-      isReversed: true,
-      reversedReason: reason,
-    });
-
-    const p = participants.find((item) => item.bibNumber === bibNumber);
-    if (p) {
-      await db.participants.update(p.id, {
-        status: 'READY',
-        updatedAt: new Date().toISOString(),
-      });
-    }
+    await operationService.undoTimingRecord(recordId, reason);
+    const p = participants.find(item => item.bibNumber === bibNumber);
 
     await operationService.logAudit(
       'START_CANCELLED',
@@ -511,8 +447,8 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                     {matchedSingleParticipant.firstName} {matchedSingleParticipant.lastName}
                   </span>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Categorie: <strong className="text-slate-200">{matchedSingleParticipant.categoryName || 'Cat'}</strong> • Wave:{' '}
-                    <strong className="text-slate-200">{matchedSingleParticipant.waveName || '1'}</strong> • Status:{' '}
+                    Categorie: <strong className="text-slate-200">{categories.find(c => c.id === matchedSingleParticipant.categoryId)?.name || 'Cat'}</strong> • Wave:{' '}
+                    <strong className="text-slate-200">{waves.find(w => w.id === matchedSingleParticipant.waveId)?.name || '1'}</strong> • Status:{' '}
                     <strong className="text-amber-400">{matchedSingleParticipant.status}</strong>
                   </p>
                 </div>
@@ -567,7 +503,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                 />
                 {matchedManualParticipant && (
                   <span className="text-xs text-emerald-400 font-semibold mt-1 block">
-                    ✓ {matchedManualParticipant.firstName} {matchedManualParticipant.lastName} ({matchedManualParticipant.categoryName})
+                    ✓ {matchedManualParticipant.firstName} {matchedManualParticipant.lastName} ({categories.find(c => c.id === matchedManualParticipant.categoryId)?.name})
                   </span>
                 )}
               </div>

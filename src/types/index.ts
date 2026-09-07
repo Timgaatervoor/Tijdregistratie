@@ -108,6 +108,7 @@ export interface Participant extends StamhoofdSource {
   categoryId: string;
   raceProfileId: string;
   article?: string;
+  penaltyLapsCompleted?: number;
   categoryAssignment?: 'automatic' | 'manual';
   profileAssignment?: 'automatic' | 'manual';
   bibNumber?: number;
@@ -127,6 +128,10 @@ export interface Participant extends StamhoofdSource {
 }
 
 export interface TimingRecord {
+  localTimestamp?: string;
+  clockSource?: string;
+  clockUncertaintyMs?: number;
+  clockSyncedAt?: string;
   id: string;
   eventId: string;
   participantId?: string;
@@ -145,6 +150,7 @@ export interface TimingRecord {
 }
 
 export interface ShootingResult {
+  supersedesIds?: string[];
   id: string;
   eventId: string;
   participantId: string;
@@ -276,6 +282,8 @@ export interface DeviceConfig {
 }
 
 export interface RaceResult {
+  resultIssues?: string[];
+  penaltyLaps?: number;
   raceProfileId?: string;
   raceProfileName?: string;
   participantId: string;

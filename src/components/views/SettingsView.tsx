@@ -1,3 +1,5 @@
+import { DevicePairingPanel } from '../DevicePairingPanel';
+import { ClockStatus } from '../ClockStatus';
 import React, { useState } from 'react';
 import {
   Settings,
@@ -312,7 +314,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onRefresh={onRefresh}
         />
       ) : activeSection === 'sync' ? (
-        <SyncSettings eventId={event?.id || ''} />
+        <div className="space-y-4"><ClockStatus /><DevicePairingPanel onJoined={onRefresh} /><SyncSettings eventId={event?.id || ''} /></div>
       ) : activeSection === 'backup' ? (
         <BackupRecoveryView event={event} onRefresh={onRefresh} />
       ) : activeSection === 'tests' ? (

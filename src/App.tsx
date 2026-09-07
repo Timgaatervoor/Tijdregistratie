@@ -1,3 +1,5 @@
+import { DevicePairingPanel } from './components/DevicePairingPanel';
+import { ClockStatus } from './components/ClockStatus';
 import React, { useState } from 'react';
 import { useEventData } from './hooks/useEventData';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -56,6 +58,7 @@ export default function App() {
 
   const { isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
   const [currentTab, setCurrentTab] = useState<ActiveTab>(getInitialTab);
+  const [joinLink, setJoinLink] = useState(() => location.hash.startsWith('#join=') ? location.href : '');
   const [isLeaderboardKiosk, setIsLeaderboardKiosk] = useState(false);
 
   // Modals state
@@ -88,6 +91,7 @@ export default function App() {
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
+      if (window.location.hash.startsWith('#join=')) return;
       const nextHash = `#${currentTab}`;
       if (window.location.hash !== nextHash) {
         window.history.pushState(null, '', nextHash);
@@ -97,6 +101,7 @@ export default function App() {
 
   React.useEffect(() => {
     const restoreTabFromHistory = () => {
+      if (window.location.hash.startsWith('#join=')) { setJoinLink(window.location.href); return; }
       const hashTab = window.location.hash.replace(/^#/, '') as ActiveTab;
       if (validTabs.has(hashTab)) setCurrentTab(hashTab);
     };
@@ -144,6 +149,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950">
+      {joinLink && <div className="fixed inset-0 z-[100] bg-slate-950/95 overflow-auto p-6"><div className="max-w-2xl mx-auto"><DevicePairingPanel initialLink={joinLink} onJoined={() => { setJoinLink(''); location.reload(); }} /><button className="p-3" onClick={() => { setJoinLink(''); history.replaceState(null, '', location.pathname); }}>Sluiten</button></div></div>}
+      {!isLeaderboardKiosk && <div className="px-4 pt-2"><ClockStatus /><p className="text-[10px] text-slate-400">Versie betrouwbaarheid 2026.09 - Tijdcorrecties en toestelkoppeling</p></div>}
       {/* Test Mode / Simulated Offline Banner */}
       {!isLeaderboardKiosk && (event?.isTestMode || isSimulatedOffline) && (
         <div className="bg-amber-500 text-slate-950 px-4 py-1.5 text-xs font-black uppercase tracking-wider flex items-center justify-between shadow-md">
@@ -210,7 +217,7 @@ export default function App() {
 
         {displayedTab === 'start' && (
           <StartStationView
-            event={event}
+            categories={categories}
             waves={waves}
             participants={participants}
             timingRecords={timingRecords}
@@ -220,6 +227,7 @@ export default function App() {
 
         {displayedTab === 'shooting' && (
           <ShootingStationView
+            categories={categories}
             event={event}
             participants={participants}
             shootingResults={shootingResults}
@@ -230,6 +238,8 @@ export default function App() {
 
         {displayedTab === 'finish' && (
           <FinishStationView
+            categories={categories}
+            waves={waves}
             event={event}
             participants={participants}
             timingRecords={timingRecords}
@@ -311,16 +321,15 @@ export default function App() {
       <PrintModal
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
-        results={results}
+        participants={participants}
         categories={categories}
         waves={waves}
-        profiles={raceProfiles}
         event={event}
       />
 
       <ConflictResolverModal
+        isOpen={!!activeConflict}
         conflict={activeConflict}
-        participants={participants}
         onClose={() => setActiveConflict(null)}
         onResolved={refresh}
       />

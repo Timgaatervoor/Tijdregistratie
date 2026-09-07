@@ -247,6 +247,7 @@ export default function App() {
 
         {(displayedTab === 'live' || displayedTab === 'results') && (
           <LiveLeaderboardView
+            key={event?.id}
             results={results}
             categories={categories}
             waves={waves}
@@ -317,6 +318,7 @@ export default function App() {
       />
 
       <PrintModal
+        profiles={raceProfiles}
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
         participants={participants}

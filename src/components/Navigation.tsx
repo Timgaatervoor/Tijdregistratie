@@ -164,7 +164,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           <span>{label}</span>
           <ChevronDown className="w-3.5 h-3.5 transition group-open:rotate-180" />
         </summary>
-        <div className="absolute left-0 top-full mt-1 min-w-52 z-50 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
+        <div className="absolute right-0 top-full mt-1 min-w-52 z-50 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
           {tabs.map((tab) => renderTabButton(tab))}
         </div>
       </details>
@@ -173,7 +173,12 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   return (
     <nav aria-label="Hoofdnavigatie" className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4">
-      <div className="md:hidden max-w-7xl mx-auto py-2">
+      <div className="md:hidden max-w-7xl mx-auto py-2 space-y-2">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Wedstrijdregistratie">
+          {renderTabButton('start', true)}
+          {renderTabButton('shooting', true)}
+          {renderTabButton('finish', true)}
+        </div>
         <label htmlFor="mobile-main-navigation" className="sr-only">Open onderdeel</label>
         <select
           id="mobile-main-navigation"
@@ -189,17 +194,17 @@ export const Navigation: React.FC<NavigationProps> = ({
         </select>
       </div>
 
-      <div className="hidden md:flex max-w-7xl mx-auto items-center gap-1.5 py-1.5">
-        {renderTabButton('event')}
-        {renderMenu('Voorbereiding', ['participants', 'waves'])}
-        <div className="h-6 w-px bg-slate-700 mx-1" aria-hidden="true" />
+      <div className="hidden md:flex flex-wrap max-w-7xl mx-auto items-center gap-1.5 py-2">
         {renderTabButton('start', true)}
         {renderTabButton('shooting', true)}
         {renderTabButton('finish', true)}
         <div className="h-6 w-px bg-slate-700 mx-1" aria-hidden="true" />
         {renderMenu('Uitslagen', ['live', 'results'])}
         {renderTabButton('attention')}
-        <div className="ml-auto">{renderTabButton('settings')}</div>
+        <div className="ml-auto flex items-center gap-1.5">
+          {renderMenu('Evenement', ['event', 'participants', 'waves'])}
+          {renderTabButton('settings')}
+        </div>
       </div>
     </nav>
   );

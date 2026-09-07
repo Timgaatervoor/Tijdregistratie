@@ -1,3 +1,4 @@
+import { ClockStatus } from './ClockStatus';
 import React, { useState } from 'react';
 import {
   Wifi,
@@ -7,7 +8,6 @@ import {
   VolumeX,
   Maximize,
   Minimize,
-  Clock,
   Laptop,
   CheckCircle2,
   Printer,
@@ -86,7 +86,6 @@ export const Header: React.FC<HeaderProps> = ({
     setTimeout(() => setSyncToast(null), 3000);
   };
 
-  const clockOffset = syncService.getClockOffsetMs();
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 text-slate-100">
@@ -164,6 +163,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
+          <ClockStatus compact />
+
           {/* Sync Button */}
           <button
             onClick={handleSyncNow}
@@ -198,17 +199,6 @@ export const Header: React.FC<HeaderProps> = ({
               <LockOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Ontgrendelen</span>
             </button>
-          )}
-
-          {/* Clock Offset Warning if > 1s (Req 42) */}
-          {Math.abs(clockOffset) > 1000 && (
-            <div
-              className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 border border-amber-700 text-xs"
-              title={`Klokverschil van dit toestel: ${(clockOffset / 1000).toFixed(1)}s`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>±{(clockOffset / 1000).toFixed(1)}s</span>
-            </div>
           )}
 
           {/* Simulated Offline Toggle */}

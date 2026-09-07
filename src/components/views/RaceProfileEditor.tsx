@@ -318,7 +318,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
         <p className="text-sm">Sla eerst de profielen en leeftijdscategorieën op. Pas daarna de opgeslagen regels toe op geïmporteerde deelnemers. Handmatige keuzes en deelnemers die al gestart zijn blijven behouden.</p>
-        <button type="button" className="bg-blue-600 rounded px-4 py-2 font-bold" onClick={async () => { try { const result = await applyClassification(); setClassificationMessage(`${result.updated} indelingen bijgewerkt. ${result.problems.length} te controleren.\n${result.problems.join('\n')}`); onRefresh(); } catch (error) { setClassificationMessage((error as Error).message); } }}>Artikel + leeftijdscategorie toepassen</button>
+        <button type="button" className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400" onClick={async () => { try { const result = await applyClassification(); setClassificationMessage(`${result.updated} indelingen bijgewerkt. ${result.problems.length} te controleren.\n${result.problems.join('\n')}`); onRefresh(); } catch (error) { setClassificationMessage((error as Error).message); } }}>Artikel + leeftijdscategorie toepassen</button>
         {classificationMessage && <p role="status" className="whitespace-pre-wrap max-h-72 overflow-auto text-sm">{classificationMessage}</p>}
       </div>
       {/* Editor Form */}

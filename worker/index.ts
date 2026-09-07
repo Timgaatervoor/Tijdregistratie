@@ -1,3 +1,5 @@
+import { paginate } from '../src/services/stamhoofdPagination';
+export { paginate } from '../src/services/stamhoofdPagination';
 import type { StamhoofdShop } from '../src/types/stamhoofd';
 
 export interface Env {
@@ -15,31 +17,6 @@ export function domainName(value: string): string {
   const url = new URL(value.includes('://') ? value : `https://${value}`);
   if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || url.pathname !== '/' || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(url.hostname)) throw new ApiError('Geef een geldig webshopdomein zonder pad op.', 400);
   return url.hostname;
-}
-export async function paginate(get: (path: string) => Promise<any>, path: string, webshopId: string, sort: string) {
-  const rows: Record<string, any>[] = [];
-  const seen = new Set<string>();
-  const ids = new Set<string>();
-  let pageFilter: unknown;
-  for (let page = 0; page < 60; page++) {
-    const query = new URLSearchParams({ filter: JSON.stringify({ webshopId }), sort, limit: '100' });
-    if (pageFilter !== undefined) query.set('pageFilter', JSON.stringify(pageFilter));
-    if (seen.has(query.toString())) throw new ApiError('Herhaalde paginering; synchronisatie afgebroken.');
-    seen.add(query.toString());
-    const result = await get(`${path}?${query}`);
-    if (!Array.isArray(result.results)) throw new ApiError('Onverwacht paginaformaat van Stamhoofd.');
-    for (const row of result.results) {
-      if (typeof row.id !== 'string' || ids.has(row.id)) throw new ApiError('Dubbele of ontbrekende ID in paginering.');
-      if (row.webshopId && row.webshopId !== webshopId) throw new ApiError('Onverwachte webshop in antwoord.');
-      ids.add(row.id);
-      rows.push(row);
-    }
-    if (rows.length > 5000) throw new ApiError('Meer dan 5000 resultaten; geen gedeeltelijke import uitgevoerd.');
-    if (result.next == null) return rows;
-    if (!result.next.pageFilter || !result.results.length) throw new ApiError('Ongeldige volgende pagina van Stamhoofd.');
-    pageFilter = result.next.pageFilter;
-  }
-  throw new ApiError('Paginaveiligheidslimiet bereikt.');
 }
 function label(value: any): string { return typeof value === 'string' ? value : value?.nl ?? Object.values(value ?? {}).find(v => typeof v === 'string') ?? ''; }
 async function authorized(request: Request, env: Env) {

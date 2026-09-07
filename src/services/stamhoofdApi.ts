@@ -1,5 +1,6 @@
 import type { StamhoofdConfig, StamhoofdShop, StamhoofdSnapshot } from '../types/stamhoofd';
 import { syncService } from './syncService';
+import { DIRECT_STAMHOOFD, searchDirectShops, loadDirectStamhoofd } from './stamhoofdDirect';
 
 export const LOCAL_STAMHOOFD = '/api/stamhoofd';
 export function isLocalApp(): boolean {
@@ -46,10 +47,15 @@ export async function workerRequest<T>(workerUrl: string, path: string, accessTo
   return data;
 }
 export function searchShops(url: string, domain: string, token: string) {
+  if (url === DIRECT_STAMHOOFD) return searchDirectShops(domain);
   return workerRequest<{ shops: StamhoofdShop[] }>(url, `/webshop/search?${new URLSearchParams({ domain })}`, token);
 }
-export async function loadStamhoofd(config: StamhoofdConfig, token: string, apiKey?: string): Promise<StamhoofdSnapshot> {
+export async function loadStamhoofd(config: StamhoofdConfig, token: string, apiKey?: string, progress?: (text: string) => void): Promise<StamhoofdSnapshot> {
   if (!config.shop) throw new Error('Selecteer eerst een webshop.');
+  if (config.workerUrl === DIRECT_STAMHOOFD) {
+    if (!navigator.onLine || syncService.getIsSimulatedOffline()) throw new Error('Je bent offline. Lokale wedstrijdregistratie blijft beschikbaar.');
+    return loadDirectStamhoofd(config.shop, apiKey, progress);
+  }
   const data = await workerRequest<StamhoofdSnapshot>(config.workerUrl, `/sync?${new URLSearchParams({ organizationId: config.shop.organizationId, webshopId: config.shop.id })}`, token, apiKey);
   if (data.shop.id !== config.shop.id || data.shop.organizationId !== config.shop.organizationId || !Array.isArray(data.orders) || !Array.isArray(data.tickets) || !data.webshop) throw new Error('Onvolledig synchronisatieantwoord.');
   return { ...data, shop: config.shop };

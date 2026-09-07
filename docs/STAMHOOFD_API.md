@@ -1,13 +1,38 @@
 # Stamhoofd API-integratie
 
-De app kan Stamhoofd rechtstreeks via een **lokale koppeling op jouw computer** synchroniseren. Hiervoor is geen Cloudflare-account, Worker URL of aparte toegangscode nodig. De Cloudflare Worker blijft een optionele oplossing voor gebruik vanuit GitHub Pages. Deelnemers, optionele ticketgegevens, veldkeuzes en syncverslagen worden lokaal opgeslagen in dezelfde Dexie-database. Start, finish en schieten gebruiken geen van beide koppelingen. CSV/Excel-import blijft beschikbaar.
+De app gebruikt standaard **rechtstreekse browserrequests**, zoals het aangeleverde `stamhoofd_run_biathlon_deelnemers_qr_v10.html`. Geen Cloudflare-account, Worker URL of lokale server nodig. De key wordt alleen voor de huidige ophaalaanvraag gebruikt. Deelnemers, geselecteerde ticketgegevens, veldkeuzes en syncverslagen worden lokaal opgeslagen in dezelfde Dexie-database. Start, finish en schieten blijven offline werken. CSV/Excel-import blijft beschikbaar.
 
-## Lokaal gebruiken (aanbevolen)
+## Eenvoudig synchroniseren (standaard)
+
+1. Open **Deelnemers → Stamhoofd API**. De huidige Run Biathlon-webshop staat al geselecteerd; een eerder gekozen andere webshop blijft behouden.
+2. Plak je aparte read-only key in **API-key**.
+3. Klik **Synchroniseer deelnemers + QR**. Orders en tickets verschijnen automatisch in de preview. De key wordt na afloop uit het veld gewist, ook bij fouten.
+4. Koppel bij de eerste import de producten aan je wedstrijdcategorieën. Indien nodig pas je onder **Velden aanpassen (optioneel)** de veldkeuzes aan. Controleer de preview en klik **Synchronisatie toepassen**. Deze stap schrijft de deelnemers lokaal en heeft geen key nodig.
+
+Voor een andere webshop open je **Andere webshop of verbinding**, vul je het domein in en kies je **Zoek webshops** en **Gebruik deze webshop**. Webshops zoeken gebruikt de publieke endpoint zonder key.
+
+De key gaat net als in de HTML uitsluitend in de `Authorization: Bearer ...`-header naar de organisatiehost van Stamhoofd, met `Accept: application/json`, `X-Platform: web` en `X-Locale: nl-BE`. Hij staat niet in de broncode, URL, opslag of export, maar is tijdens de aanvraag wel zichtbaar in de netwerkinspectie van je eigen browser. Dit is de bewust gekozen directe werkwijze; de oorspronkelijke eis dat de browser de key nooit mag zien is daarmee vervangen.
+
+Op 7 september 2026 gaf de Stamhoofd-server op een keyloze OPTIONS-controle expliciet toestemming voor `https://timgaatervoor.github.io` en de headers `authorization,x-platform,x-locale`. Dit controleert CORS; een volledige live import vereist nog je eigen key. Als Stamhoofd zijn CORS-beleid later verandert, zijn de lokale koppeling en Worker beschikbaar onder **Andere webshop of verbinding**.
+
+### Controle van de aangeleverde HTML
+
+De HTML gebruikt directe GET-requests naar `/webshop/orders` en `/webshop/tickets/private`. De technische ticketkoppeling via `itemId` is correct. Het voorbeeld bevat geen ingebouwde API-key en schrijft die niet naar browseropslag. Het laat de key wel in het invoerveld staan tot **Wis** wordt ingedrukt.
+
+De app neemt de requests en eenvoudige bediening over, met deze aanvullingen:
+
+- Alle pagina’s worden opgehaald via `next.pageFilter`; de HTML stopt bij de eerste 100 orders/tickets.
+- De key wordt automatisch gewist na de ophaalaanvraag.
+- Het voorbeeld hergebruikt bij ontbrekende extra tickets `linked[0]`; de app blokkeert zulke meervoudige/ambigue items voor controle, zodat dezelfde ticketcode niet stil aan meerdere personen wordt gekoppeld.
+- De HTML markeert een bestelling betaald zodra één betaling Succeeded is. De app houdt de conservatievere controle en laat de beheerder verdachte betalingen beoordelen.
+- Producten en velden blijven configureerbaar. Annuleringen verwijderen geen lokale wedstrijdgegevens en QR-codes worden nooit borstnummers.
+
+## Optioneel: lokale koppeling
 
 1. Start de bijgewerkte app via `start-windows.bat` of `start-mac-linux.sh`. Als de app al draait, sluit het startvenster en start opnieuw. De lokale koppeling start automatisch mee; je hoeft geen extra server of Cloudflare in te stellen.
-2. Open `http://localhost:3000` en ga naar **Deelnemers → Stamhoofd API**. Kies **Op deze computer — geen Cloudflare nodig**.
+2. Open `http://localhost:3000` en ga naar **Deelnemers → Stamhoofd API → Andere webshop of verbinding**. Kies **Lokale koppeling**.
 3. Vul het webshopdomein in, klik **Zoek webshops**, selecteer de webshop en klik **Gebruik deze webshop**. Zoeken vereist geen API-key.
-4. Vul je aparte read-only Stamhoofd API-key in bij **Stamhoofd API-key voor deze aanvraag** en klik **Beschikbare gegevens ophalen**. De key wordt alleen gebruikt voor deze ophaalaanvraag, inclusief alle pagina’s met orders en tickets. Het veld wordt na afloop leeggemaakt, ook bij een fout. Voor een nieuwe ophaalaanvraag voer je de key opnieuw in.
+4. Vul je aparte read-only Stamhoofd API-key in bij **API-key** en klik **Synchroniseer deelnemers + QR**. De key wordt alleen gebruikt voor deze ophaalaanvraag, inclusief alle pagina’s met orders en tickets. Het veld wordt na afloop leeggemaakt, ook bij een fout. Voor een nieuwe ophaalaanvraag voer je de key opnieuw in.
 5. Kies velden en categorieën, bekijk de preview en pas de synchronisatie toe. Deze lokale verwerking heeft geen key nodig. Dit is dezelfde veilige import als bij de optionele Worker.
 
 De key wordt niet opgeslagen: niet in een bestand, Git, IndexedDB, localStorage, backups of de productiebuild. Hij bestaat tijdelijk in het invoerveld en tijdens de ophaalaanvraag. Een volgende aanvraag kan de vorige key niet hergebruiken. Als je met een oudere versie al `.env.stamhoofd.local` had aangemaakt, kun je dat bestand verwijderen; deze versie leest of schrijft het niet meer.
@@ -41,7 +66,7 @@ Technisch draait `server/stamhoofdLocal.ts` mee met `npm run dev` en `npm run pr
 
 ## Gebruik met de optionele Worker
 
-6. Open **Deelnemers → Stamhoofd API** en kies **Cloudflare Worker (optioneel)**. Vul de Worker URL, het webshopdomein (bijvoorbeeld `shop.kidsatletiekdehaan.be`) en de aparte Worker-toegangscode in. Deze toegangscode blijft alleen in het geheugen tot het venster sluit; hij wordt niet opgeslagen. Vul in het Worker-toegangscodeveld nooit de Stamhoofd API-key in.
+6. Open **Deelnemers → Stamhoofd API → Andere webshop of verbinding** en kies **Cloudflare Worker**. Vul de Worker URL, het webshopdomein (bijvoorbeeld `shop.kidsatletiekdehaan.be`) en de aparte Worker-toegangscode in. Deze toegangscode blijft alleen in het geheugen tot het venster sluit; hij wordt niet opgeslagen. Vul in het Worker-toegangscodeveld nooit de Stamhoofd API-key in.
 7. Kies **Zoek webshops**, selecteer de naam/domein/ID en druk **Gebruik deze webshop**. Het domein kan meerdere open webshops opleveren. De huidige webshop kan worden herkend aan `603e808b-9ac6-47cb-933c-bf7b4c66f357`; dit ID is niet hardcoded in de integratie. Als een webshop niet gevonden wordt, controleer domein, publicatie en de serverorganisatie.
 8. Kies **Beschikbare gegevens ophalen**. De Worker haalt webshopconfiguratie, alle orders en alle private tickets op. Stel de gewenste velden in. Namen worden automatisch herkend met dezelfde veldnaamsynoniemen als de bestaande CSV-parser; afwijkende velden kun je expliciet kiezen op ID. Koppel ieder product aan een bestaande categorie met een wedstrijdprofiel voor nieuwe deelnemers. Nieuwe deelnemers hebben nog geen borstnummer of wave.
 9. Kies **Configuratie bewaren en preview tonen**. Controleer aantallen, namen, geboortedata, afstand, bestelling, betaling, ticket en lokale status. Niet-betaalde/onbekende betalingen zijn standaard niet geselecteerd; selecteer deze alleen na controle. De status Betaald vereist dat alle gevonden betalingen Succeeded zijn; dit is geen financiële reconciliatie. Bij twijfel controleer de bestelling in Stamhoofd. Items met meerdere personen/tickets of ontbrekende namen worden geblokkeerd om onjuiste koppelingen te voorkomen.

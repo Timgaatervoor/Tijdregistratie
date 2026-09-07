@@ -223,6 +223,7 @@ class SyncService {
     const rows = (await response.json()) as Array<Record<string, any>>;
     let applied = 0;
     for (const row of rows) {
+      if (String(row.event_id) !== config.eventId) continue;
       const operation: RaceOperation = {
         operationId: String(row.operation_id),
         eventId: String(row.event_id),
@@ -237,12 +238,22 @@ class SyncService {
         revision: Number(row.revision || 1),
       };
 
-      if (await db.operations.get(operation.operationId)) continue;
-      await db.operations.put(operation);
-      await this.applyRemoteOperation(operation);
-      applied += 1;
+      await db.transaction('rw', [db.events, db.operations, db.timingRecords, db.shootingResults, db.participants, db.waves], async () => {
+        // A reset can finish while the HTTP request is still in flight. Check
+        // inside the transaction so old operations cannot repopulate a new event.
+        if (!this.isCurrentConnection(config) || !await db.events.get(config.eventId)) return;
+        if (await db.operations.get(operation.operationId)) return;
+        await db.operations.put(operation);
+        await this.applyRemoteOperation(operation);
+        applied += 1;
+      });
     }
     return applied;
+  }
+
+  private isCurrentConnection(config: SyncConfig): boolean {
+    const current = this.getConfig();
+    return current.enabled && current.eventId === config.eventId && current.projectUrl === config.projectUrl && current.anonKey === config.anonKey;
   }
 
   public async syncNow(): Promise<{ syncedCount: number; error?: string }> {
@@ -260,11 +271,16 @@ class SyncService {
       if (!config.projectUrl || !config.anonKey) {
         return { syncedCount: 0, error: 'Supabase Project URL en anon key ontbreken.' };
       }
+      const activeEvent = await db.events.toCollection().first();
+      if (!config.eventId || activeEvent?.id !== config.eventId) {
+        return { syncedCount: 0, error: 'Het Supabase Event-ID moet overeenkomen met het huidige evenement.' };
+      }
 
       const uploadable = pending.filter(
-        (operation) => !config.eventId || operation.eventId === config.eventId
+        (operation) => operation.eventId === config.eventId
       );
       const pulledCount = await this.pullRemoteOperations(config);
+      if (!this.isCurrentConnection(config) || !await db.events.get(config.eventId)) return { syncedCount: 0 };
       if (uploadable.length === 0) return { syncedCount: pulledCount };
 
       const response = await fetch(`${config.projectUrl}/rest/v1/race_operations?on_conflict=operation_id`, {

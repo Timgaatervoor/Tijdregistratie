@@ -1,4 +1,6 @@
 import { db } from '../db/dexieDb';
+import { generateUUID } from './operationService';
+import { syncService } from './syncService';
 import type { RaceEvent, RaceProfile, Category, Wave, Participant } from '../types';
 
 const BELGIAN_FIRST_NAMES_M = [
@@ -282,7 +284,7 @@ export async function resetToBlankEvent(
 ): Promise<void> {
   const now = new Date().toISOString();
   const event: RaceEvent = {
-    id: 'event-de-haan-2026',
+    id: generateUUID(),
     name: name || 'Run-Biathlon De Haan',
     date,
     location: location || 'De Haan',
@@ -300,6 +302,9 @@ export async function resetToBlankEvent(
     updatedAt: now,
   };
 
+  // Stop new cloud requests before clearing local data. Existing responses are
+  // also checked against the active event inside syncService's transactions.
+  syncService.saveConfig({ ...syncService.getConfig(), enabled: false, eventId: event.id });
   await db.transaction(
     'rw',
     [
@@ -327,16 +332,9 @@ export async function resetToBlankEvent(
         db.shootingResults.clear(),
         db.operations.clear(),
         db.conflicts.clear(),
+        db.auditLogs.clear(),
       ]);
       await db.events.put(event);
-      await db.auditLogs.add({
-        id: `audit-blank-event-${Date.now()}`,
-        timestamp: now,
-        deviceId: 'RACE-CONTROL',
-        operator: 'System',
-        action: 'BLANK_EVENT_CREATED',
-        details: `Leeg evenement aangemaakt: ${event.name}.`,
-      });
     }
   );
 }

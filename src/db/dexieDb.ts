@@ -80,3 +80,9 @@ export class BiathlonDatabase extends Dexie {
 
 // Node has no browser IndexedDB. Keep test/CLI storage explicitly separate.
 export const db = new BiathlonDatabase(typeof window === 'undefined' ? 'BiathlonDeHaanDB-node-test' : 'BiathlonDeHaanDB');
+
+export async function getActiveEventId(): Promise<string> {
+  const event = await db.events.toCollection().first();
+  if (!event) throw new Error('Maak eerst een evenement aan.');
+  return event.id;
+}

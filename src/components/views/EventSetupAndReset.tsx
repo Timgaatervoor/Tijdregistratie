@@ -136,7 +136,7 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
                 <Database className="w-4 h-4" /> Nieuw evenement
               </div>
               <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                Wist alle wedstrijdgegevens en maakt een volledig blanco evenement aan.
+                Wist alle wedstrijdgegevens en logs. Maakt een blanco evenement met een nieuw ID; online synchronisatie wordt uitgezet.
               </p>
             </div>
             <button type="button" onClick={() => setShowBlankEventModal(true)} className="w-full py-2 px-3 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition">
@@ -170,7 +170,7 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
               </h3>
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Alle deelnemers, startgroepen en tijden worden gewist. Maak vooraf een back-up als u deze gegevens wilt bewaren.
+              Alle deelnemers, startgroepen, tijden en logs worden gewist. Het nieuwe evenement krijgt een eigen ID en online synchronisatie wordt uitgezet. Maak vooraf een back-up als u deze gegevens wilt bewaren.
             </p>
             <form onSubmit={handleFactoryResetBlank} className="space-y-3">
               <div>

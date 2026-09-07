@@ -655,7 +655,7 @@ const SyncSettings: React.FC<SyncSettingsProps> = ({ eventId }) => {
           <li>Maak een gratis project aan op <strong className="text-white">supabase.com</strong>.</li>
           <li>Open in Supabase <strong className="text-white">SQL Editor</strong>, maak een nieuwe query en voer de SQL hieronder uit.</li>
           <li>Open <strong className="text-white">Project Settings &gt; API</strong> en kopieer de Project URL en de <strong className="text-white">Publishable key</strong> (of legacy anon public key).</li>
-          <li>Vul die gegevens hieronder in, gebruik als Event-ID bijvoorbeeld <code className="text-amber-300">event-de-haan-2026</code>, en klik op <strong className="text-white">Verbinding testen</strong>.</li>
+          <li>Vul die gegevens hieronder in, gebruik het Event-ID van dit evenement: <code className="text-amber-300">{eventId}</code>, en klik op <strong className="text-white">Verbinding testen</strong>. Gebruik op andere toestellen dezelfde evenementback-up.</li>
           <li>Krijg je “Verbinding met Supabase werkt”, klik dan op <strong className="text-white">Instellingen opslaan</strong>.</li>
         </ol>
 

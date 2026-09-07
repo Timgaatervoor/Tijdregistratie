@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Crosshair, Flag, Clock, Edit3, ShieldAlert, CheckCircle2, UserCog } from 'lucide-react';
 import type { RaceResult, AuditLog, ParticipantStatus, Participant, Category, Wave, RaceProfile } from '../types';
-import { db } from '../db/dexieDb';
+import { db, getActiveEventId } from '../db/dexieDb';
 import { operationService, generateUUID } from '../services/operationService';
 import { formatLocalTime } from '../services/timingEngine';
 import {
@@ -147,6 +147,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setIsSavingStatus(true);
     setStatusError(null);
     try {
+      const eventId = await getActiveEventId();
       await db.participants.update(activeResult.participantId, {
         status: newStatus,
         statusReason: reason,
@@ -155,7 +156,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
       const op = {
         operationId: generateUUID(),
-        eventId: 'event-de-haan-2026',
+        eventId,
         participantId: activeResult.participantId,
         type: 'STATUS_CHANGED' as const,
         deviceId: operationService.getDeviceId(),

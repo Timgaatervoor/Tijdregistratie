@@ -11,7 +11,7 @@ import {
   Edit3,
 } from 'lucide-react';
 import type { Wave, Participant, TimingRecord, Category } from '../../types';
-import { db } from '../../db/dexieDb';
+import { db, getActiveEventId } from '../../db/dexieDb';
 import { operationService, generateUUID } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
@@ -173,7 +173,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     const nowIso = new Date().toISOString();
 
     await operationService.recordStart(
-      'event-de-haan-2026',
+      await getActiveEventId(),
       bib,
       p,
       nowIso,
@@ -232,7 +232,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     } else {
       // Create new record with manual timestamp
       await operationService.recordStart(
-        'event-de-haan-2026',
+        await getActiveEventId(),
         parsedManualBib,
         p,
         targetIso,

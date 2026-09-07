@@ -61,13 +61,21 @@ Open **Instellingen > Online Synchronisatie** en vul in:
 
 - Supabase Project URL
 - Supabase anon public key
-- Event-ID, bijvoorbeeld `event-de-haan-2026`
+- Event-ID van het huidige evenement (getoond in de instellingen)
+
 - Schakel online synchronisatie in
 
 Klik eerst op **Verbinding testen** en daarna op **Instellingen opslaan**.
 
 De racegegevens blijven lokaal in IndexedDB. De knop voor synchroniseren uploadt de lokale `RaceOperation`-records naar Supabase. De unieke `operation_id` voorkomt dubbele records.
 
+### Volledig nieuw evenement
+
+**Blanco evenement starten** wist lokale wedstrijdgegevens, de operatiewachtrij en alle auditlogs. Het logboek begint leeg, ook zonder resetmelding. Bestaande backups blijven beschikbaar.
+
+Elk blanco evenement krijgt een nieuw, uniek ID. Supabase-synchronisatie wordt bij deze actie uitgezet en het ingestelde Event-ID wordt vervangen door het nieuwe ID; de projectverbinding blijft bewaard. Oude Supabase-gegevens worden niet verwijderd en kunnen niet terugkomen via een vertraagd antwoord van de oude synchronisatie.
+
+De Supabase-database hoeft dus niet leeg voor een nieuwe wedstrijd. Gebruik op de andere toestellen dezelfde evenementbackup, controleer dat alle toestellen hetzelfde nieuwe Event-ID hebben en schakel daarna synchronisatie weer in. Oude testdata kan indien gewenst afzonderlijk per evenement worden opgeruimd in Supabase; daarvoor is geen algemene wisfunctie in de app nodig.
 ## Meerdere pc's gebruiken
 
 Open op elke pc dezelfde online app en vul exact dezelfde Supabase Project URL, publishable/anon key en Event-ID in. Geef elke pc in **Instellingen > Algemeen & Tijd** een unieke Device ID, bijvoorbeeld `START-01`, `SHOOT-01` en `FINISH-01`.

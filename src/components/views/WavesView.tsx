@@ -13,7 +13,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { Wave, Category, Participant } from '../../types';
-import { db } from '../../db/dexieDb';
+import { db, getActiveEventId } from '../../db/dexieDb';
 import { generateUUID, operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 
@@ -121,7 +121,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
     const nextWaveNum = waves.length > 0 ? Math.max(...waves.map((w) => w.waveNumber)) + 1 : 1;
     const wave: Wave = {
       id: generateUUID(),
-      eventId: 'event-de-haan-2026',
+      eventId: await getActiveEventId(),
       name: newWaveName.trim(),
       waveNumber: nextWaveNum,
       scheduledStartTime: newStartTime.trim(),

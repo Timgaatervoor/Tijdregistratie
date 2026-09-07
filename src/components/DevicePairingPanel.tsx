@@ -5,8 +5,8 @@ import { createDeviceInvite, readDeviceInvite, joinEvent } from '../services/dev
 import { RealQrCode } from './RealQrCode';
 import { syncStyles as ui } from './syncSettingsStyles';
 
-export function DevicePairingPanel({ initialLink = '', title = 'Toestel koppelen aan evenement', onJoined }: { initialLink?: string; title?: string; onJoined: () => void }) {
-  const [mode, setMode] = useState<'share' | 'join'>(initialLink ? 'join' : 'share');
+export function DevicePairingPanel({ initialLink = '', initialMode = 'share', title = 'Toestel koppelen aan evenement', onJoined }: { initialLink?: string; initialMode?: 'share' | 'join'; title?: string; onJoined: () => void }) {
+  const [mode, setMode] = useState<'share' | 'join'>(initialLink ? 'join' : initialMode);
   const [input, setInput] = useState(initialLink);
   const [invitation, setInvitation] = useState<{ link: string; code: string }>();
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof readDeviceInvite>>>();

@@ -54,6 +54,7 @@ if not exist "node_modules\vite\bin\vite.js" (
 
 echo.
 echo Tijdregistratie wordt gestart op http://localhost:3000
+echo De lokale Stamhoofd-koppeling start automatisch mee.
 echo Dit venster mag open blijven. Druk op Ctrl+C om te stoppen.
 echo.
 call npm run dev -- --open

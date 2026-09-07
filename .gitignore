@@ -8,3 +8,5 @@ coverage/
 !.env.example
 .dev.vars*
 .wrangler/
+# Local Stamhoofd credentials (also covered by .env* above).
+.env.stamhoofd.local

@@ -1,8 +1,35 @@
 import type { StamhoofdConfig, StamhoofdShop, StamhoofdSnapshot } from '../types/stamhoofd';
 import { syncService } from './syncService';
 
+export const LOCAL_STAMHOOFD = '/api/stamhoofd';
+export function isLocalApp(): boolean {
+  return typeof location !== 'undefined' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+}
+async function localRequest<T>(path: string, apiKey?: string): Promise<T> {
+  if (!isLocalApp()) throw new Error('Start de app op je computer via start-windows.bat of start-mac-linux.sh.');
+  const response = await fetch(`${LOCAL_STAMHOOFD}${path}`, {
+    method: apiKey === undefined ? 'GET' : 'POST',
+    headers: { 'X-Stamhoofd-Local': '1', ...(apiKey === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: apiKey === undefined ? undefined : JSON.stringify({ apiKey }),
+    cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(180000),
+  });
+  if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('Herstart de lokale app om de Stamhoofd-koppeling te activeren.');
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Lokale koppeling niet bereikbaar.');
+  return data;
+}
+export const localConnectionStatus = () => localRequest<{ local: boolean; configured: boolean }>('/health');
+export const saveLocalApiKey = (apiKey: string) => localRequest<{ configured: boolean }>('/configure', apiKey);
+
 export async function workerRequest<T>(workerUrl: string, path: string, accessToken: string): Promise<T> {
   if (!navigator.onLine || syncService.getIsSimulatedOffline()) throw new Error('Je bent offline. Lokale wedstrijdregistratie blijft beschikbaar.');
+  if (workerUrl === LOCAL_STAMHOOFD) {
+    try { return await localRequest<T>(path); }
+    catch (error) {
+      if (error instanceof TypeError) throw new Error('Lokale koppeling niet bereikbaar. Herstart de app op deze computer.');
+      throw error;
+    }
+  }
   const base = new URL(workerUrl);
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash || base.pathname !== '/') throw new Error('Gebruik een HTTPS Worker URL zonder pad of aanmeldgegevens.');
   let response: Response;

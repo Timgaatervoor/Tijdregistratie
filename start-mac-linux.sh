@@ -26,5 +26,6 @@ if [ ! -f "node_modules/vite/bin/vite.js" ]; then
 fi
 
 echo "Tijdregistratie wordt gestart op http://localhost:3000"
+echo "De lokale Stamhoofd-koppeling start automatisch mee."
 echo "Laat dit venster open. Druk op Ctrl+C om te stoppen."
 npm run dev -- --open

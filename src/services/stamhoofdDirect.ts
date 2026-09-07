@@ -27,8 +27,10 @@ async function getJson(url: string, apiKey?: string) {
     throw new Error('Stamhoofd niet bereikbaar. Controleer internet. Als de browser de aanvraag blokkeert (CORS), kun je onder andere webshop of verbinding de lokale koppeling kiezen.');
   }
   if (!response.ok) {
-    console.error('Stamhoofd-aanvraag mislukt:', response.status);
-    throw new Error(response.status === 401 ? 'API-key ongeldig.' : response.status === 403 ? 'Onvoldoende API-rechten.' : response.status === 404 ? 'Webshop niet gevonden.' : response.status === 429 ? 'Stamhoofd aanvraaglimiet bereikt. Probeer later opnieuw.' : `Stamhoofd gaf HTTP ${response.status}.`);
+    const endpoint = new URL(url).pathname;
+    const resource = endpoint.endsWith('/tickets/private') ? 'Tickets' : endpoint.endsWith('/orders') ? 'Orders' : 'Webshop';
+    console.error('Stamhoofd-aanvraag mislukt:', endpoint, response.status);
+    throw new Error(response.status === 401 ? 'API-key ongeldig.' : response.status === 403 ? 'Onvoldoende API-rechten.' : response.status === 404 ? 'Webshop niet gevonden.' : response.status === 429 ? 'Stamhoofd aanvraaglimiet bereikt. Probeer later opnieuw.' : `${resource} konden niet worden opgehaald (HTTP ${response.status}).`);
   }
   try { return await response.json(); } catch { throw new Error('Stamhoofd gaf geen geldig JSON-antwoord.'); }
 }

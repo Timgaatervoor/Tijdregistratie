@@ -5,7 +5,9 @@ export async function paginate(get: (path: string) => Promise<any>, path: string
   let pageFilter: unknown;
   for (let page = 0; page < 60; page++) {
     const query = new URLSearchParams({ filter: JSON.stringify({ webshopId }), sort, limit: '100' });
-    if (pageFilter !== undefined) query.set('pageFilter', JSON.stringify(pageFilter));
+    // v417 encodes next.pageFilter as JSON text already. Serializing that text
+    // again turns the filter into a JSON string and causes an upstream HTTP 500.
+    if (pageFilter !== undefined) query.set('pageFilter', typeof pageFilter === 'string' ? pageFilter : JSON.stringify(pageFilter));
     if (seen.has(query.toString())) throw new Error('Herhaalde paginering; synchronisatie afgebroken.');
     seen.add(query.toString());
     const result = await get(`${path}?${query}`);

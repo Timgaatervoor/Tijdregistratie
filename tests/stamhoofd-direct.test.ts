@@ -10,7 +10,13 @@ test('direct HTML-style requests use matching headers, pagination and only the s
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input)); calls.push({ url, init });
     if (url.pathname.endsWith('/webshop-from-domain')) return Response.json({ organization: { id: defaultStamhoofdShop.organizationId }, webshop: { id: defaultStamhoofdShop.id, meta: { name: 'Test shop' } } });
-    if (url.pathname.endsWith('/webshop/orders')) return Response.json(url.searchParams.has('pageFilter') ? { results: [{ id: 'order-100' }], next: null } : { results: Array.from({ length: 100 }, (_, i) => ({ id: `order-${i}` })), next: { pageFilter: { id: { $gt: 'order-99' } } } });
+    if (url.pathname.endsWith('/webshop/orders')) {
+      if (url.searchParams.has('pageFilter')) {
+        assert.deepEqual(JSON.parse(url.searchParams.get('pageFilter')), { id: { $gt: 'order-99' } });
+        return Response.json({ results: [{ id: 'order-100' }], next: null });
+      }
+      return Response.json({ results: Array.from({ length: 100 }, (_, i) => ({ id: `order-${i}` })), next: { pageFilter: JSON.stringify({ id: { $gt: 'order-99' } }) } });
+    }
     if (url.pathname.endsWith('/tickets/private')) return Response.json({ results: [{ id: 'ticket', secret: 'TESTSECRET', itemId: 'item', orderId: 'order-0', deletedAt: null }], next: null });
     return Response.json({ id: defaultStamhoofdShop.id });
   };

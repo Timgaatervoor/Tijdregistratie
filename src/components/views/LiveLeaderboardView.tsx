@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import './LiveLeaderboardView.css';
 import {
   Trophy,
   Search,
@@ -13,7 +14,7 @@ import {
   Settings,
   Clock,
 } from 'lucide-react';
-import type { RaceResult, Category, Wave, RaceEvent } from '../../types';
+import type { RaceResult, Category, Wave, RaceEvent, ParticipantStatus } from '../../types';
 import { formatDuration } from '../../services/timingEngine';
 import { downloadCsvFile } from '../../services/backupService';
 
@@ -60,7 +61,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedWave, setSelectedWave] = useState<string>('ALL');
   const [selectedGender, setSelectedGender] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'STARTED' | 'FINISHED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | ParticipantStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isKioskMode, setIsKioskMode] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -72,6 +73,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
         ...defaultTvKioskConfig,
         ...storedConfig,
         categoryIds: Array.isArray(storedConfig.categoryIds) ? storedConfig.categoryIds : [],
+        textScale: ['normal', 'large', 'extra-large'].includes(storedConfig.textScale) ? storedConfig.textScale : defaultTvKioskConfig.textScale,
       };
     } catch {
       return defaultTvKioskConfig;
@@ -112,6 +114,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
+        setIsKioskMode(true);
       } else {
         setIsKioskMode(true);
       }
@@ -209,18 +212,11 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     downloadCsvFile(csv, `uitslagen_${Date.now()}.csv`);
   };
 
-  const textScaleClass =
-    isKioskMode && tvConfig.textScale === 'extra-large'
-      ? 'text-[15px]'
-      : isKioskMode && tvConfig.textScale === 'large'
-      ? 'text-[13px]'
-      : 'text-xs';
-
   return (
-    <div className={`space-y-6 ${textScaleClass} ${isKioskMode ? 'p-6 bg-slate-950 min-h-screen' : ''}`}>
+    <div data-text-scale={isKioskMode ? tvConfig.textScale : undefined} className={`space-y-6 text-xs ${isKioskMode ? 'leaderboard-kiosk p-3 sm:p-6 bg-slate-950 min-h-screen' : ''}`}>
       {/* Top Banner & TV Kiosk Mode Toggle */}
       <div className={isKioskMode
-        ? 'flex items-center justify-end gap-2'
+        ? 'flex flex-wrap items-center justify-between gap-3'
         : 'bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4'}>
         {!isKioskMode && <div>
           <div className="flex items-center gap-2 mb-1">
@@ -248,6 +244,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               : `Realtime updates tijdens de race: actieve lopers op parcours, live schietbeurten en virtuele tussenstanden`}
           </p>
         </div>}
+        {isKioskMode && <p className="text-lg text-amber-300 font-bold">{profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle leeftijdscategorieën' : categories.find(c => c.id === selectedCategory)?.name}</p>}
 
         <div className="flex items-center gap-2.5">
           {!isKioskMode && <button
@@ -259,6 +256,8 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           {isKioskMode && (
             <button
               type="button"
+              aria-expanded={showKioskSettings}
+              aria-controls="kiosk-settings"
               onClick={() => setShowKioskSettings((current) => !current)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 text-xs font-bold transition"
             >
@@ -281,7 +280,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
       </div>
 
       {isKioskMode && showKioskSettings && (
-        <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-4 space-y-4 text-xs">
+        <div id="kiosk-settings" className="bg-slate-900 border border-amber-500/40 rounded-xl p-4 space-y-4 text-xs">
           <div className="flex flex-wrap items-center gap-4">
           <label className="flex items-center gap-2 text-slate-200">
             <input type="checkbox" checked={tvConfig.showPodium} onChange={(event) => setTvConfig({ ...tvConfig, showPodium: event.target.checked })} />
@@ -305,8 +304,8 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             </select>
           </label>
           <label className="flex items-center gap-2 text-slate-200">
-            Tekst
-            <select value={tvConfig.textScale} onChange={(event) => setTvConfig({ ...tvConfig, textScale: event.target.value as TvKioskConfig['textScale'] })} className="bg-slate-800 border border-slate-700 rounded px-2 py-1">
+            Tekstgrootte
+            <select aria-label="Tekstgrootte" value={tvConfig.textScale} onChange={(event) => setTvConfig({ ...tvConfig, textScale: event.target.value as TvKioskConfig['textScale'] })} className="bg-slate-800 border border-slate-700 rounded px-2 py-1">
               <option value="normal">Normaal</option>
               <option value="large">Groot</option>
               <option value="extra-large">Extra groot</option>
@@ -350,13 +349,13 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
       )}
 
       {/* Filter Toolbar */}
-      {!isKioskMode && (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex flex-wrap items-center gap-3">
+      <div role="region" aria-label="Scorebordfilters" className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex flex-wrap items-center gap-3">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            aria-label="Zoeken op naam, startnummer of club"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Zoek op naam, startnummer of club..."
@@ -371,8 +370,12 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
         </label>
         {/* Category Filter */}
         <select
+          aria-label="Leeftijdscategorie"
           value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
+          onChange={(e) => {
+            setSelectedCategory(e.target.value);
+            setTvConfig(current => ({ ...current, rotateCategories: false }));
+          }}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-amber-500"
         >
           <option value="ALL">Alle Categorieën ({categories.length})</option>
@@ -385,6 +388,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
         {/* Wave Filter */}
         <select
+          aria-label="Startgroep"
           value={selectedWave}
           onChange={(e) => setSelectedWave(e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-amber-500"
@@ -399,6 +403,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
         {/* Gender Filter */}
         <select
+          aria-label="Geslacht"
           value={selectedGender}
           onChange={(e) => setSelectedGender(e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-amber-500"
@@ -406,9 +411,21 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           <option value="ALL">Geslacht (Alle)</option>
           <option value="M">Heren</option>
           <option value="F">Dames</option>
+          <option value="X">Open / onbekend</option>
         </select>
+        <select aria-label="Deelnemerstatus" value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+          <option value="ALL">Alle statussen</option>
+          <option value="REGISTERED">Ingeschreven</option>
+          <option value="CHECKED_IN">Aangemeld</option>
+          <option value="READY">Klaar voor start</option>
+          <option value="STARTED">Onderweg</option>
+          <option value="FINISHED">Gefinisht</option>
+          <option value="DNS">Niet gestart (DNS)</option>
+          <option value="DNF">Niet gefinisht (DNF)</option>
+          <option value="DSQ">Gediskwalificeerd (DSQ)</option>
+        </select>
+        {isKioskMode && tvConfig.rotateCategories && <p className="text-xs text-amber-300">Categorierotatie actief. Zelf een categorie kiezen stopt de rotatie.</p>}
       </div>
-      )}
 
       {/* Podium Cards if finishes exist */}
       {tvConfig.showPodium && finishedPodium.length > 0 && (

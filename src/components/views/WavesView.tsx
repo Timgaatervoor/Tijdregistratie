@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Layers,
   Clock,
@@ -15,6 +15,8 @@ import {
 import type { Wave, Category, Participant } from '../../types';
 import { db, getActiveEventId } from '../../db/dexieDb';
 import { generateUUID, operationService } from '../../services/operationService';
+import { WavePlanningPanel } from '../WavePlanningPanel';
+import { defaultWaveSettings, nextWaveTime, timeSeconds, waveAllows, type WaveSettings } from '../../services/wavePlanning';
 import { soundService } from '../../services/soundService';
 
 interface WavesViewProps {
@@ -30,6 +32,12 @@ export const WavesView: React.FC<WavesViewProps> = ({
   participants,
   onRefresh,
 }) => {
+  const [waveSettings, setWaveSettings] = useState<WaveSettings>(defaultWaveSettings);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [assignmentError, setAssignmentError] = useState('');
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
+  useEffect(() => { void db.events.toCollection().first().then(event => setWaveSettings(event?.waveSettings ?? defaultWaveSettings)).catch(error => setAssignmentError(error.message)); }, []);
+  const matchesSearch = (p: Participant) => `${p.firstName} ${p.lastName} ${p.bibNumber ?? ''} ${p.article ?? p.stamhoofdRegistration?.product ?? ''} ${categories.find(c => c.id === p.categoryId)?.name ?? ''}`.toLowerCase().includes(participantSearch.trim().toLowerCase());
   const [editingWave, setEditingWave] = useState<Wave | null>(null);
   const [managingParticipantsWave, setManagingParticipantsWave] = useState<Wave | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -80,6 +88,8 @@ export const WavesView: React.FC<WavesViewProps> = ({
   const handleSaveEditWave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingWave || !editName.trim()) return;
+    try { timeSeconds(editStartTime.trim()); } catch (error) { setAssignmentError((error as Error).message); return; }
+    if (editCapacity < participants.filter(p => p.waveId === editingWave.id).length) { setAssignmentError('De capaciteit kan niet lager zijn dan het huidige aantal deelnemers.'); return; }
 
     await db.waves.update(editingWave.id, {
       name: editName.trim(),
@@ -117,6 +127,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
   const handleAddWave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWaveName.trim()) return;
+    try { timeSeconds(newStartTime.trim()); } catch (error) { setAssignmentError((error as Error).message); return; }
 
     const nextWaveNum = waves.length > 0 ? Math.max(...waves.map((w) => w.waveNumber)) + 1 : 1;
     const wave: Wave = {
@@ -161,23 +172,30 @@ export const WavesView: React.FC<WavesViewProps> = ({
   };
 
   // Participant assignment functions
-  const handleAssignParticipantToWave = async (participantId: string, waveId: string) => {
-    await db.participants.update(participantId, { waveId });
-    await operationService.logAudit(
-      'PARTICIPANT_UPDATED',
-      `Deelnemer toegewezen aan wave`
-    );
-    onRefresh();
+  const changeParticipantWave = async (participantId: string, waveId?: string) => {
+    setAssignmentBusy(true); setAssignmentError('');
+    try {
+      await db.transaction('rw', [db.participants, db.waves, db.auditLogs, db.timingRecords, db.shootingResults], async () => {
+        const p = await db.participants.get(participantId);
+        if (!p || !['REGISTERED', 'CHECKED_IN', 'READY'].includes(p.status)) throw new Error('Deze deelnemer kan niet meer van startgroep veranderen.');
+        if ((await db.timingRecords.toArray()).some(t => t.participantId === p.id || (!!p.bibNumber && t.bibNumber === p.bibNumber)) || (await db.shootingResults.toArray()).some(r => r.participantId === p.id)) throw new Error('Deze deelnemer heeft al wedstrijdregistraties.');
+        const previous = p.waveId ? await db.waves.get(p.waveId) : undefined;
+        if (previous && (previous.status !== 'SCHEDULED' || previous.actualStartTime)) throw new Error('De bestaande wave is al gestart.');
+        if (waveId) {
+          const wave = await db.waves.get(waveId);
+          if (!wave || wave.status !== 'SCHEDULED' || wave.actualStartTime) throw new Error('Deze wave is al gestart of bestaat niet meer.');
+          if (p.stamhoofdInactive || !waveAllows(wave, p)) throw new Error('Artikel of categorie past niet bij deze wave, of de inschrijving is inactief.');
+          if (p.waveId !== waveId && await db.participants.where('waveId').equals(waveId).count() >= wave.maxParticipants) throw new Error('Deze wave is vol. Verhoog eerst de capaciteit of kies een andere wave.');
+        }
+        await db.participants.update(participantId, { waveId, updatedAt: new Date().toISOString() });
+        await operationService.logAudit('PARTICIPANT_UPDATED', waveId ? 'Deelnemer toegewezen aan wave' : 'Deelnemer ontkoppeld van wave', participantId);
+      });
+      onRefresh();
+    } catch (error) { setAssignmentError((error as Error).message); }
+    finally { setAssignmentBusy(false); }
   };
-
-  const handleRemoveParticipantFromWave = async (participantId: string) => {
-    await db.participants.update(participantId, { waveId: undefined });
-    await operationService.logAudit(
-      'PARTICIPANT_UPDATED',
-      `Deelnemer ontkoppeld van wave`
-    );
-    onRefresh();
-  };
+  const handleAssignParticipantToWave = (participantId: string, waveId: string) => changeParticipantWave(participantId, waveId);
+  const handleRemoveParticipantFromWave = (participantId: string) => changeParticipantWave(participantId);
 
   return (
     <div className="space-y-6">
@@ -198,6 +216,8 @@ export const WavesView: React.FC<WavesViewProps> = ({
         <button
           onClick={() => {
             const nextNum = waves.length > 0 ? Math.max(...waves.map((w) => w.waveNumber)) + 1 : 1;
+            try { setNewStartTime(nextWaveTime(waves, waveSettings)); } catch (error) { setAssignmentError((error as Error).message); return; }
+            setNewCapacity(waveSettings.capacity);
             setNewWaveName(`Wave ${nextNum}`);
             setShowAddModal(true);
           }}
@@ -207,6 +227,8 @@ export const WavesView: React.FC<WavesViewProps> = ({
         </button>
       </div>
 
+      {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
+      <WavePlanningPanel waves={waves} participants={participants} settings={waveSettings} onChange={setWaveSettings} onRefresh={onRefresh} />
       {/* Wave Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {waves.map((w) => {
@@ -220,6 +242,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
               className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 relative overflow-hidden"
             >
               <div>
+                {w.assignmentGroup && <p className="text-xs text-amber-300 mb-2">{w.assignmentGroup.type === 'article' ? `Artikel: ${w.assignmentGroup.value}` : 'Ingedeeld per wedstrijdprofiel'}</p>}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 font-black font-mono flex items-center justify-center text-sm shadow">
@@ -351,7 +374,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
               <div className="space-y-2 pt-2 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setManagingParticipantsWave(w)}
+                  onClick={() => { setManagingParticipantsWave(w); setParticipantSearch(''); setAssignmentError(''); }}
                   className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition"
                 >
                   <Users className="w-3.5 h-3.5 text-amber-400" />
@@ -406,6 +429,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
               </button>
             </div>
 
+            {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
             <form onSubmit={handleSaveEditWave} className="space-y-4">
               <div>
                 <label className="text-slate-300 font-semibold block mb-1">Naam van de startgroep:</label>
@@ -442,7 +466,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   <input
                     type="number"
                     min={1}
-                    max={100}
+                    max={1000}
                     value={editCapacity}
                     onChange={(e) => setEditCapacity(parseInt(e.target.value, 10) || 25)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold focus:border-amber-400"
@@ -500,6 +524,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
               </button>
             </div>
 
+            {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
             <form onSubmit={handleAddWave} className="space-y-3">
               <div>
                 <label className="text-slate-300 font-semibold block mb-1">Wave Naam:</label>
@@ -534,7 +559,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                 <input
                   type="number"
                   min={1}
-                  max={100}
+                  max={1000}
                   value={newCapacity}
                   onChange={(e) => setNewCapacity(parseInt(e.target.value, 10) || 25)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
@@ -582,22 +607,26 @@ export const WavesView: React.FC<WavesViewProps> = ({
               </button>
             </div>
 
+            <label className="block text-slate-300">Deelnemers zoeken
+              <input type="search" value={participantSearch} onChange={e => setParticipantSearch(e.target.value)} placeholder="Naam, borstnummer, artikel of leeftijdscategorie" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" />
+            </label>
+            {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden">
               {/* Currently in this wave */}
               <div className="flex flex-col border border-slate-800 rounded-xl p-3 bg-slate-950/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-white text-xs">
-                    In deze Wave ({participants.filter((p) => p.waveId === managingParticipantsWave.id).length}):
+                    In deze Wave ({participants.filter((p) => p.waveId === managingParticipantsWave.id && matchesSearch(p)).length}):
                   </span>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-[350px]">
-                  {participants.filter((p) => p.waveId === managingParticipantsWave.id).length === 0 ? (
+                  {participants.filter((p) => p.waveId === managingParticipantsWave.id && matchesSearch(p)).length === 0 ? (
                     <div className="text-slate-500 py-6 text-center italic">
-                      Geen deelnemers in deze wave.
+                      Geen deelnemers in deze wave gevonden voor deze zoekopdracht.
                     </div>
                   ) : (
                     participants
-                      .filter((p) => p.waveId === managingParticipantsWave.id)
+                      .filter((p) => p.waveId === managingParticipantsWave.id && matchesSearch(p))
                       .map((p) => (
                         <div
                           key={p.id}
@@ -619,6 +648,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
                           <button
                             type="button"
+                            disabled={assignmentBusy}
                             onClick={() => handleRemoveParticipantFromWave(p.id)}
                             className="p-1.5 rounded bg-red-950/40 text-red-400 hover:bg-red-900/50 border border-red-800/40"
                             title="Verwijder uit wave"
@@ -635,17 +665,17 @@ export const WavesView: React.FC<WavesViewProps> = ({
               <div className="flex flex-col border border-slate-800 rounded-xl p-3 bg-slate-950/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-white text-xs">
-                    Deelnemers zonder Wave ({participants.filter((p) => !p.waveId).length}):
+                    Deelnemers zonder Wave ({participants.filter((p) => !p.waveId && !p.stamhoofdInactive && matchesSearch(p)).length}):
                   </span>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-[350px]">
-                  {participants.filter((p) => !p.waveId).length === 0 ? (
+                  {participants.filter((p) => !p.waveId && !p.stamhoofdInactive && matchesSearch(p)).length === 0 ? (
                     <div className="text-slate-500 py-6 text-center italic">
-                      Alle deelnemers hebben reeds een wave toegewezen.
+                      Geen deelnemers zonder wave gevonden voor deze zoekopdracht.
                     </div>
                   ) : (
                     participants
-                      .filter((p) => !p.waveId)
+                      .filter((p) => !p.waveId && !p.stamhoofdInactive && matchesSearch(p))
                       .map((p) => (
                         <div
                           key={p.id}
@@ -667,6 +697,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
                           <button
                             type="button"
+                            disabled={assignmentBusy}
                             onClick={() => handleAssignParticipantToWave(p.id, managingParticipantsWave.id)}
                             className="px-2 py-1 rounded bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 flex items-center gap-1 text-[11px]"
                           >

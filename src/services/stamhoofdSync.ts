@@ -46,6 +46,7 @@ export function paymentStatus(order: any): string {
   return 'In behandeling';
 }
 export interface SyncRow {
+  registeredAt?: string;
   itemId: string; orderId: string; productId: string; updatedAt: string;
   registration: StamhoofdRegistration; inactive: boolean; errors: string[];
   payment: string; ticket?: any; existing?: Participant;
@@ -93,7 +94,7 @@ export function normalize(snapshot: StamhoofdSnapshot, config: StamhoofdConfig):
       if (config.fields.includes(`custom:${key}`)) customFields[key] = textValue(a.answer);
     }
     if (Object.keys(customFields).length) registration.customFields = customFields;
-    rows.push({ itemId: item.id, orderId: order.id, productId: product.id, updatedAt: textValue(order.updatedAt), registration, inactive: order.status !== 'Created' || (linked.length > 0 && active.length === 0), errors, payment, ticket, change: 'nieuw' });
+    rows.push({ registeredAt: Number.isFinite(Date.parse(order.createdAt)) ? new Date(order.createdAt).toISOString() : undefined, itemId: item.id, orderId: order.id, productId: product.id, updatedAt: textValue(order.updatedAt), registration, inactive: order.status !== 'Created' || (linked.length > 0 && active.length === 0), errors, payment, ticket, change: 'nieuw' });
   }
   return { rows, warnings };
 }
@@ -136,7 +137,7 @@ export function mergeRegistration(existing: Participant | undefined, row: SyncRo
     stamhoofdTicketId: row.registration.ticketId as string | undefined,
     stamhoofdTicketSecret: row.registration.ticketSecret as string | undefined,
     stamhoofdTicketUrl: row.registration.ticketUrl as string | undefined,
-    stamhoofdUpdatedAt: row.updatedAt, stamhoofdLastSyncAt: now, stamhoofdInactive: row.inactive,
+    stamhoofdUpdatedAt: row.updatedAt, stamhoofdRegisteredAt: row.registeredAt ?? existing?.stamhoofdRegisteredAt, stamhoofdLastSyncAt: now, stamhoofdInactive: row.inactive,
     stamhoofdRegistration: row.registration, stamhoofdBaseline: baseline };
 }
 export async function applySync(snapshot: StamhoofdSnapshot, config: StamhoofdConfig, approvedIds: string[]) {

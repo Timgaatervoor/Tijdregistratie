@@ -27,6 +27,10 @@ test('orders normalize, link by itemId, payment and ticket URL independent of bi
   assert.equal(rows[0].registration.ticketUrl, 'https://shop.example.be/tickets/TESTSECRET');
   assert.equal(mergeRegistration(undefined, rows[0], config, 'now').bibNumber, undefined);
   assert.equal(ticketUrl('next.example.be', 'AB/C'), 'https://next.example.be/tickets/AB%2FC');
+  const dated = fixture();
+  dated.orders[0].createdAt = '2026-08-01T09:15:00Z';
+  const source = normalize(dated, config).rows[0];
+  assert.equal(mergeRegistration(undefined, source, config, 'now').stamhoofdRegisteredAt, '2026-08-01T09:15:00.000Z');
 });
 test('deleted orders/tickets, wrong order linkage, missing secrets and orphan tickets', () => {
   const data = fixture();

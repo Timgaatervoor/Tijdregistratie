@@ -39,6 +39,7 @@ export interface StamhoofdSource {
   stamhoofdTicketSecret?: string;
   stamhoofdTicketUrl?: string;
   stamhoofdUpdatedAt?: string;
+  stamhoofdRegisteredAt?: string;
   stamhoofdLastSyncAt?: string;
   stamhoofdInactive?: boolean;
   stamhoofdRegistration?: StamhoofdRegistration;

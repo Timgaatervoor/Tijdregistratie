@@ -90,6 +90,7 @@ export interface Wave {
   actualStartTime?: string;
   categoryIds: string[];
   maxParticipants: number;
+  assignmentGroup?: { type: 'article' | 'profile'; value: string };
   status: 'SCHEDULED' | 'STARTED' | 'COMPLETED';
 }
 
@@ -242,6 +243,7 @@ export interface EventSnapshot {
 }
 
 export interface RaceEvent {
+  waveSettings?: { intervalMinutes: number; capacity: number; firstStartTime: string };
   id: string;
   name: string;
   date: string;

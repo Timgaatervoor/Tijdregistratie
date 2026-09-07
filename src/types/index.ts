@@ -1,3 +1,5 @@
+import type { StamhoofdSource } from './stamhoofd';
+
 export type EventStatus =
   | 'DRAFT'
   | 'PREPARATION'
@@ -90,7 +92,7 @@ export interface Wave {
   status: 'SCHEDULED' | 'STARTED' | 'COMPLETED';
 }
 
-export interface Participant {
+export interface Participant extends StamhoofdSource {
   id: string;
   externalId?: string;
   firstName: string;
@@ -225,6 +227,7 @@ export interface EventSnapshot {
     conflicts: RaceConflict[];
     auditLogs?: AuditLog[];
     devices?: DeviceConfig[];
+    stamhoofdConfigs?: import('./stamhoofd').StamhoofdConfig[];
     syncConfig?: {
       enabled: boolean;
       projectUrl: string;

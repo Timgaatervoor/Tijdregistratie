@@ -59,6 +59,7 @@ export async function createFullSnapshot(event: RaceEvent): Promise<EventSnapsho
     auditLogs,
     devices,
     syncConfig: syncService.getConfig(),
+    stamhoofdConfigs: await db.stamhoofdConfigs.toArray(),
   };
 
   const jsonString = JSON.stringify(rawData);
@@ -203,6 +204,7 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       db.conflicts,
       db.auditLogs,
       db.devices,
+      db.stamhoofdConfigs,
     ],
     async () => {
       // Clear existing
@@ -217,6 +219,7 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
         db.operations.clear(),
         db.conflicts.clear(),
         db.devices.clear(),
+        db.stamhoofdConfigs.clear(),
         db.auditLogs.clear(),
       ]);
 
@@ -239,6 +242,7 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       if (data.conflicts?.length) await db.conflicts.bulkPut(data.conflicts);
       if (data.auditLogs?.length) await db.auditLogs.bulkPut(data.auditLogs);
       if (data.devices?.length) await db.devices.bulkPut(data.devices);
+      if (data.stamhoofdConfigs?.length) await db.stamhoofdConfigs.bulkPut(data.stamhoofdConfigs);
 
       if (data.syncConfig) {
         syncService.saveConfig(data.syncConfig);

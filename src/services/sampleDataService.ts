@@ -35,6 +35,7 @@ export async function initializeSampleData(force = false): Promise<void> {
   // Clear previous if force
   if (force) {
     await Promise.all([
+      db.stamhoofdConfigs.clear(),
       db.events.clear(),
       db.raceProfiles.clear(),
       db.categories.clear(),
@@ -302,6 +303,7 @@ export async function resetToBlankEvent(
   await db.transaction(
     'rw',
     [
+      db.stamhoofdConfigs,
       db.events,
       db.raceProfiles,
       db.categories,
@@ -315,6 +317,7 @@ export async function resetToBlankEvent(
     ],
     async () => {
       await Promise.all([
+        db.stamhoofdConfigs.clear(),
         db.events.clear(),
         db.raceProfiles.clear(),
         db.categories.clear(),

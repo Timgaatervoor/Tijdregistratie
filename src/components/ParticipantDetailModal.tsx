@@ -375,6 +375,15 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         {activeTab === 'overview' && (
           <div className="p-6 overflow-y-auto space-y-6 text-sm">
             {/* Timing & Penalty Breakdown */}
+            {currentParticipant?.stamhoofdItemId && <div className="p-4 rounded-lg bg-slate-800 border border-slate-700 space-y-2">
+              <h3 className="font-bold">Stamhoofd</h3>
+              <p>Borstnummer: {currentParticipant.bibNumber ?? 'Nog niet toegewezen'}</p>
+              <p>Ticketcode: {currentParticipant.stamhoofdTicketSecret || 'Niet beschikbaar'}</p>
+              {currentParticipant.stamhoofdTicketUrl && /^https:\/\//.test(currentParticipant.stamhoofdTicketUrl) && <a className="text-blue-300 underline" href={currentParticipant.stamhoofdTicketUrl} target="_blank" rel="noopener noreferrer">Open ticket</a>}
+              <p>Status: {currentParticipant.stamhoofdRegistration?.scannedAt ? `Gescand op ${currentParticipant.stamhoofdRegistration.scannedAt}` : 'Niet gescand / scanstatus niet opgeslagen'}</p>
+              {currentParticipant.stamhoofdRegistration?.scannedBy && <p>Gescand door: {String(currentParticipant.stamhoofdRegistration.scannedBy)}</p>}
+              {currentParticipant.stamhoofdInactive && <p className="text-amber-300 font-bold">Geannuleerd/inactief in Stamhoofd. Lokale wedstrijdgegevens zijn behouden.</p>}
+            </div>}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 rounded-lg bg-slate-800/70 border border-slate-700">
                 <span className="text-xs text-slate-400 flex items-center gap-1">

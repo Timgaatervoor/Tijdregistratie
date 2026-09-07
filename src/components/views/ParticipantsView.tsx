@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { StamhoofdIntegrationModal } from '../StamhoofdIntegrationModal';
 import {
   Users,
   Search,
@@ -54,6 +55,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   onSelectParticipant,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showStamhoofd, setShowStamhoofd] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -91,12 +93,13 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   const filtered = participants.filter((p) => {
     if (selectedCategory !== 'ALL' && p.categoryId !== selectedCategory) return false;
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.trim().toLowerCase();
       const matchName = `${p.firstName} ${p.lastName}`.toLowerCase().includes(q);
       const matchBib = String(p.bibNumber || '').includes(q);
       const matchClub = (p.club || '').toLowerCase().includes(q);
       const matchExt = (p.externalId || '').toLowerCase().includes(q);
-      if (!matchName && !matchBib && !matchClub && !matchExt) return false;
+      const matchTicket = (p.stamhoofdTicketSecret || '').toLowerCase().includes(q) || (!!p.stamhoofdTicketUrl && p.stamhoofdTicketUrl.toLowerCase() === q);
+      if (!matchName && !matchBib && !matchClub && !matchExt && !matchTicket) return false;
     }
     return true;
   });
@@ -534,6 +537,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {showStamhoofd && <StamhoofdIntegrationModal participants={participants} categories={categories} onRefresh={onRefresh} onClose={() => setShowStamhoofd(false)} />}
       {/* Top Banner & Action Buttons */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -549,6 +553,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button onClick={() => setShowStamhoofd(true)} className="px-3.5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs">Stamhoofd API</button>
           <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition"
@@ -586,7 +591,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Zoek op naam, startnummer, club of Stamhoofd ID..."
+            placeholder="Zoek op naam, borstnummer, club of ticket secret..."
             className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -646,6 +651,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                       <td className="py-3 px-4">
                         <span className="font-bold text-white block">
                           {p.firstName} {p.lastName}
+                          {p.stamhoofdInactive && <span className="block text-xs text-amber-300">Stamhoofd: geannuleerd/inactief</span>}
                         </span>
                         {p.email && <span className="text-[11px] text-slate-500">{p.email}</span>}
                       </td>

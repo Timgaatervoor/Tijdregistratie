@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import type { StamhoofdConfig } from '../types/stamhoofd';
 import type {
   RaceEvent,
   RaceProfile,
@@ -15,6 +16,7 @@ import type {
 } from '../types';
 
 export class BiathlonDatabase extends Dexie {
+  stamhoofdConfigs!: Table<StamhoofdConfig, string>;
   events!: Table<RaceEvent, string>;
   raceProfiles!: Table<RaceProfile, string>;
   categories!: Table<Category, string>;
@@ -28,8 +30,8 @@ export class BiathlonDatabase extends Dexie {
   snapshots!: Table<EventSnapshot, string>;
   devices!: Table<DeviceConfig, string>;
 
-  constructor() {
-    super('BiathlonDeHaanDB');
+  constructor(name = 'BiathlonDeHaanDB') {
+    super(name);
 
     this.version(1).stores({
       events: 'id, status, isTestMode',
@@ -69,7 +71,12 @@ export class BiathlonDatabase extends Dexie {
           category.raceProfileId = category.raceProfileIds[0];
         });
       });
+    this.version(3).stores({
+      participants: 'id, externalId, bibNumber, waveId, categoryId, status, [categoryId+status], stamhoofdItemId, stamhoofdTicketSecret, [stamhoofdEventId+stamhoofdWebshopId]',
+      stamhoofdConfigs: 'id',
+    });
   }
 }
 
-export const db = new BiathlonDatabase();
+// Node has no browser IndexedDB. Keep test/CLI storage explicitly separate.
+export const db = new BiathlonDatabase(typeof window === 'undefined' ? 'BiathlonDeHaanDB-node-test' : 'BiathlonDeHaanDB');

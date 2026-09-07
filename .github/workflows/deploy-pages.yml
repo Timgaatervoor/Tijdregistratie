@@ -27,10 +27,18 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Typecheck and tests
+        run: |
+          npm run lint
+          npm test
 
       - name: Build
         run: npm run build
+
+      - name: Check for secrets
+        run: npm run check:secrets
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

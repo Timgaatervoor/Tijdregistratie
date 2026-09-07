@@ -4,12 +4,7 @@ import { paginate } from './stamhoofdPagination';
 export const DIRECT_STAMHOOFD = 'direct';
 const version = 'v417';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const defaultStamhoofdShop: StamhoofdShop = {
-  id: '603e808b-9ac6-47cb-933c-bf7b4c66f357',
-  organizationId: 'af201d93-dcd6-4cfe-bfc7-ed3d2a209236',
-  domain: 'shop.kidsatletiekdehaan.be',
-  name: 'Run Biathlon De Haan 19 sept. 2026',
-};
+
 
 // Matches the user's working HTML: credentials exist only for this fetch flow.
 // Never use storage, log request headers, or surface raw upstream error bodies.

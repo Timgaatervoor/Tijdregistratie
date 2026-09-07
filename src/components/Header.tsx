@@ -1,3 +1,4 @@
+import { ClockStatus } from './ClockStatus';
 import React, { useState } from 'react';
 import {
   Wifi,
@@ -7,18 +8,15 @@ import {
   VolumeX,
   Maximize,
   Minimize,
-  Clock,
   Laptop,
   CheckCircle2,
   Printer,
   LockOpen,
 } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import { usePWAInstall } from '../hooks/usePWAInstall';
 import { soundService } from '../services/soundService';
 import { syncService } from '../services/syncService';
 import type { RaceEvent, DeviceConfig } from '../types';
-import { InstallDesktopModal } from './InstallDesktopModal';
 
 const roleLabels: Record<DeviceConfig['role'], string> = {
   ADMIN: 'Beheerder',
@@ -31,6 +29,7 @@ const roleLabels: Record<DeviceConfig['role'], string> = {
 };
 
 interface HeaderProps {
+  stationNavigation: React.ReactNode;
   event: RaceEvent | null;
   deviceConfig: DeviceConfig | null;
   pendingSyncCount: number;
@@ -41,6 +40,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  stationNavigation,
   event,
   deviceConfig,
   pendingSyncCount,
@@ -50,13 +50,11 @@ export const Header: React.FC<HeaderProps> = ({
   isTestMode,
 }) => {
   const { isOnline, isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
-  const { isInstallable, isInstalled, install } = usePWAInstall();
   const syncConfigured = syncService.getConfig().enabled;
   const [isSoundOn, setIsSoundOn] = useState(soundService.getSoundEnabled());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
-  const [showDesktopModal, setShowDesktopModal] = useState(false);
 
   const toggleSound = () => {
     const next = soundService.toggleSound();
@@ -86,11 +84,11 @@ export const Header: React.FC<HeaderProps> = ({
     setTimeout(() => setSyncToast(null), 3000);
   };
 
-  const clockOffset = syncService.getClockOffsetMs();
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 text-slate-100">
+    <header className="relative text-slate-100">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+        {stationNavigation}
         {/* Brand & Event Title */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/20 ring-1 ring-amber-400/40">
@@ -104,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-                {event?.name || 'Run Biathlon De Haan'}
+                {event?.name || 'Biathlon Tijdregistratie'}
               </h1>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
@@ -119,9 +117,9 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2">
-              <span>{event?.location || 'De Haan aan Zee'}</span>
+              <span>{event?.location || 'Locatie nog niet ingesteld'}</span>
               <span className="text-slate-600">•</span>
-              <span className="font-mono text-slate-300">{event?.date || '2026-09-06'}</span>
+              <span className="font-mono text-slate-300">{event?.date || 'Datum nog niet ingesteld'}</span>
               {event?.organizer && (
                 <>
                   <span className="hidden md:inline text-slate-600">•</span>
@@ -164,6 +162,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
+          <ClockStatus compact />
+
           {/* Sync Button */}
           <button
             onClick={handleSyncNow}
@@ -198,17 +198,6 @@ export const Header: React.FC<HeaderProps> = ({
               <LockOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Ontgrendelen</span>
             </button>
-          )}
-
-          {/* Clock Offset Warning if > 1s (Req 42) */}
-          {Math.abs(clockOffset) > 1000 && (
-            <div
-              className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 border border-amber-700 text-xs"
-              title={`Klokverschil van dit toestel: ${(clockOffset / 1000).toFixed(1)}s`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>±{(clockOffset / 1000).toFixed(1)}s</span>
-            </div>
           )}
 
           {/* Simulated Offline Toggle */}
@@ -271,18 +260,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Desktop App & Local Offline Button */}
-          {!deviceConfig?.isLocked && (
-            <button
-              onClick={() => setShowDesktopModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition"
-              title="Lokaal opslaan en als zelfstandig programma installeren"
-            >
-              <Laptop className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span className="hidden sm:inline">Lokale app</span>
-              <span className="sm:hidden">Lokaal</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -292,12 +269,6 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      {/* Desktop App & Local Execution Modal */}
-      <InstallDesktopModal
-        isOpen={showDesktopModal}
-        onClose={() => setShowDesktopModal(false)}
-        event={event}
-      />
     </header>
   );
 };

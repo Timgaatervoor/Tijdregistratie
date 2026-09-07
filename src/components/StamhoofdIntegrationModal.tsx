@@ -4,13 +4,13 @@ import type { RaceProfile, Category, Participant } from '../types';
 import type { StamhoofdConfig, StamhoofdShop, StamhoofdSnapshot } from '../types/stamhoofd';
 import { db } from '../db/dexieDb';
 import { searchShops, loadStamhoofd, LOCAL_STAMHOOFD, isLocalApp } from '../services/stamhoofdApi';
-import { DIRECT_STAMHOOFD, defaultStamhoofdShop } from '../services/stamhoofdDirect';
+import { DIRECT_STAMHOOFD } from '../services/stamhoofdDirect';
 import { applySync, defaultFields, discoverFields, importFields, previewSync } from '../services/stamhoofdSync';
 
 const input = 'w-full bg-slate-800 border border-slate-600 rounded-lg p-2 text-white';
 const button = 'px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold disabled:opacity-40';
 export function StamhoofdIntegrationModal({ participants, categories, onClose, onRefresh }: { participants: Participant[]; categories: Category[]; onClose: () => void; onRefresh: () => void }) {
-  const [config, setConfig] = useState<StamhoofdConfig>({ id: '', workerUrl: DIRECT_STAMHOOFD, shop: defaultStamhoofdShop, domain: defaultStamhoofdShop.domain, fields: defaultFields, mapping: {}, productCategories: {} });
+  const [config, setConfig] = useState<StamhoofdConfig>({ id: '', workerUrl: DIRECT_STAMHOOFD, domain: '', fields: defaultFields, mapping: {}, productCategories: {} });
   const [profiles, setProfiles] = useState<RaceProfile[]>([]);
   const [eventDate, setEventDate] = useState('');
   const [token, setToken] = useState(''); // Worker access only; never persisted.
@@ -33,7 +33,7 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
       setEventDate(event.date);
       setProfiles(await db.raceProfiles.toArray());
       const saved = await db.stamhoofdConfigs.get(event.id);
-      setConfig(c => saved ? { ...saved, workerUrl: DIRECT_STAMHOOFD, shop: saved.shop ?? defaultStamhoofdShop } : { ...c, id: event.id });
+      setConfig(c => saved ? { ...saved, workerUrl: DIRECT_STAMHOOFD, shop: saved.shop } : { ...c, id: event.id });
     } catch (e) { setError((e as Error).message); }
   })(); }, []);
   const run = async (label: string, action: () => Promise<void>) => {
@@ -58,7 +58,7 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
         <legend className="font-bold mb-2">Deelnemers en QR ophalen</legend>
         <p>{config.shop?.name || 'Selecteer een webshop'} <span className="text-sm text-slate-400">{config.shop?.domain}</span></p>
         {needsKey && <label>API-key<input className={input} type="password" autoComplete="off" placeholder="Plak je aparte Stamhoofd API-key" value={apiKey} onChange={e => setApiKey(e.target.value)} /></label>}
-        <p className="text-xs text-slate-400">De key wordt alleen voor deze aanvraag gebruikt en daarna uit het veld gewist. Hij wordt niet opgeslagen.{directMode && ' Zoals in je HTML gaat hij rechtstreeks naar Stamhoofd via de browser.'}</p>
+        <p className="text-xs text-slate-400">De key wordt alleen voor deze aanvraag gebruikt en daarna uit het veld gewist. Hij wordt niet opgeslagen.{directMode && ' De aanvraag gaat rechtstreeks naar Stamhoofd via de browser.'}</p>
         <button className={button} disabled={!config.shop || (needsKey && !apiKey.trim()) || (localMode && !isLocalApp())} onClick={() => run('Deelnemers en QR ophalen', async () => {
           setSnapshot(undefined); setShowPreview(false);
           try {
@@ -70,21 +70,21 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
           }
           finally { setApiKey(''); }
         })}>Synchroniseer deelnemers + QR</button>
-        <details className="rounded-lg border border-slate-700 p-3 space-y-3">
-          <summary className="cursor-pointer text-sm">Andere webshop of verbinding</summary>
-          <label>Verbinding<select className={input} value={directMode ? 'direct' : localMode ? 'local' : 'worker'} onChange={e => { update({ workerUrl: e.target.value === 'direct' ? DIRECT_STAMHOOFD : e.target.value === 'local' ? LOCAL_STAMHOOFD : '' }); setSnapshot(undefined); setShops([]); setApiKey(''); setToken(''); }}><option value="direct">Rechtstreeks, zoals de HTML</option><option value="local">Lokale koppeling</option><option value="worker">Cloudflare Worker</option></select></label>
+        <details open={!config.shop || undefined} className="rounded-lg border border-slate-700 p-3 space-y-3">
+          <summary className="cursor-pointer text-sm">Webshop en verbinding instellen</summary>
+          <label>Verbinding<select className={input} value={directMode ? 'direct' : localMode ? 'local' : 'worker'} onChange={e => { update({ workerUrl: e.target.value === 'direct' ? DIRECT_STAMHOOFD : e.target.value === 'local' ? LOCAL_STAMHOOFD : '' }); setSnapshot(undefined); setShops([]); setApiKey(''); setToken(''); }}><option value="direct">Rechtstreeks via de browser</option><option value="local">Lokale koppeling</option><option value="worker">Cloudflare Worker</option></select></label>
           {localMode && !isLocalApp() && <p>Start de app via start-windows.bat of start-mac-linux.sh en open http://localhost:3000 om de lokale koppeling te gebruiken.</p>}
           {!needsKey && <>
             <label>Worker URL<input className={input} type="url" value={config.workerUrl} onChange={e => { update({ workerUrl: e.target.value }); setSnapshot(undefined); }} /></label>
             <label>Worker-toegangscode<input className={input} type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} /></label>
           </>}
-          <label>Webshopdomein<input className={input} value={config.domain} onChange={e => { update({ domain: e.target.value, shop: undefined }); setSnapshot(undefined); setShops([]); }} /></label>
+          <label>Webshopdomein<input className={input} placeholder="shop.jouw-organisatie.be" value={config.domain} onChange={e => { update({ domain: e.target.value, shop: undefined }); setSnapshot(undefined); setShops([]); }} /></label>
           <button className={button} disabled={localMode && !isLocalApp()} onClick={() => run('Webshops zoeken', async () => { const result = await searchShops(config.workerUrl, config.domain, token); setShops(result.shops); setSelected(result.shops[0]?.id ?? ''); if (!result.shops.length) throw new Error('Geen webshops gevonden.'); })}>Zoek webshops</button>
           {!!shops.length && <div className="space-y-2"><label>Webshop<select className={input} value={selected} onChange={e => setSelected(e.target.value)}>{shops.map(s => <option key={s.id} value={s.id}>{s.name} ? {s.domain} ? {s.id}</option>)}</select></label><button className={button} onClick={() => run('Configuratie bewaren', async () => { const shop = shops.find(s => s.id === selected); const next = { ...config, shop, mapping: {}, productCategories: {}, lastSyncAt: undefined }; await db.stamhoofdConfigs.put(next); setConfig(next); setSnapshot(undefined); setShowPreview(false); })}>Gebruik deze webshop</button></div>}
         </details>
         {analysis && <>
           {analysis.error && <p role="alert" className="text-red-300">{analysis.error}</p>}
-          <details className="rounded-lg border border-slate-700 p-3 space-y-3"><summary className="cursor-pointer font-bold">Velden aanpassen (optioneel)</summary>
+          <details open={!config.shop || undefined} className="rounded-lg border border-slate-700 p-3 space-y-3"><summary className="cursor-pointer font-bold">Velden aanpassen (optioneel)</summary>
           <p className="text-xs text-slate-400">Organisatie-, webshop-, order- en item-ID blijven verplicht bewaard voor veilige synchronisatie. Uitgevinkte optionele bronvelden worden bij toepassen verwijderd. Handmatig gecorrigeerde lokale gegevens blijven behouden.</p>
           <div className="grid sm:grid-cols-3 gap-2">{[['Stamhoofd order-ID'], ['Stamhoofd cart item-ID']].map(([name]) => <label key={name}><input type="checkbox" checked disabled /> {name} (verplicht)</label>)}{Object.entries(importFields).map(([key, label]) => <label key={key}><input type="checkbox" checked={key === 'product' || config.fields.includes(key)} disabled={key === 'product'} onChange={e => update({ fields: e.target.checked ? [...config.fields, key] : config.fields.filter(f => f !== key) })} /> {label}</label>)}</div>
           <div className="grid sm:grid-cols-3 gap-3">{['firstName', 'lastName', 'birthDate', 'gender'].map(key => <label key={key}>{importFields[key]} koppeling<select className={input} value={config.mapping[key] ?? ''} onChange={e => update({ mapping: { ...config.mapping, [key]: e.target.value } })}><option value="">Automatisch op veldnaam</option>{analysis.fields.map(f => <option key={f.id} value={f.id}>{f.name} ({f.id})</option>)}</select></label>)}</div>

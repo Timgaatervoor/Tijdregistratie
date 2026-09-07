@@ -1,3 +1,4 @@
+import { EventWorkbookPanel } from '../EventWorkbookPanel';
 import React, { useState, useRef, useEffect } from 'react';
 import { BibAssignmentModal } from '../BibAssignmentModal';
 import { updateBibs } from '../../services/bibAssignment';
@@ -528,6 +529,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       {showStamhoofd && <StamhoofdIntegrationModal participants={participants} categories={categories} onRefresh={onRefresh} onClose={() => setShowStamhoofd(false)} />}
       {showBibAssignment && <BibAssignmentModal participants={participants} onClose={() => setShowBibAssignment(false)} onRefresh={onRefresh} />}
       {bibMessage && <p role="status" className="rounded-xl bg-slate-800 p-3 text-amber-300">{bibMessage}</p>}
+      <EventWorkbookPanel onRefresh={onRefresh} />
       {/* Top Banner & Action Buttons */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -535,7 +537,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             <Users className="w-4 h-4" /> Deelnemers Administratie
           </span>
           <h2 className="text-2xl font-black text-white tracking-tight mt-0.5">
-            Deelnemersbeheer & Stamhoofd Import
+            Deelnemersbeheer & import
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             Totaal: <strong className="text-white">{participants.length}</strong> deelnemers geregistreerd
@@ -548,7 +550,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition"
           >
-            <Upload className="w-4 h-4" /> Stamhoofd CSV/Excel Import
+            <Upload className="w-4 h-4" /> Andere CSV/Excel import
           </button>
           <button
             onClick={() => setShowBibAssignment(true)}
@@ -827,7 +829,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   type="text"
                   value={newClub}
                   onChange={(e) => setNewClub(e.target.value)}
-                  placeholder="bv. Kustatletiek De Haan"
+                  placeholder="Naam van de club"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>

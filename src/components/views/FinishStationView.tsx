@@ -1,3 +1,4 @@
+import { raceClock } from '../../services/raceClock';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Flag,
@@ -9,13 +10,15 @@ import {
   HelpCircle,
   Volume2,
 } from 'lucide-react';
-import type { Participant, TimingRecord, RaceEvent } from '../../types';
+import type { Category, Wave, Participant, TimingRecord, RaceEvent } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
 
 interface FinishStationViewProps {
+  categories: Category[];
+  waves: Wave[];
   event: RaceEvent | null;
   participants: Participant[];
   timingRecords: TimingRecord[];
@@ -23,6 +26,8 @@ interface FinishStationViewProps {
 }
 
 export const FinishStationView: React.FC<FinishStationViewProps> = ({
+  categories,
+  waves,
   event,
   participants,
   timingRecords,
@@ -99,7 +104,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
     explicitTime?: { iso: string; monotonic: number }
   ) => {
     setIsSubmitting(true);
-    const nowIso = explicitTime?.iso || new Date().toISOString();
+    const nowIso = explicitTime?.iso || raceClock.nowISO();
     const monotonicNow = explicitTime?.monotonic !== undefined ? explicitTime.monotonic : performance.now();
 
     try {
@@ -148,7 +153,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
     }
 
     // Freeze timestamp T1 immediately on trigger (Requirement 17)
-    const tIso = new Date().toISOString();
+    const tIso = raceClock.nowISO();
     const tMono = performance.now();
 
     if (!quickFinish) {
@@ -169,7 +174,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
     const emergencyBib = highestBib + 1;
 
     setIsSubmitting(true);
-    const nowIso = new Date().toISOString();
+    const nowIso = raceClock.nowISO();
 
     const { record } = await operationService.recordFinish(
       event?.id || 'event-de-haan-2026',
@@ -197,18 +202,8 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
     const reason = prompt('Reden van annuleren finish (verplicht):');
     if (!reason || !reason.trim()) return;
 
-    await db.timingRecords.update(record.id, {
-      isReversed: true,
-      reversedReason: reason,
-    });
-
-    const p = participants.find((item) => item.bibNumber === record.bibNumber);
-    if (p) {
-      await db.participants.update(p.id, {
-        status: 'STARTED',
-        updatedAt: new Date().toISOString(),
-      });
-    }
+    await operationService.undoTimingRecord(record.id, reason);
+    const p = participants.find(item => item.bibNumber === record.bibNumber);
 
     await operationService.logAudit(
       'FINISH_CANCELLED',
@@ -287,7 +282,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
                     {matchedParticipant.firstName} {matchedParticipant.lastName}
                   </span>
                   <span className="text-slate-400 font-mono">
-                    {matchedParticipant.categoryName || 'Cat'} • {matchedParticipant.waveName || 'Wave'}
+                    {categories.find(c => c.id === matchedParticipant.categoryId)?.name || 'Cat'} • {waves.find(w => w.id === matchedParticipant.waveId)?.name || 'Wave'}
                   </span>
                 </div>
               )}
@@ -396,7 +391,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
                           {p ? `${p.firstName} ${p.lastName}` : `Deelnemer #${rec.bibNumber}`}
                         </span>
                         <span className="text-slate-400 text-xs font-mono">
-                          {p?.categoryName || 'Cat'} • {rec.deviceId} ({rec.operatorId})
+                          {categories.find(c => c.id === p?.categoryId)?.name || 'Cat'} • {rec.deviceId} ({rec.operatorId})
                         </span>
                       </div>
                     </div>
@@ -441,7 +436,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
                   {matchedParticipant.firstName} {matchedParticipant.lastName}
                 </span>
                 <span className="text-slate-400 font-medium">
-                  {matchedParticipant.categoryName || 'Cat'} • Wave {matchedParticipant.waveName || '1'}
+                  {categories.find(c => c.id === matchedParticipant.categoryId)?.name || 'Cat'} • Wave {waves.find(w => w.id === matchedParticipant.waveId)?.name || '1'}
                 </span>
               </div>
             )}

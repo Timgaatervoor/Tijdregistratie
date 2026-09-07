@@ -1,3 +1,4 @@
+import { raceClock } from './raceClock';
 import { db } from '../db/dexieDb';
 import type {
   RaceOperation,
@@ -78,8 +79,11 @@ export class OperationService {
     participant: Participant | undefined,
     capturedTimestamp: string,
     monotonicMs: number,
-    clockOffsetMs = 0
+    clockOffsetMs = raceClock.status().offsetMs
   ): Promise<{ record: TimingRecord; conflict?: RaceConflict }> {
+    return db.transaction('rw', [db.events, db.participants, db.timingRecords, db.shootingResults, db.operations, db.auditLogs, db.conflicts, db.waves], async () => {
+    const active = await db.events.get(eventId);
+    if (active?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld. Ontgrendel eerst voor een correctie.');
     const recordId = generateUUID();
     const operationId = generateUUID();
 
@@ -101,6 +105,10 @@ export class OperationService {
       timestamp: capturedTimestamp,
       monotonicMs,
       clockOffsetMs,
+      clockSource: raceClock.status().source,
+      clockSyncedAt: raceClock.status().syncedAt,
+      clockUncertaintyMs: raceClock.status().uncertaintyMs,
+      localTimestamp: new Date(Date.parse(capturedTimestamp) - clockOffsetMs).toISOString(),
       deviceId: this.currentDeviceId,
       operatorId: this.currentOperator,
       isUnknownBib: !participant,
@@ -155,6 +163,11 @@ export class OperationService {
         recordId,
         bibNumber,
         timestamp: capturedTimestamp,
+        clockOffsetMs,
+        clockSource: record.clockSource,
+        clockUncertaintyMs: record.clockUncertaintyMs,
+        clockSyncedAt: record.clockSyncedAt,
+        localTimestamp: record.localTimestamp,
         monotonicMs,
         isUnknownBib: !participant,
       },
@@ -175,6 +188,7 @@ export class OperationService {
     this.broadcast({ type: 'FINISH_RECORDED', operation, record, conflict });
 
     return { record, conflict };
+    });
   }
 
   /**
@@ -186,8 +200,11 @@ export class OperationService {
     participant: Participant | undefined,
     capturedTimestamp: string,
     monotonicMs: number,
-    clockOffsetMs = 0
+    clockOffsetMs = raceClock.status().offsetMs
   ): Promise<TimingRecord> {
+    return db.transaction('rw', [db.events, db.participants, db.timingRecords, db.shootingResults, db.operations, db.auditLogs, db.conflicts, db.waves], async () => {
+    const active = await db.events.get(eventId);
+    if (active?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld. Ontgrendel eerst voor een correctie.');
     const recordId = generateUUID();
     const operationId = generateUUID();
 
@@ -200,6 +217,10 @@ export class OperationService {
       timestamp: capturedTimestamp,
       monotonicMs,
       clockOffsetMs,
+      clockSource: raceClock.status().source,
+      clockSyncedAt: raceClock.status().syncedAt,
+      clockUncertaintyMs: raceClock.status().uncertaintyMs,
+      localTimestamp: new Date(Date.parse(capturedTimestamp) - clockOffsetMs).toISOString(),
       deviceId: this.currentDeviceId,
       operatorId: this.currentOperator,
       isUnknownBib: !participant,
@@ -228,6 +249,11 @@ export class OperationService {
         recordId,
         bibNumber,
         timestamp: capturedTimestamp,
+        clockOffsetMs,
+        clockSource: record.clockSource,
+        clockUncertaintyMs: record.clockUncertaintyMs,
+        clockSyncedAt: record.clockSyncedAt,
+        localTimestamp: record.localTimestamp,
       },
       syncStatus: 'LOCAL_ONLY',
       revision: 1,
@@ -244,6 +270,7 @@ export class OperationService {
 
     this.broadcast({ type: 'START_RECORDED', operation, record });
     return record;
+    });
   }
 
   /**
@@ -256,29 +283,16 @@ export class OperationService {
     participants: Participant[],
     capturedTimestamp: string
   ): Promise<void> {
-    const monotonic = typeof performance !== 'undefined' ? performance.now() : Date.now();
-
+    return db.transaction('rw', [db.events, db.participants, db.timingRecords, db.shootingResults, db.operations, db.auditLogs, db.conflicts, db.waves], async () => {
+    const active = await db.events.get(eventId);
+    if (active?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld. Ontgrendel eerst voor een correctie.');
+    const monotonic = performance.now();
+    const wave = await db.waves.get(waveId);
+    if (!wave || wave.eventId !== eventId || wave.actualStartTime || wave.status === 'STARTED' || wave.status === 'COMPLETED') throw new Error('Deze startgroep bestaat niet of is al gestart.');
     for (const p of participants) {
-      if (p.bibNumber && p.status !== 'DNS' && p.status !== 'DSQ') {
-        const rec: TimingRecord = {
-          id: generateUUID(),
-          eventId,
-          participantId: p.id,
-          bibNumber: p.bibNumber,
-          type: 'START',
-          timestamp: capturedTimestamp,
-          monotonicMs: monotonic,
-          clockOffsetMs: 0,
-          deviceId: this.currentDeviceId,
-          operatorId: this.currentOperator,
-          isConfirmed: true,
-          syncStatus: 'LOCAL_ONLY',
-        };
-        await db.timingRecords.put(rec);
-        await db.participants.update(p.id, {
-          status: 'STARTED',
-          updatedAt: new Date().toISOString(),
-        });
+      const current = await db.participants.get(p.id);
+      if (current?.waveId === waveId && current.bibNumber && ['REGISTERED', 'CHECKED_IN', 'READY'].includes(current.status)) {
+        await this.recordStart(eventId, current.bibNumber, current, capturedTimestamp, monotonic);
       }
     }
 
@@ -307,6 +321,7 @@ export class OperationService {
     );
 
     this.broadcast({ type: 'WAVE_STARTED', operation, waveId });
+    });
   }
 
   /**
@@ -324,11 +339,20 @@ export class OperationService {
     isCorrection = false,
     correctionReason?: string
   ): Promise<ShootingResult> {
+    return db.transaction('rw', [db.events, db.participants, db.timingRecords, db.shootingResults, db.operations, db.auditLogs, db.conflicts, db.waves], async () => {
+    const active = await db.events.get(eventId);
+    if (active?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld. Ontgrendel eerst voor een correctie.');
     const recordId = generateUUID();
     const operationId = generateUUID();
-    const timestamp = new Date().toISOString();
+    const timestamp = raceClock.nowISO();
 
+    if (![round, shots, hits, misses].every(Number.isSafeInteger) || round < 1 || shots < 1 || hits < 0 || misses < 0 || hits + misses !== shots) throw new Error('Ongeldige schietregistratie.');
+    const prior = await db.shootingResults.where('participantId').equals(participant.id).filter(r => r.eventId === eventId && r.round === round).toArray();
+    if (!isCorrection && prior.some(r => !r.isCorrected)) throw new Error('Deze schietbeurt bestaat al. Gebruik een correctie.');
+    if (isCorrection && !correctionReason?.trim()) throw new Error('Geef een reden voor de correctie.');
+    const supersedesIds = isCorrection ? prior.map(r => r.id) : [];
     const record: ShootingResult = {
+      supersedesIds,
       id: recordId,
       eventId,
       participantId: participant.id,
@@ -367,6 +391,7 @@ export class OperationService {
         misses,
           targetDetails,
         isCorrection,
+        supersedesIds,
         correctionReason,
       },
       syncStatus: 'LOCAL_ONLY',
@@ -387,14 +412,17 @@ export class OperationService {
 
     this.broadcast({ type: 'SHOOTING_RECORDED', operation, record });
     return record;
+    });
   }
 
   /**
    * Undo the last timing record for a bib (without hard deleting, preserves audit history)
    */
   public async undoTimingRecord(recordId: string, reason = 'Operator undo'): Promise<void> {
+    return db.transaction('rw', [db.events, db.participants, db.timingRecords, db.shootingResults, db.operations, db.auditLogs, db.conflicts, db.waves], async () => {
     const record = await db.timingRecords.get(recordId);
     if (!record) return;
+    if ((await db.events.get(record.eventId))?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld.');
 
     await db.timingRecords.update(recordId, {
       isReversed: true,
@@ -439,6 +467,19 @@ export class OperationService {
     );
 
     this.broadcast({ type: 'RECORD_UNDO', recordId, bibNumber: record.bibNumber });
+    });
+  }
+
+  public async correctTimingRecord(recordId: string, timestamp: string, reason: string) {
+    if (!reason.trim() || !Number.isFinite(Date.parse(timestamp))) throw new Error('Een geldige tijd en reden zijn verplicht.');
+    return db.transaction('rw', [db.events, db.participants, db.timingRecords, db.shootingResults, db.operations, db.auditLogs, db.conflicts, db.waves], async () => {
+      const old = await db.timingRecords.get(recordId);
+      if (!old) throw new Error('Tijdregistratie bestaat niet meer.');
+      const p = old.participantId ? await db.participants.get(old.participantId) : undefined;
+      await this.undoTimingRecord(recordId, reason);
+      if (old.type === 'START') return this.recordStart(old.eventId, old.bibNumber, p, timestamp, performance.now(), 0);
+      return this.recordFinish(old.eventId, old.bibNumber, p, timestamp, performance.now(), 0);
+    });
   }
 
   private broadcast(message: any) {

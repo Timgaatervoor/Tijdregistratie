@@ -1,3 +1,4 @@
+import { raceClock } from '../../services/raceClock';
 import React, { useEffect, useState } from 'react';
 import './LiveLeaderboardView.css';
 import {
@@ -55,6 +56,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   onSelectParticipant,
   onKioskModeChange,
 }) => {
+  const kioskStorageKey = `biathlon_tv_kiosk_config:${event?.id || 'new'}`;
   const profileOptions = [...new Map(results.map(r => [r.raceProfileId ?? '', r.raceProfileName ?? 'Nog niet gekoppeld'])).entries()];
   const [selectedProfile, setSelectedProfile] = useState('__default');
   const activeProfile = profileOptions.some(([id]) => id === selectedProfile) ? selectedProfile : profileOptions.find(([id]) => !!id)?.[0] ?? '';
@@ -64,14 +66,17 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | ParticipantStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isKioskMode, setIsKioskMode] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [currentTime, setCurrentTime] = useState(() => new Date(raceClock.nowMs()));
   const [showKioskSettings, setShowKioskSettings] = useState(false);
   const [tvConfig, setTvConfig] = useState<TvKioskConfig>(() => {
     try {
-      const storedConfig = JSON.parse(localStorage.getItem('biathlon_tv_kiosk_config') || '{}');
+      const storedConfig = JSON.parse(localStorage.getItem(kioskStorageKey) || '{}');
       return {
         ...defaultTvKioskConfig,
-        ...storedConfig,
+        showPodium: storedConfig.showPodium !== false,
+        showClock: storedConfig.showClock !== false,
+        rotateCategories: storedConfig.rotateCategories === true,
+        rotationSeconds: [10, 15, 30, 60].includes(storedConfig.rotationSeconds) ? storedConfig.rotationSeconds : 15,
         categoryIds: Array.isArray(storedConfig.categoryIds) ? storedConfig.categoryIds : [],
         textScale: ['normal', 'large', 'extra-large'].includes(storedConfig.textScale) ? storedConfig.textScale : defaultTvKioskConfig.textScale,
       };
@@ -80,14 +85,14 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     }
   });
 
-  const availableCategoryIds = categories.map((category) => category.id);
+  const availableCategoryIds = categories.filter(c => results.some(r => (r.raceProfileId ?? '') === activeProfile && r.categoryId === c.id && (selectedWave === 'ALL' || r.waveId === selectedWave) && (selectedGender === 'ALL' || r.gender === selectedGender))).map(c => c.id);
   const configuredCategoryIds = tvConfig.categoryIds.filter((id) => availableCategoryIds.includes(id));
-  const rotationCategoryIds = tvConfig.categoryIds.length === 0 ? availableCategoryIds : configuredCategoryIds;
+  const rotationCategoryIds = configuredCategoryIds.length === 0 ? availableCategoryIds : configuredCategoryIds;
   const rotationCategoryKey = rotationCategoryIds.join('|');
 
   useEffect(() => {
-    localStorage.setItem('biathlon_tv_kiosk_config', JSON.stringify(tvConfig));
-  }, [tvConfig]);
+    try { localStorage.setItem(kioskStorageKey, JSON.stringify(tvConfig)); } catch { /* Kiosk remains usable if browser storage is unavailable. */ }
+  }, [tvConfig, kioskStorageKey]);
 
   useEffect(() => {
     onKioskModeChange?.(isKioskMode);
@@ -97,10 +102,16 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsKioskMode(Boolean(document.fullscreenElement));
+      if (!document.fullscreenElement) { setIsKioskMode(false); setShowKioskSettings(false); }
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const escape = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.fullscreenElement) { setIsKioskMode(false); setShowKioskSettings(false); } };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
   }, []);
 
   const toggleKioskMode = async () => {
@@ -160,7 +171,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
   useEffect(() => {
     if (!isKioskMode || !tvConfig.showClock) return;
-    const clock = window.setInterval(() => setCurrentTime(new Date()), 1000);
+    const clock = window.setInterval(() => setCurrentTime(new Date(raceClock.nowMs())), 1000);
     return () => window.clearInterval(clock);
   }, [isKioskMode, tvConfig.showClock]);
 
@@ -236,7 +247,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           </div>
           <p className="text-amber-300 font-bold">{profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle leeftijdscategorieën' : categories.find(c => c.id === selectedCategory)?.name}</p>
           <h2 className="text-2xl font-black text-white tracking-tight">
-            {event?.name || 'Run Biathlon De Haan 2026'}
+            {event?.name || 'Nieuw evenement'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             {mode === 'results'
@@ -325,7 +336,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {categories.map((category) => (
+              {categories.filter(category => availableCategoryIds.includes(category.id)).map((category) => (
                 <label key={`kiosk-category-${category.id}`} className="flex items-center gap-2 rounded-lg bg-slate-800/70 border border-slate-700 px-3 py-2 text-slate-200">
                   <input
                     type="checkbox"
@@ -364,7 +375,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
         </div>
 
         <label className="text-xs">Wedstrijdprofiel
-          <select aria-label="Wedstrijdprofiel" value={activeProfile} onChange={e => setSelectedProfile(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white ml-2">
+          <select aria-label="Wedstrijdprofiel" value={activeProfile} onChange={e => { setSelectedProfile(e.target.value); setSelectedCategory('ALL'); }} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white ml-2">
             {profileOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </label>
@@ -433,7 +444,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           {/* Silver #2 */}
           {finishedPodium[1] && (
             <div
-              onClick={() => onSelectParticipant(finishedPodium[1])}
+              onClick={() => !isKioskMode && onSelectParticipant(finishedPodium[1])}
               className="bg-slate-900 border border-slate-750 hover:border-slate-600 rounded-2xl p-5 shadow cursor-pointer transition flex flex-col justify-between order-2 sm:order-1 relative overflow-hidden"
             >
               <div className="flex items-center justify-between mb-2">
@@ -466,7 +477,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           {/* Gold #1 */}
           {finishedPodium[0] && (
             <div
-              onClick={() => onSelectParticipant(finishedPodium[0])}
+              onClick={() => !isKioskMode && onSelectParticipant(finishedPodium[0])}
               className="bg-gradient-to-b from-amber-950/40 to-slate-900 border-2 border-amber-500/60 rounded-2xl p-6 shadow-2xl cursor-pointer transition flex flex-col justify-between order-1 sm:order-2 scale-105 z-10 relative overflow-hidden"
             >
               <div className="flex items-center justify-between mb-2">
@@ -504,7 +515,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           {/* Bronze #3 */}
           {finishedPodium[2] && (
             <div
-              onClick={() => onSelectParticipant(finishedPodium[2])}
+              onClick={() => !isKioskMode && onSelectParticipant(finishedPodium[2])}
               className="bg-slate-900 border border-slate-750 hover:border-slate-600 rounded-2xl p-5 shadow cursor-pointer transition flex flex-col justify-between order-3 relative overflow-hidden"
             >
               <div className="flex items-center justify-between mb-2">
@@ -569,7 +580,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                   return (
                     <tr
                       key={`lb-row-${r.participantId}`}
-                      onClick={() => onSelectParticipant(r)}
+                      onClick={() => !isKioskMode && onSelectParticipant(r)}
                       className="hover:bg-slate-850/80 cursor-pointer transition"
                     >
                       {/* Rank */}
@@ -667,8 +678,9 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                               : 'bg-slate-800 text-slate-400'
                           }`}
                         >
-                          {r.status}
+                          {r.resultIssues?.length ? 'VOORLOPIG' : r.status}
                         </span>
+                        {r.resultIssues?.map(issue => <span key={issue} className="block text-amber-300 text-xs">{issue}</span>)}
                       </td>
                     </tr>
                   );

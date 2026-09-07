@@ -63,6 +63,14 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({
 
   return (
     <div className="space-y-6">
+      <div className="bg-slate-900 rounded-xl border border-slate-700 p-4 flex flex-wrap gap-3 text-sm">
+        <strong>Voorbereiding:</strong>
+        <button className="text-amber-300 underline" onClick={() => onNavigate('participants')}>1. Import en indeling</button>
+        <button className="text-amber-300 underline" onClick={() => onNavigate('participants')}>2. Borstnummers</button>
+        <button className="text-amber-300 underline" onClick={() => onNavigate('waves')}>3. Startgroepen</button>
+        <button className="text-amber-300 underline" onClick={() => onNavigate('settings')}>4. Toestellen en back-up</button>
+        <button className="text-amber-300 underline" onClick={onOpenPreRaceCheck}>5. Startcontrole</button>
+      </div>
       {/* Top Banner / Event Status */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -73,10 +81,10 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({
             </span>
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight">
-            {event?.name || 'Run Biathlon De Haan 2026'}
+            {event?.name || 'Nieuw evenement'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Locatie: {event?.location || 'De Haan'} • Straf per misser: {event?.penaltySecondsPerMiss || 20} sec
+            Locatie: {event?.location || 'Locatie nog niet ingesteld'} • Straf per misser: {event?.penaltySecondsPerMiss || 20} sec
           </p>
         </div>
 

@@ -3,7 +3,7 @@ import { db } from '../db/dexieDb';
 import { operationService } from '../services/operationService';
 import { syncService } from '../services/syncService';
 import { calculateRaceResults } from '../services/timingEngine';
-import { initializeSampleData } from '../services/sampleDataService';
+import { initializeEmptyEvent } from '../services/sampleDataService';
 import type {
   RaceEvent,
   Participant,
@@ -38,7 +38,7 @@ export function useEventData() {
       const isInitialized = typeof window !== 'undefined' && localStorage.getItem('biathlon_db_initialized') === 'true';
 
       if (!ev && !isInitialized) {
-        await initializeSampleData(false);
+        await initializeEmptyEvent();
         ev = await db.events.toCollection().first();
       }
 

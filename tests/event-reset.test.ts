@@ -2,12 +2,28 @@ import 'fake-indexeddb/auto';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db, getActiveEventId } from '../src/db/dexieDb';
-import { resetToBlankEvent } from '../src/services/sampleDataService';
+import { resetToBlankEvent, initializeEmptyEvent } from '../src/services/sampleDataService';
 import { syncService, type SyncConfig } from '../src/services/syncService';
 
 after(async () => {
   assert.equal(db.name, 'BiathlonDeHaanDB-node-test');
   await db.delete();
+});
+
+test('first use starts empty and generic, and initialization preserves an existing organization', async () => {
+  await initializeEmptyEvent();
+  const event = await db.events.toCollection().first();
+  assert.equal(event.name, 'Nieuw evenement');
+  assert.equal(event.date, '');
+  assert.equal(event.location, '');
+  assert.equal(event.organizer, '');
+  assert.equal(event.isTestMode, false);
+  assert.equal(await db.participants.count(), 0);
+  await db.events.update(event.id, { name: 'Eigen wedstrijd', organizer: 'Eigen organisatie' });
+  await initializeEmptyEvent();
+  assert.equal(await db.events.count(), 1);
+  assert.equal((await db.events.get(event.id)).organizer, 'Eigen organisatie');
+  await db.events.clear();
 });
 
 test('a completely new event has empty logs and race data, a fresh ID and disabled cloud sync', async () => {

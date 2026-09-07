@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { raceClock } from '../services/raceClock';
+import { syncService } from '../services/syncService';
 import { CheckCircle2, AlertTriangle, XCircle, ShieldCheck, X } from 'lucide-react';
 import type { RaceEvent, Participant, Wave, RaceProfile, Category, RaceConflict } from '../types';
 import { db } from '../db/dexieDb';
@@ -29,13 +31,22 @@ export const PreRaceCheckModal: React.FC<PreRaceCheckModalProps> = ({
   pendingSyncCount = 0,
   onGoLiveSuccess = () => {},
 }) => {
+  const [storageChecked, setStorageChecked] = useState(false);
+  const [offlineReady, setOfflineReady] = useState(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    setStorageChecked(false);
+    void db.events.count().then(() => setStorageChecked(true)).catch(() => setStorageChecked(false));
+    setOfflineReady(typeof navigator !== 'undefined' && !!navigator.serviceWorker?.controller);
+  }, [isOpen]);
   if (!isOpen) return null;
+  const clock = raceClock.status();
 
   // Analysis
   const safeProfiles = profiles || [];
   const safeCategories = categories || [];
   const safeWaves = waves || [];
-  const safeParticipants = participants || [];
+  const safeParticipants = (participants || []).filter(p => !p.stamhoofdInactive && p.status !== 'DNS');
   const safeConflicts = conflicts || [];
 
   const hasProfiles = safeProfiles.length > 0;
@@ -61,11 +72,15 @@ export const PreRaceCheckModal: React.FC<PreRaceCheckModalProps> = ({
 
   const unresolvedConflicts = safeConflicts.filter((c) => !c.resolvedAt);
 
+  const missingAssignments = safeParticipants.filter(p => !safeCategories.some(c => c.id === p.categoryId) || !safeProfiles.some(profile => profile.id === p.raceProfileId));
+  const overCapacity = safeWaves.filter(w => safeParticipants.filter(p => p.waveId === w.id).length > w.maxParticipants);
   const checks = [
+    { label: 'Indeling deelnemers', status: missingAssignments.length ? 'fail' : 'pass', detail: missingAssignments.length ? missingAssignments.map(p => `${p.firstName} ${p.lastName}`).join(', ') : 'Iedere deelnemer heeft een categorie en wedstrijdprofiel.' },
+    { label: 'Capaciteit startgroepen', status: overCapacity.length ? 'fail' : 'pass', detail: overCapacity.length ? overCapacity.map(w => w.name).join(', ') : 'Geen startgroepen over capaciteit.' },
     {
       label: 'Wedstrijdprofielen geconfigureerd',
       status: hasProfiles ? 'pass' : 'fail',
-      detail: `${safeProfiles.length} profielen actief (Kids, Junior, Adult)`,
+      detail: `${safeProfiles.length} profielen actief`,
     },
     {
       label: 'Categorieën geconfigureerd',
@@ -108,18 +123,18 @@ export const PreRaceCheckModal: React.FC<PreRaceCheckModalProps> = ({
     },
     {
       label: 'Lokale opslag (IndexedDB / Dexie.js)',
-      status: 'pass',
-      detail: 'Actief, persistente browser storage geverifieerd',
+      status: storageChecked ? 'pass' : 'warn',
+      detail: storageChecked ? 'Lokale database is leesbaar. Controleer ook een externe back-up.' : 'Lokale opslag nog niet gecontroleerd',
     },
     {
       label: 'Klok & Tijdsynchronisatie',
-      status: 'pass',
-      detail: 'Toestelklok operationeel (Europe/Brussels)',
+      status: clock.state === 'SYNCED' ? 'pass' : 'warn',
+      detail: clock.state === 'SYNCED' ? `Centrale tijd gemeten, onzekerheid circa ${Math.ceil(clock.uncertaintyMs!)} ms` : 'Centrale tijd niet recent gemeten. Meet eerst via de tijdstatus bovenaan.',
     },
     {
       label: 'Offline voorbereiding (PWA Cache)',
-      status: 'pass',
-      detail: 'App shell en lokale tabellen gecached',
+      status: offlineReady ? 'pass' : 'warn',
+      detail: offlineReady ? 'Offline serviceworker actief; voer ook een test zonder internet uit.' : 'Geen actieve offline serviceworker gedetecteerd',
     },
     {
       label: 'Synchronisatiewachtrij',
@@ -128,10 +143,10 @@ export const PreRaceCheckModal: React.FC<PreRaceCheckModalProps> = ({
     },
   ];
 
-  const canGoLive = hasProfiles && hasParticipants && duplicateBibs.length === 0;
+  const canGoLive = hasProfiles && hasCategories && hasParticipants && duplicateBibs.length === 0 && missingBibCount === 0 && missingAssignments.length === 0 && overCapacity.length === 0 && unresolvedConflicts.length === 0 && (!syncService.getConfig().enabled || clock.state === 'SYNCED');
 
   const handleGoLive = async () => {
-    if (!event) return;
+    if (!event || !canGoLive) return;
     await db.events.update(event.id, {
       status: 'LIVE',
       updatedAt: new Date().toISOString(),

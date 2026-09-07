@@ -49,6 +49,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [editLastName, setEditLastName] = useState('');
   const [editBib, setEditBib] = useState('');
   const [editGender, setEditGender] = useState<'M' | 'F' | 'X'>('M');
+  const [editPenaltyLaps, setEditPenaltyLaps] = useState(0);
   const [editBirthDate, setEditBirthDate] = useState('');
   const [manualCategory, setManualCategory] = useState(false);
   const [manualProfile, setManualProfile] = useState(false);
@@ -103,6 +104,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setEditGender(p.gender || 'X');
     setEditCategoryId(p.categoryId || '');
     setEditBirthDate(p.birthDate || '');
+    setEditPenaltyLaps(p.penaltyLapsCompleted ?? 0);
     setManualCategory(p.categoryAssignment === 'manual');
     setManualProfile(p.profileAssignment === 'manual');
     setEditProfileId(p.raceProfileId || '');
@@ -237,6 +239,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setEditError(null);
 
     try {
+      if ((await db.events.toCollection().first())?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld.');
+      if (!Number.isSafeInteger(editPenaltyLaps) || editPenaltyLaps < 0) throw new Error('Ongeldig aantal strafrondes.');
       const now = new Date().toISOString();
       const oldBib = currentParticipant.bibNumber;
       const isBibChanged = parsedBib !== oldBib;
@@ -259,6 +263,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         bibNumber: parsedBib,
         gender: editGender,
         birthDate: editBirthDate.trim() || undefined,
+        penaltyLapsCompleted: editPenaltyLaps,
         categoryId: editCategoryId,
         raceProfileId: selectedProfileId,
         categoryAssignment: manualCategory ? 'manual' : 'automatic',
@@ -288,6 +293,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           .equals(currentParticipant.id)
           .modify({ bibNumber: parsedBib });
       }
+
+      await db.operations.put({ operationId: generateUUID(), eventId: await getActiveEventId(), participantId: currentParticipant.id, type: 'PARTICIPANT_UPDATED', deviceId: operationService.getDeviceId(), operatorId: operationService.getOperator(), deviceTimestamp: now, payload: { updates: updatedData }, syncStatus: 'LOCAL_ONLY', revision: 1 });
 
       await operationService.logAudit(
         'PARTICIPANT_UPDATED',
@@ -681,6 +688,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             </div>
 
             <div className="space-y-2 text-xs">
+              <label className="block">Gecontroleerde afgelegde strafrondes<input type="number" min="0" step="1" value={editPenaltyLaps} onChange={e => setEditPenaltyLaps(Number(e.target.value))} className="block w-full bg-slate-800 rounded p-2" /></label>
               <p>Artikel: {currentParticipant.article || String(currentParticipant.stamhoofdRegistration?.product ?? 'Geen')}</p>
               <label className="block">Geboortedatum (dd/mm/jjjj of jjjj-mm-dd)<input value={editBirthDate} onChange={e => setEditBirthDate(e.target.value)} className="block w-full bg-slate-800 rounded p-2" /></label>
               <label className="block"><input type="checkbox" checked={manualCategory} onChange={e => setManualCategory(e.target.checked)} /> Leeftijdscategorie handmatig vastzetten</label>
@@ -738,7 +746,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   type="text"
                   value={editClub}
                   onChange={(e) => setEditClub(e.target.value)}
-                  placeholder="bv. Kids Atletiek De Haan"
+                  placeholder="Naam van je organisatie"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 />
               </div>

@@ -1,3 +1,4 @@
+import { DevicePairingPanel } from './components/DevicePairingPanel';
 import React, { useState } from 'react';
 import { useEventData } from './hooks/useEventData';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
@@ -56,6 +57,7 @@ export default function App() {
 
   const { isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
   const [currentTab, setCurrentTab] = useState<ActiveTab>(getInitialTab);
+  const [joinLink, setJoinLink] = useState(() => location.hash.startsWith('#join=') ? location.href : '');
   const [isLeaderboardKiosk, setIsLeaderboardKiosk] = useState(false);
 
   // Modals state
@@ -88,6 +90,7 @@ export default function App() {
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
+      if (window.location.hash.startsWith('#join=')) return;
       const nextHash = `#${currentTab}`;
       if (window.location.hash !== nextHash) {
         window.history.pushState(null, '', nextHash);
@@ -97,6 +100,7 @@ export default function App() {
 
   React.useEffect(() => {
     const restoreTabFromHistory = () => {
+      if (window.location.hash.startsWith('#join=')) { setJoinLink(window.location.href); return; }
       const hashTab = window.location.hash.replace(/^#/, '') as ActiveTab;
       if (validTabs.has(hashTab)) setCurrentTab(hashTab);
     };
@@ -136,7 +140,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 space-y-3">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
         <span className="text-sm font-semibold tracking-wider font-mono">
-          Run Biathlon De Haan Timing laden...
+          Biathlon Tijdregistratie laden...
         </span>
       </div>
     );
@@ -144,6 +148,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950">
+      {joinLink && <div className="fixed inset-0 z-[100] bg-slate-950/95 overflow-auto p-6"><div className="max-w-2xl mx-auto"><DevicePairingPanel initialLink={joinLink} onJoined={() => { setJoinLink(''); location.reload(); }} /><button className="p-3" onClick={() => { setJoinLink(''); history.replaceState(null, '', location.pathname); }}>Sluiten</button></div></div>}
       {/* Test Mode / Simulated Offline Banner */}
       {!isLeaderboardKiosk && (event?.isTestMode || isSimulatedOffline) && (
         <div className="bg-amber-500 text-slate-950 px-4 py-1.5 text-xs font-black uppercase tracking-wider flex items-center justify-between shadow-md">
@@ -152,7 +157,7 @@ export default function App() {
             <span>
               {isSimulatedOffline
                 ? 'GEFORCEERDE OFFLINE MODUS ACTIEF: Apparaat opereert 100% autonoom op lokale IndexedDB'
-                : `TESTMODUS: ${event?.name || 'Run Biathlon De Haan'} Testset actief`}
+                : `TESTMODUS: ${event?.name || 'Biathlon Tijdregistratie'} Testset actief`}
             </span>
           </div>
           {isSimulatedOffline && (
@@ -166,9 +171,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Global Header */}
-      {!isLeaderboardKiosk && (
+      {!isLeaderboardKiosk && <div className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800">
         <Header
+          stationNavigation={<Navigation variant="stations" activeTab={displayedTab} onSelectTab={setCurrentTab} conflictCount={unresolvedConflictsCount} attentionCount={attentionCount} deviceConfig={deviceConfig} />}
           event={event}
           deviceConfig={deviceConfig}
           pendingSyncCount={pendingSyncCount}
@@ -177,10 +182,6 @@ export default function App() {
           onUnlockDevice={handleUnlockDevice}
           isTestMode={event?.isTestMode ?? false}
         />
-      )}
-
-      {/* Main Tab Navigation */}
-      {!isLeaderboardKiosk && (
         <Navigation
           activeTab={displayedTab}
           onSelectTab={setCurrentTab}
@@ -188,7 +189,7 @@ export default function App() {
           attentionCount={attentionCount}
           deviceConfig={deviceConfig}
         />
-      )}
+      </div>}
 
       {/* Main Content View */}
       <main className={isLeaderboardKiosk
@@ -210,7 +211,7 @@ export default function App() {
 
         {displayedTab === 'start' && (
           <StartStationView
-            event={event}
+            categories={categories}
             waves={waves}
             participants={participants}
             timingRecords={timingRecords}
@@ -220,6 +221,7 @@ export default function App() {
 
         {displayedTab === 'shooting' && (
           <ShootingStationView
+            categories={categories}
             event={event}
             participants={participants}
             shootingResults={shootingResults}
@@ -230,6 +232,8 @@ export default function App() {
 
         {displayedTab === 'finish' && (
           <FinishStationView
+            categories={categories}
+            waves={waves}
             event={event}
             participants={participants}
             timingRecords={timingRecords}
@@ -239,6 +243,7 @@ export default function App() {
 
         {(displayedTab === 'live' || displayedTab === 'results') && (
           <LiveLeaderboardView
+            key={event?.id}
             results={results}
             categories={categories}
             waves={waves}
@@ -309,18 +314,18 @@ export default function App() {
       />
 
       <PrintModal
+        profiles={raceProfiles}
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
-        results={results}
+        participants={participants}
         categories={categories}
         waves={waves}
-        profiles={raceProfiles}
         event={event}
       />
 
       <ConflictResolverModal
+        isOpen={!!activeConflict}
         conflict={activeConflict}
-        participants={participants}
         onClose={() => setActiveConflict(null)}
         onResolved={refresh}
       />

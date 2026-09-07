@@ -328,8 +328,6 @@ export const WavesView: React.FC<WavesViewProps> = ({
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           : w.status === 'COMPLETED'
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                          : w.status === 'DELAYED'
-                          ? 'bg-red-500/20 text-red-300 border border-red-500/30'
                           : 'bg-slate-800 text-slate-300'
                       }`}
                     >

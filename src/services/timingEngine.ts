@@ -1,3 +1,4 @@
+import { effectiveShooting, shootingPenalty } from './shootingRules';
 import type {
   Participant,
   TimingRecord,
@@ -122,7 +123,8 @@ export function calculateRaceResults(
 
   // Group shooting results by participant id
   const shootingMap = new Map<string, ShootingResult[]>();
-  shootingResults.forEach((sr) => {
+  const shooting = effectiveShooting(shootingResults);
+  shooting.effective.forEach((sr) => {
     const list = shootingMap.get(sr.participantId) || [];
     list.push(sr);
     shootingMap.set(sr.participantId, list);
@@ -141,7 +143,20 @@ export function calculateRaceResults(
       .sort((a, b) => a.round - b.round);
 
     const totalMisses = participantShooting.reduce((acc, curr) => acc + curr.misses, 0);
-    const penaltySeconds = totalMisses * penaltyPerMiss;
+    const penalties = participantShooting.map(sr => shootingPenalty(profile, sr.round, sr.misses, penaltyPerMiss));
+    const penaltySeconds = penalties.reduce((sum, p) => sum + p.seconds, 0);
+    const penaltyLaps = penalties.reduce((sum, p) => sum + p.laps, 0);
+    const expectedRounds = profile?.legs.filter(leg => leg.type === 'SHOOT') ?? [];
+    const missingRounds = expectedRounds.some((leg, index) => !participantShooting.some(sr => sr.round === index + 1));
+    const resultIssues: string[] = [];
+    if (!profile) resultIssues.push('Wedstrijdprofiel ontbreekt');
+    if (missingRounds) resultIssues.push('Schietbeurten ontbreken');
+    if (shooting.issues.has(p.id)) resultIssues.push('Schietconflict oplossen');
+    if (penaltyLaps > (p.penaltyLapsCompleted ?? 0)) resultIssues.push('Strafrondes nog niet bevestigd');
+    if (participantShooting.some(sr => !expectedRounds[sr.round - 1] || sr.shots !== (expectedRounds[sr.round - 1].shotCount ?? 5) || sr.hits + sr.misses !== sr.shots)) resultIssues.push('Schietgegevens wijken af van profiel');
+    const ownTiming = timingRecords.filter(tr => !tr.isReversed && tr.bibNumber === p.bibNumber);
+    if (['START', 'FINISH'].some(type => ownTiming.filter(tr => tr.type === type).length > 1)) resultIssues.push('Tijdconflict oplossen');
+    if (ownTiming.some(tr => tr.isConfirmed === false)) resultIssues.push('Tijdregistratie nog niet bevestigd');
 
     let rawElapsedMs: number | undefined = undefined;
     let officialTimeMs: number | undefined = undefined;
@@ -187,16 +202,18 @@ export function calculateRaceResults(
       shootingRounds,
       totalMisses,
       penaltySeconds,
+      penaltyLaps,
+      resultIssues,
       penaltyFormatted: penaltySeconds > 0 ? `+${penaltySeconds}s` : '0s',
       officialTimeMs,
       officialTimeFormatted: officialTimeMs !== undefined ? formatDuration(officialTimeMs, false, true) : '--:--',
-      isPendingShooting: participantShooting.length < (profile?.legs.filter(leg => leg.type === 'SHOOT').length ?? 0) && p.status === 'STARTED',
+      isPendingShooting: missingRounds,
     };
   });
 
   // Ranking overall (only participants with official finish and officialTimeMs)
   const finishers = computed.filter(
-    (r) => r.officialTimeMs !== undefined && r.status === 'FINISHED' && !!r.raceProfileId
+    (r) => r.officialTimeMs !== undefined && r.status === 'FINISHED' && !!r.raceProfileId && !r.resultIssues?.length
   );
 
   // Tie breaking rules:

@@ -1,6 +1,8 @@
+import { createPortal } from 'react-dom';
+import { RealQrCode } from './RealQrCode';
 import React, { useState } from 'react';
 import { Printer, Download, X, QrCode, FileText, CheckSquare } from 'lucide-react';
-import type { Participant, Wave, Category, RaceEvent } from '../types';
+import type { Participant, Wave, Category, RaceEvent, RaceProfile } from '../types';
 import { downloadCsvFile } from '../services/backupService';
 
 interface PrintModalProps {
@@ -10,6 +12,7 @@ interface PrintModalProps {
   participants: Participant[];
   waves: Wave[];
   categories: Category[];
+  profiles: RaceProfile[];
 }
 
 export const PrintModal: React.FC<PrintModalProps> = ({
@@ -19,9 +22,15 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   participants,
   waves,
   categories,
+  profiles,
 }) => {
   const [printMode, setPrintMode] = useState<'bibs' | 'paper_sheet' | 'waves' | 'participants'>('paper_sheet');
 
+  const [excludedRounds, setExcludedRounds] = useState<number[]>([]);
+  const roundsFor = (p: Participant) => profiles.find(profile => profile.id === p.raceProfileId)?.legs.filter(leg => leg.type === 'SHOOT') ?? [];
+  const roundCount = Math.max(0, ...profiles.map(profile => profile.legs.filter(leg => leg.type === 'SHOOT').length));
+  const allRounds = Array.from({ length: roundCount }, (_, i) => i + 1);
+  const selectedRounds = allRounds.filter(round => !excludedRounds.includes(round));
   if (!isOpen) return null;
 
   const categoryMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
@@ -40,12 +49,10 @@ export const PrintModal: React.FC<PrintModalProps> = ({
     let rows: string[] = [];
 
     if (printMode === 'paper_sheet') {
-      headers = 'Startnummer,Naam,Categorie,Wave,Geplande Start,Schieten 1 (Hits/Miss),Schieten 2 (Hits/Miss),Finish Tijd,Opmerkingen\n';
-      rows = sortedParticipants.map((p) => {
-        const cat = categoryMap.get(p.categoryId)?.name || '';
-        const wave = p.waveId ? waveMap.get(p.waveId) : undefined;
-        return `${p.bibNumber || ''},"${p.firstName} ${p.lastName}",${cat},"${wave?.name || ''}",${wave?.scheduledStartTime || ''},[  / 5 ],[  / 5 ],:,`;
-      });
+      const cell = (value: unknown) => '"' + String(value ?? '').replace(/"/g, '""') + '"';
+      headers = ['Startnummer', 'Naam', 'Categorie', 'Startgroep', 'Geplande Start', ...selectedRounds.map(r => `Schieten ${r} (treffers/totaal)`), 'Finishtijd', 'Opmerkingen'].map(cell).join(',') + '\n';
+      rows = sortedParticipants.map(p => [p.bibNumber, `${p.firstName} ${p.lastName}`, categoryMap.get(p.categoryId)?.name, waveMap.get(p.waveId)?.name, waveMap.get(p.waveId)?.scheduledStartTime,
+        ...selectedRounds.map(r => { const leg = roundsFor(p)[r - 1]; return leg ? `[ / ${leg.shotCount ?? 5} ]` : '-'; }), '', ''].map(cell).join(','));
     } else {
       headers = 'Startnummer,Voornaam,Achternaam,Geslacht,Categorie,Wave,Club,Stamhoofd ID\n';
       rows = sortedParticipants.map((p) => {
@@ -59,9 +66,9 @@ export const PrintModal: React.FC<PrintModalProps> = ({
     downloadCsvFile(csvContent, `biathlon_${printMode}_${Date.now()}.csv`);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-3 print:p-0 print:bg-white print:fixed print:inset-0">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col text-slate-100 overflow-hidden print:border-none print:shadow-none print:max-w-none print:max-h-none print:w-full print:bg-white print:text-black">
+  return createPortal(
+    <div className="race-print-dialog fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-3 print:p-0 print:bg-white print:static print:block">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col text-slate-100 overflow-hidden print:border-none print:shadow-none print:max-w-none print:max-h-none print:w-full print:bg-white print:text-black print:overflow-visible">
         {/* Screen Controls Header (hidden in print) */}
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-850 print:hidden">
           <div className="flex items-center gap-3">
@@ -108,7 +115,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                 : 'text-slate-400 hover:bg-slate-800'
             }`}
           >
-            📋 Papieren Noodfiche (Req 82)
+            📋 Papieren Noodfiche
           </button>
           <button
             onClick={() => setPrintMode('bibs')}
@@ -118,7 +125,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                 : 'text-slate-400 hover:bg-slate-800'
             }`}
           >
-            🏷️ Startnummers met QR (Req 13)
+            🏷️ Startnummers met QR
           </button>
           <button
             onClick={() => setPrintMode('waves')}
@@ -132,16 +139,22 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           </button>
         </div>
 
+        {printMode === 'paper_sheet' && <fieldset className="px-6 py-3 border-b border-slate-800 print:hidden text-xs">
+          <legend className="font-bold text-white">Schietproeven op het formulier</legend>
+          <div className="flex flex-wrap gap-3 mt-2">{allRounds.map(round => <label key={round} className="flex items-center gap-2"><input type="checkbox" className="accent-amber-500" checked={!excludedRounds.includes(round)} onChange={e => setExcludedRounds(current => e.target.checked ? current.filter(r => r !== round) : [...current, round])} />Schieten {round}</label>)}
+          <button type="button" className="text-amber-300 underline" onClick={() => setExcludedRounds([])}>Alle selecteren</button></div>
+          <p className="text-slate-400 mt-2">Het aantal schoten volgt het wedstrijdprofiel van de deelnemer. Een streepje betekent dat die schietproef niet van toepassing is.{!roundCount && ' Voeg eerst schietproeven toe bij Wedstrijdinhoud.'}</p>
+        </fieldset>}
         {/* Printable Area */}
         <div className="p-6 overflow-y-auto print:overflow-visible print:p-4 text-xs font-sans">
           {/* Printable Header */}
           <div className="border-b-2 border-slate-700 pb-3 mb-4 flex items-center justify-between text-slate-800 print:text-black">
             <div>
               <h1 className="text-xl font-bold text-white print:text-black uppercase tracking-wider">
-                {event?.name || 'Run Biathlon De Haan'}
+                {event?.name || 'Biathlon Tijdregistratie'}
               </h1>
               <p className="text-xs text-slate-400 print:text-slate-600">
-                Locatie: {event?.location || 'De Haan'} • Datum: {event?.date || '2026-09-19'} • Document:{' '}
+                Locatie: {event?.location || 'Locatie nog niet ingesteld'} • Datum: {event?.date || 'Datum nog niet ingesteld'} • Document:{' '}
                 {printMode.toUpperCase()}
               </p>
             </div>
@@ -151,7 +164,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             </div>
           </div>
 
-          {/* Mode 1: Paper Emergency Sheet (Req 82) */}
+          {/* Mode 1: Paper Emergency Sheet */}
           {printMode === 'paper_sheet' && (
             <div>
               <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 text-amber-300 print:hidden text-xs rounded">
@@ -165,8 +178,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                     <th className="p-1.5 border border-slate-700 print:border-black">Categorie</th>
                     <th className="p-1.5 border border-slate-700 print:border-black">Startgroep</th>
                     <th className="p-1.5 border border-slate-700 print:border-black w-24">Geplande Start</th>
-                    <th className="p-1.5 border border-slate-700 print:border-black w-28 text-center">Schieten 1 (0-5)</th>
-                    <th className="p-1.5 border border-slate-700 print:border-black w-28 text-center">Schieten 2 (0-5)</th>
+                    {selectedRounds.map(round => <th key={round} className="p-1.5 border border-slate-700 print:border-black text-center">Schieten {round}</th>)}
                     <th className="p-1.5 border border-slate-700 print:border-black w-28 text-center">Finishtijd</th>
                     <th className="p-1.5 border border-slate-700 print:border-black">Handtekening / Notitie</th>
                   </tr>
@@ -188,12 +200,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                         <td className="p-1.5 border border-slate-700 print:border-black font-mono text-[11px]">
                           {wave?.scheduledStartTime || '-'}
                         </td>
-                        <td className="p-1.5 border border-slate-700 print:border-black text-center font-mono text-slate-500 print:text-black">
-                          ○ ○ ○ ○ ○
-                        </td>
-                        <td className="p-1.5 border border-slate-700 print:border-black text-center font-mono text-slate-500 print:text-black">
-                          ○ ○ ○ ○ ○
-                        </td>
+                        {selectedRounds.map(round => { const leg = roundsFor(p)[round - 1]; return <td key={round} className="p-1.5 border border-slate-700 print:border-black text-center font-mono text-slate-400 print:text-black">{leg ? `___ / ${leg.shotCount ?? 5}` : '-'}</td>; })}
                         <td className="p-1.5 border border-slate-700 print:border-black text-center font-mono text-slate-400 print:text-black">
                           ___:___:___
                         </td>
@@ -206,10 +213,10 @@ export const PrintModal: React.FC<PrintModalProps> = ({
             </div>
           )}
 
-          {/* Mode 2: Bib cards with QR token (Req 13) */}
+          {/* Mode 2: Bib cards with QR token */}
           {printMode === 'bibs' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-              {sortedParticipants.slice(0, 30).map((p) => {
+              {sortedParticipants.map((p) => {
                 const cat = categoryMap.get(p.categoryId)?.name || '-';
                 const wave = p.waveId ? waveMap.get(p.waveId)?.name || '-' : '-';
                 return (
@@ -218,7 +225,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                     className="p-5 border-2 border-slate-700 print:border-black rounded-xl bg-slate-800/40 print:bg-white text-center flex flex-col justify-between break-inside-avoid"
                   >
                     <div className="text-[10px] font-bold text-slate-400 print:text-slate-600 uppercase tracking-widest mb-1">
-                      RUN BIATHLON DE HAAN 2026
+                      {event?.name || 'Wedstrijd'}
                     </div>
                     <div className="text-6xl font-black font-mono tracking-tight text-white print:text-black py-2">
                       {p.bibNumber || '---'}
@@ -237,8 +244,8 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                           </div>
                         )}
                       </div>
-                      <div className="w-14 h-14 bg-white p-1 rounded border border-slate-300 shrink-0 flex flex-col items-center justify-center">
-                        <QrCode className="w-10 h-10 text-slate-900" />
+                      <div className="w-28 h-28 bg-white p-1 rounded border border-slate-300 shrink-0 flex flex-col items-center justify-center">
+                        {p.stamhoofdTicketUrl || p.stamhoofdTicketSecret || p.bibNumber ? <RealQrCode value={p.stamhoofdTicketUrl || p.stamhoofdTicketSecret || String(p.bibNumber)} size={96} /> : <span>Geen code</span>}
                         <span className="text-[8px] font-mono text-slate-900">#{(p.bibNumber || 0).toString().padStart(3, '0')}</span>
                       </div>
                     </div>
@@ -294,6 +301,6 @@ export const PrintModal: React.FC<PrintModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 };

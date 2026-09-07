@@ -1,6 +1,12 @@
+const defaultStamhoofdShop = {
+  id: '603e808b-9ac6-47cb-933c-bf7b4c66f357',
+  organizationId: 'af201d93-dcd6-4cfe-bfc7-ed3d2a209236',
+  domain: 'shop.kidsatletiekdehaan.be',
+  name: 'Run Biathlon De Haan 19 sept. 2026',
+};
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultStamhoofdShop, loadDirectStamhoofd, searchDirectShops } from '../src/services/stamhoofdDirect';
+import { loadDirectStamhoofd, searchDirectShops } from '../src/services/stamhoofdDirect';
 
 test('direct HTML-style requests use matching headers, pagination and only the supplied key', async () => {
   const original = globalThis.fetch;

@@ -1,3 +1,4 @@
+import { raceClock } from './raceClock';
 import { db } from '../db/dexieDb';
 import type { RaceOperation, ShootingResult, TimingRecord } from '../types';
 
@@ -22,7 +23,10 @@ const defaultConfig: SyncConfig = {
 class SyncService {
   private isSimulatedOffline = false;
   private listeners: Array<() => void> = [];
-  private clockOffsetMs = 0;
+  private clockCheck?: Promise<number>;
+  private syncing?: Promise<{ syncedCount: number; error?: string }>;
+  private lastError?: string;
+  private lastSyncAt?: string;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -30,7 +34,8 @@ class SyncService {
       window.addEventListener('offline', () => this.triggerChange());
 
       // Periodic check of clock sync against reference
-      this.checkClockOffset();
+      void this.checkClockOffset();
+      window.setInterval(() => { void this.checkClockOffset(); }, 60000);
     }
   }
 
@@ -68,6 +73,8 @@ class SyncService {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(normalized));
     }
+    raceClock.reset(normalized.projectUrl);
+    if (normalized.enabled) void this.checkClockOffset();
     this.triggerChange();
   }
 
@@ -107,22 +114,29 @@ class SyncService {
     this.triggerChange();
   }
 
-  public getClockOffsetMs(): number {
-    return this.clockOffsetMs;
+  public getClockOffsetMs(): number { return raceClock.status().offsetMs; }
+  public getClockStatus() { return raceClock.status(); }
+  public getSyncHealth() { return { lastError: this.lastError, lastSyncAt: this.lastSyncAt }; }
+  public checkClockOffset(): Promise<number> {
+    if (this.clockCheck) return this.clockCheck;
+    const config = this.getConfig();
+    if (!config.enabled || !config.projectUrl || !config.anonKey || this.isSimulatedOffline) return Promise.resolve(raceClock.status().offsetMs);
+    this.clockCheck = raceClock.synchronize(config.projectUrl, async () => {
+      const response = await fetch(`${config.projectUrl}/rest/v1/rpc/race_server_time`, {
+        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(3000),
+        headers: { apikey: config.anonKey, Authorization: `Bearer ${config.anonKey}`, 'Content-Type': 'application/json' }, body: '{}',
+      });
+      if (!response.ok) throw new Error(`Tijdserver HTTP ${response.status}. Installeer supabase/reliability.sql in dit project.`);
+      return Number(await response.json());
+    }).then(status => { this.triggerChange(); return status.offsetMs; }).finally(() => { this.clockCheck = undefined; });
+    return this.clockCheck;
   }
 
-  public async checkClockOffset(): Promise<number> {
-    try {
-      const tStart = performance.now();
-      // Use local timestamp estimation or public time endpoint if online
-      const simulatedServerTime = Date.now() + 150; // slight offset for realistic testing
-      const tEnd = performance.now();
-      const rtt = tEnd - tStart;
-      this.clockOffsetMs = Math.round(simulatedServerTime - (Date.now() + rtt / 2));
-      return this.clockOffsetMs;
-    } catch {
-      return 0;
-    }
+  private async refreshParticipantStatus(participantId: string) {
+    const p = await db.participants.get(participantId);
+    if (!p || ['DNS', 'DNF', 'DSQ'].includes(p.status)) return;
+    const timing = (await db.timingRecords.toArray()).filter(t => !t.isReversed && (t.participantId === p.id || t.bibNumber === p.bibNumber));
+    await db.participants.update(p.id, { status: timing.some(t => t.type === 'FINISH') ? 'FINISHED' : timing.some(t => t.type === 'START') ? 'STARTED' : 'READY' });
   }
 
   public async getPendingCount(): Promise<number> {
@@ -148,20 +162,24 @@ class SyncService {
         type: operation.type === 'START_RECORDED' ? 'START' : 'FINISH',
         timestamp: String(payload.timestamp || operation.deviceTimestamp),
         monotonicMs: Number(payload.monotonicMs || 0),
-        clockOffsetMs: 0,
+        clockOffsetMs: Number(payload.clockOffsetMs || 0),
+        clockSource: payload.clockSource, clockUncertaintyMs: payload.clockUncertaintyMs,
+        clockSyncedAt: payload.clockSyncedAt, localTimestamp: payload.localTimestamp,
         deviceId: operation.deviceId,
         operatorId: operation.operatorId,
         isUnknownBib: Boolean(payload.isUnknownBib),
         isConfirmed: true,
         syncStatus: 'SYNCED',
       };
+      // A revoke can arrive before its original record (same upload batch or offline devices).
+      const revokes = (await db.operations.toArray()).filter(op => op.eventId === record.eventId && ((op.type === 'RECORD_UNDO' && op.payload.recordId === record.id) || (op.type === 'CONFLICT_RESOLVED' && op.payload.discardedRecordId === record.id)));
+      if (revokes.length) { record.isReversed = true; record.reversedReason = 'Herroepen door gesynchroniseerde correctie'; }
+      const participant = record.participantId ? await db.participants.get(record.participantId) : undefined;
+      if (participant?.bibNumber) record.bibNumber = participant.bibNumber;
       await db.timingRecords.put(record);
-      if (operation.participantId) {
-        await db.participants.update(operation.participantId, {
-          status: record.type === 'START' ? 'STARTED' : 'FINISHED',
-          updatedAt: new Date().toISOString(),
-        });
-      }
+      const duplicates = await db.timingRecords.where({ bibNumber: record.bibNumber, type: record.type }).filter(t => t.eventId === record.eventId && !t.isReversed && t.id !== record.id).toArray();
+      for (const other of record.isReversed ? [] : duplicates) await db.conflicts.put({ id: `conflict-${[other.id, record.id].sort().join('-')}`, eventId: record.eventId, participantId: record.participantId ?? '', bibNumber: record.bibNumber, type: record.type === 'START' ? 'START_CONFLICT' : 'FINISH_CONFLICT', recordA: other, recordB: record, createdAt: operation.deviceTimestamp });
+      if (operation.participantId) await this.refreshParticipantStatus(operation.participantId);
       return;
     }
 
@@ -181,6 +199,7 @@ class SyncService {
         hits: Number(payload.hits || 0),
         misses: Number(payload.misses || 0),
         isCorrection: Boolean(payload.isCorrection),
+        supersedesIds: Array.isArray(payload.supersedesIds) ? payload.supersedesIds : undefined,
         correctionReason: payload.correctionReason,
         operatorId: operation.operatorId,
         deviceId: operation.deviceId,
@@ -198,17 +217,37 @@ class SyncService {
       return;
     }
 
+    if ((operation.type === 'PARTICIPANT_UPDATED' || operation.type === 'STATUS_CHANGED' || operation.type === 'BIB_ASSIGNED') && operation.participantId) {
+      const patch = payload.updates || payload;
+      const allowed = Object.fromEntries(['firstName','lastName','birthDate','gender','categoryId','raceProfileId','waveId','bibNumber','status','statusReason','penaltyLapsCompleted'].filter(key => key in patch).map(key => [key, patch[key]]));
+      await db.participants.update(operation.participantId, allowed);
+      if (allowed.bibNumber) {
+        await db.timingRecords.where('participantId').equals(operation.participantId).modify({ bibNumber: allowed.bibNumber });
+        await db.shootingResults.where('participantId').equals(operation.participantId).modify({ bibNumber: allowed.bibNumber });
+      }
+      return;
+    }
+
+    if (operation.type === 'CONFLICT_RESOLVED' && payload.discardedRecordId) {
+      await db.timingRecords.update(payload.discardedRecordId, { isReversed: true, reversedReason: payload.reason });
+      await db.conflicts.filter(c => c.id === payload.conflictId || (c.recordA.id === payload.discardedRecordId && c.recordB.id === payload.chosenRecordId) || (c.recordB.id === payload.discardedRecordId && c.recordA.id === payload.chosenRecordId)).modify({ resolvedAt: operation.deviceTimestamp, resolvedReason: payload.reason, resolvedWinner: payload.selectedWinner });
+      if (operation.participantId) await this.refreshParticipantStatus(operation.participantId);
+      return;
+    }
     if (operation.type === 'RECORD_UNDO' && payload.recordId) {
       await db.timingRecords.update(String(payload.recordId), {
         isReversed: true,
         reversedReason: String(payload.reason || 'Online undo'),
       });
+      if (operation.participantId) await this.refreshParticipantStatus(operation.participantId);
     }
   }
 
   private async pullRemoteOperations(config: SyncConfig): Promise<number> {
+    let applied = 0;
+    for (let offset = 0; ; offset += 500) {
     const response = await fetch(
-      `${config.projectUrl}/rest/v1/race_operations?event_id=eq.${encodeURIComponent(config.eventId)}&order=device_timestamp.asc&limit=1000`,
+      `${config.projectUrl}/rest/v1/race_operations?event_id=eq.${encodeURIComponent(config.eventId)}&order=created_at.asc,operation_id.asc&limit=500&offset=${offset}`,
       {
         headers: {
           apikey: config.anonKey,
@@ -216,12 +255,9 @@ class SyncService {
         },
       }
     );
-    if (!response.ok) {
-      return 0;
-    }
+    if (!response.ok) throw new Error(`Download synchronisatie mislukt (HTTP ${response.status}).`);
 
     const rows = (await response.json()) as Array<Record<string, any>>;
-    let applied = 0;
     for (const row of rows) {
       if (String(row.event_id) !== config.eventId) continue;
       const operation: RaceOperation = {
@@ -238,7 +274,7 @@ class SyncService {
         revision: Number(row.revision || 1),
       };
 
-      await db.transaction('rw', [db.events, db.operations, db.timingRecords, db.shootingResults, db.participants, db.waves], async () => {
+      await db.transaction('rw', [db.events, db.operations, db.timingRecords, db.shootingResults, db.participants, db.waves, db.conflicts], async () => {
         // A reset can finish while the HTTP request is still in flight. Check
         // inside the transaction so old operations cannot repopulate a new event.
         if (!this.isCurrentConnection(config) || !await db.events.get(config.eventId)) return;
@@ -248,6 +284,8 @@ class SyncService {
         applied += 1;
       });
     }
+    if (rows.length < 500 || !this.isCurrentConnection(config)) break;
+    }
     return applied;
   }
 
@@ -256,7 +294,17 @@ class SyncService {
     return current.enabled && current.eventId === config.eventId && current.projectUrl === config.projectUrl && current.anonKey === config.anonKey;
   }
 
-  public async syncNow(): Promise<{ syncedCount: number; error?: string }> {
+  public syncNow(): Promise<{ syncedCount: number; error?: string }> {
+    if (this.syncing) return this.syncing;
+    this.syncing = this.performSync().then(result => {
+      this.lastError = result.error;
+      if (!result.error) this.lastSyncAt = raceClock.nowISO();
+      this.triggerChange();
+      return result;
+    }).finally(() => { this.syncing = undefined; });
+    return this.syncing;
+  }
+  private async performSync(): Promise<{ syncedCount: number; error?: string }> {
     if (this.isSimulatedOffline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
       return { syncedCount: 0, error: 'Apparaat is offline' };
     }

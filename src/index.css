@@ -1,1 +1,8 @@
 @import "tailwindcss";
+
+@media print {
+  body:has(.race-print-dialog) > :not(.race-print-dialog) { display: none !important; }
+  .race-print-dialog, .race-print-dialog > div { display: block !important; position: static !important; max-height: none !important; overflow: visible !important; }
+  .race-print-dialog thead { display: table-header-group; }
+  .race-print-dialog tr { break-inside: avoid; }
+}

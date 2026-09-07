@@ -3,12 +3,12 @@ import type { StamhoofdConfig, StamhoofdRegistration, StamhoofdSnapshot } from '
 import { db } from '../db/dexieDb';
 import { autoDetectMapping } from './stamhoofdParser';
 import { operationService, generateUUID } from './operationService';
-import { getDefaultCategoryProfileId } from './categoryProfileService';
+import { classifyParticipant } from './participantClassification';
 
 export const importFields: Record<string, string> = {
-  firstName: 'Voornaam', lastName: 'Achternaam', birthDate: 'Geboortedatum', product: 'Product', distance: 'Afstand', orderNumber: 'Bestelnummer', paymentStatus: 'Betaalstatus', email: 'E-mail besteller', phone: 'Telefoon besteller', ticketId: 'Stamhoofd ticket-ID', ticketSecret: 'Ticket secret', ticketUrl: 'Ticket URL', scannedAt: 'Ticket scannedAt', scannedBy: 'Ticket scannedBy',
+  firstName: 'Voornaam', lastName: 'Achternaam', birthDate: 'Geboortedatum', gender: 'Geslacht', product: 'Artikel', distance: 'Afstand', orderNumber: 'Bestelnummer', paymentStatus: 'Betaalstatus', email: 'E-mail besteller', phone: 'Telefoon besteller', ticketId: 'Stamhoofd ticket-ID', ticketSecret: 'Ticket secret', ticketUrl: 'Ticket URL', scannedAt: 'Ticket scannedAt', scannedBy: 'Ticket scannedBy',
 };
-export const defaultFields = ['firstName', 'lastName', 'birthDate', 'product', 'distance', 'orderNumber', 'paymentStatus', 'ticketId', 'ticketSecret', 'ticketUrl', 'scannedAt', 'scannedBy'];
+export const defaultFields = ['firstName', 'lastName', 'birthDate', 'gender', 'product', 'distance', 'orderNumber', 'paymentStatus', 'ticketId', 'ticketSecret', 'ticketUrl', 'scannedAt', 'scannedBy'];
 export function textValue(value: any): string {
   if (typeof value === 'string' || typeof value === 'number') return String(value);
   if (value && typeof value === 'object') return textValue(value.nl ?? value.name ?? value.firstName ?? '');
@@ -78,14 +78,14 @@ export function normalize(snapshot: StamhoofdSnapshot, config: StamhoofdConfig):
     if (!answer('firstName') || !answer('lastName')) errors.push('Voornaam of achternaam ontbreekt; controleer veldkoppeling.');
     const payment = paymentStatus(order);
     const raw: StamhoofdRegistration = {
-      firstName: answer('firstName'), lastName: answer('lastName'), birthDate: answer('birthDate'),
+      firstName: answer('firstName'), lastName: answer('lastName'), birthDate: answer('birthDate'), gender: ({ man: 'M', male: 'M', m: 'M', vrouw: 'F', female: 'F', v: 'F', f: 'F', x: 'X' } as Record<string, string>)[answer('gender').toLowerCase()] ?? '',
       product: textValue(product.name), distance: textValue(product.name).match(/\d+(?:[.,]\d+)?\s*km/i)?.[0] ?? '',
       orderNumber: textValue(order.number), paymentStatus: payment,
       email: textValue(order.data?.customer?.email ?? order.data?.email), phone: textValue(order.data?.customer?.phone ?? order.data?.phone),
       ticketId: ticket?.id ?? '', ticketSecret: ticket?.secret ?? '', ticketUrl: ticket?.secret ? ticketUrl(snapshot.shop.domain, ticket.secret) : '',
       scannedAt: ticket?.scannedAt ? new Date(ticket.scannedAt).toISOString() : '', scannedBy: textValue(ticket?.scannedBy),
     };
-    const registration: StamhoofdRegistration = {};
+    const registration: StamhoofdRegistration = { product: raw.product };
     for (const key of config.fields) if (key in importFields) registration[key] = raw[key];
     const customFields: Record<string, string> = {};
     for (const a of answers) {
@@ -117,7 +117,7 @@ export function previewSync(snapshot: StamhoofdSnapshot, config: StamhoofdConfig
 export function mergeRegistration(existing: Participant | undefined, row: SyncRow, config: StamhoofdConfig, now: string, categoryId = '', raceProfileId = ''): Participant {
   const next: Participant = existing ? { ...existing } : { id: generateUUID(), firstName: '', lastName: '', status: 'REGISTERED', categoryId, raceProfileId, createdAt: now, updatedAt: now };
   const baseline: Record<string, string> = { ...existing?.stamhoofdBaseline };
-  for (const key of ['firstName', 'lastName', 'birthDate', 'email', 'phone'] as const) {
+  for (const key of ['firstName', 'lastName', 'birthDate', 'email', 'phone', 'gender'] as const) {
     if (row.inactive) continue;
     const value = row.registration[key];
     if (typeof value !== 'string') {
@@ -125,10 +125,13 @@ export function mergeRegistration(existing: Participant | undefined, row: SyncRo
       delete baseline[key];
       continue;
     }
-    if (!existing || (existing[key] ?? '') === (baseline[key] ?? '')) next[key] = value;
+    if (!existing || (existing[key] ?? '') === (baseline[key] ?? '')) {
+      if (key === 'gender') next.gender = value === 'M' || value === 'F' || value === 'X' ? value : undefined;
+      else next[key] = value;
+    }
     baseline[key] = value;
   }
-  return { ...next, stamhoofdEventId: config.id, stamhoofdOrganizationId: config.shop.organizationId, stamhoofdWebshopId: config.shop.id,
+  return { ...next, article: String(row.registration.product ?? existing?.article ?? ''), stamhoofdEventId: config.id, stamhoofdOrganizationId: config.shop.organizationId, stamhoofdWebshopId: config.shop.id,
     stamhoofdItemId: row.itemId, stamhoofdOrderId: row.orderId,
     stamhoofdTicketId: row.registration.ticketId as string | undefined,
     stamhoofdTicketSecret: row.registration.ticketSecret as string | undefined,
@@ -137,16 +140,25 @@ export function mergeRegistration(existing: Participant | undefined, row: SyncRo
     stamhoofdRegistration: row.registration, stamhoofdBaseline: baseline };
 }
 export async function applySync(snapshot: StamhoofdSnapshot, config: StamhoofdConfig, approvedIds: string[]) {
-  return db.transaction('rw', [db.participants, db.categories, db.events, db.stamhoofdConfigs, db.auditLogs], async () => {
-    if (!await db.events.get(config.id)) throw new Error('Het lokale evenement bestaat niet meer.');
+  return db.transaction('rw', [db.participants, db.categories, db.raceProfiles, db.events, db.stamhoofdConfigs, db.auditLogs], async () => {
+    const event = await db.events.get(config.id);
+    if (!event) throw new Error('Het lokale evenement bestaat niet meer.');
     const { rows, warnings } = previewSync(snapshot, config, await db.participants.toArray());
     const now = new Date().toISOString();
+    const categories = await db.categories.toArray();
+    const profiles = await db.raceProfiles.toArray();
     const applied: SyncRow[] = [];
     for (const row of rows) {
       if (!approvedIds.includes(row.itemId) || (row.errors.length && !row.inactive) || (row.inactive && !row.existing)) continue;
-      const category = await db.categories.get(config.productCategories[row.productId] || '');
-      if (!row.existing && (!category || !getDefaultCategoryProfileId(category))) throw new Error('Koppel elk te importeren product aan een categorie met wedstrijdprofiel.');
-      await db.participants.put(mergeRegistration(row.existing, row, config, now, category?.id, getDefaultCategoryProfileId(category)));
+      const participant = mergeRegistration(row.existing, row, config, now);
+      if (!row.existing) {
+        const assignment = classifyParticipant(participant, event.date, categories, profiles);
+        participant.categoryId = assignment.categoryId;
+        participant.raceProfileId = assignment.raceProfileId;
+        participant.categoryAssignment = 'automatic';
+        participant.profileAssignment = 'automatic';
+      }
+      await db.participants.put(participant);
       applied.push(row);
     }
     const report = { webshopId: snapshot.shop.id, orders: snapshot.orders.length, participants: rows.length, applied: applied.length, new: applied.filter(r => r.change === 'nieuw').length, changed: applied.filter(r => r.change === 'gewijzigd').length, cancelled: applied.filter(r => r.inactive).length, withSecret: rows.filter(r => r.ticket?.secret).length, withoutSecret: rows.filter(r => !r.ticket?.secret).length, errors: [...warnings, ...rows.flatMap(r => r.errors)] };

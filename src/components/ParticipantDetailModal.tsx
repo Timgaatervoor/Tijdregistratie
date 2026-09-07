@@ -6,7 +6,6 @@ import { operationService, generateUUID } from '../services/operationService';
 import { formatLocalTime } from '../services/timingEngine';
 import {
   getCategoryProfileIds,
-  getDefaultCategoryProfileId,
   getProfilesForCategory,
 } from '../services/categoryProfileService';
 
@@ -50,6 +49,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [editLastName, setEditLastName] = useState('');
   const [editBib, setEditBib] = useState('');
   const [editGender, setEditGender] = useState<'M' | 'F' | 'X'>('M');
+  const [editBirthDate, setEditBirthDate] = useState('');
+  const [manualCategory, setManualCategory] = useState(false);
+  const [manualProfile, setManualProfile] = useState(false);
   const [editCategoryId, setEditCategoryId] = useState('');
   const [editProfileId, setEditProfileId] = useState('');
   const [editWaveId, setEditWaveId] = useState('');
@@ -98,9 +100,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setEditFirstName(p.firstName || '');
     setEditLastName(p.lastName || '');
     setEditBib(p.bibNumber ? String(p.bibNumber) : '');
-    setEditGender(p.gender || 'M');
+    setEditGender(p.gender || 'X');
     setEditCategoryId(p.categoryId || '');
-    setEditProfileId(p.raceProfileId || getDefaultCategoryProfileId(categories.find((category) => category.id === p.categoryId)));
+    setEditBirthDate(p.birthDate || '');
+    setManualCategory(p.categoryAssignment === 'manual');
+    setManualProfile(p.profileAssignment === 'manual');
+    setEditProfileId(p.raceProfileId || '');
     setEditWaveId(p.waveId || '');
     setEditClub(p.club || '');
     setEditTeam(p.team || '');
@@ -206,13 +211,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     }
 
     const selectedCategory = categories.find((category) => category.id === editCategoryId);
-    const selectedProfileId = editProfileId || getDefaultCategoryProfileId(selectedCategory);
+    const selectedProfileId = editProfileId;
     const allowedProfileIds = getCategoryProfileIds(selectedCategory);
-    if (!selectedProfileId) {
-      setEditError('Kies een wedstrijdprofiel voor deze deelnemer.');
-      return;
-    }
-    if (allowedProfileIds.length > 0 && !allowedProfileIds.includes(selectedProfileId)) {
+    if (selectedProfileId && allowedProfileIds.length > 0 && !allowedProfileIds.includes(selectedProfileId)) {
       setEditError('Dit wedstrijdprofiel is niet gekoppeld aan de gekozen leeftijdscategorie.');
       return;
     }
@@ -257,8 +258,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         lastName: editLastName.trim(),
         bibNumber: parsedBib,
         gender: editGender,
+        birthDate: editBirthDate.trim() || undefined,
         categoryId: editCategoryId,
         raceProfileId: selectedProfileId,
+        categoryAssignment: manualCategory ? 'manual' : 'automatic',
+        profileAssignment: manualProfile ? 'manual' : 'automatic',
         waveId: editWaveId || undefined,
         club: editClub.trim() || undefined,
         team: editTeam.trim() || undefined,
@@ -676,6 +680,13 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
               </div>
             </div>
 
+            <div className="space-y-2 text-xs">
+              <p>Artikel: {currentParticipant.article || String(currentParticipant.stamhoofdRegistration?.product ?? 'Geen')}</p>
+              <label className="block">Geboortedatum (dd/mm/jjjj of jjjj-mm-dd)<input value={editBirthDate} onChange={e => setEditBirthDate(e.target.value)} className="block w-full bg-slate-800 rounded p-2" /></label>
+              <label className="block"><input type="checkbox" checked={manualCategory} onChange={e => setManualCategory(e.target.checked)} /> Leeftijdscategorie handmatig vastzetten</label>
+              <label className="block"><input type="checkbox" checked={manualProfile} onChange={e => setManualProfile(e.target.checked)} /> Wedstrijdprofiel handmatig vastzetten</label>
+              <p>Uitgevinkt: de opgeslagen regels kunnen deze indeling aanpassen via Artikel + leeftijdscategorie toepassen.</p>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-slate-300 font-semibold block mb-1">
@@ -686,10 +697,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   onChange={(e) => {
                     const nextCategoryId = e.target.value;
                     setEditCategoryId(nextCategoryId);
-                    setEditProfileId(getDefaultCategoryProfileId(categories.find((category) => category.id === nextCategoryId)));
+                    setManualCategory(true);
                   }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 >
+                  <option value="">Nog niet ingedeeld</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.code})
@@ -737,7 +749,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </label>
                 <select
                   value={editProfileId}
-                  onChange={(e) => setEditProfileId(e.target.value)}
+                  onChange={(e) => { setEditProfileId(e.target.value); setManualProfile(true); }}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
                 >
                   <option value="">Kies een toegestaan profiel...</option>

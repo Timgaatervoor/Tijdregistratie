@@ -99,7 +99,8 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       const matchClub = (p.club || '').toLowerCase().includes(q);
       const matchExt = (p.externalId || '').toLowerCase().includes(q);
       const matchTicket = (p.stamhoofdTicketSecret || '').toLowerCase().includes(q) || (!!p.stamhoofdTicketUrl && p.stamhoofdTicketUrl.toLowerCase() === q);
-      if (!matchName && !matchBib && !matchClub && !matchExt && !matchTicket) return false;
+      const matchArticle = (p.article ?? String(p.stamhoofdRegistration?.product ?? '')).toLowerCase().includes(q);
+      if (!matchArticle && !matchName && !matchBib && !matchClub && !matchExt && !matchTicket) return false;
     }
     return true;
   });
@@ -651,6 +652,9 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                       <td className="py-3 px-4">
                         <span className="font-bold text-white block">
                           {p.firstName} {p.lastName}
+                          {(p.article || p.stamhoofdRegistration?.product) && <span className="block text-xs text-slate-400">Artikel: {p.article || String(p.stamhoofdRegistration?.product)}</span>}
+                          <span className="block text-xs text-slate-400">Profiel: {profiles.find(profile => profile.id === p.raceProfileId)?.name || 'Nog niet gekoppeld'}</span>
+                          {(!p.categoryId || !p.raceProfileId) && <span className="block text-xs text-amber-300">Indeling controleren</span>}
                           {p.stamhoofdInactive && <span className="block text-xs text-amber-300">Stamhoofd: geannuleerd/inactief</span>}
                         </span>
                         {p.email && <span className="text-[11px] text-slate-500">{p.email}</span>}

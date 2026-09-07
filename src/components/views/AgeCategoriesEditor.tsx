@@ -27,22 +27,18 @@ export const AgeCategoriesEditor: React.FC<AgeCategoriesEditorProps> = ({
   const [gender, setGender] = useState<Category['gender']>('ALL');
   const [minAge, setMinAge] = useState(1);
   const [maxAge, setMaxAge] = useState<number | ''>('');
-  const [profileIds, setProfileIds] = useState<string[]>(() => {
-    const defaultProfileId = profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id;
-    return defaultProfileId ? [defaultProfileId] : [];
-  });
+  const [profileIds, setProfileIds] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const resetForm = () => {
-    const defaultProfileId = profiles.find((profile) => profile.isDefault)?.id || profiles[0]?.id;
     setCategoryId(newCategoryId);
     setName('');
     setCode('');
     setGender('ALL');
     setMinAge(1);
     setMaxAge('');
-    setProfileIds(defaultProfileId ? [defaultProfileId] : []);
+    setProfileIds([]);
     setMessage(null);
     setError(null);
   };
@@ -68,10 +64,6 @@ export const AgeCategoriesEditor: React.FC<AgeCategoriesEditorProps> = ({
       setError('Naam en code zijn verplicht.');
       return;
     }
-    if (profiles.length > 0 && profileIds.length === 0) {
-      setError('Selecteer minstens één wedstrijdprofiel.');
-      return;
-    }
     if (maxAge !== '' && Number(maxAge) < minAge) {
       setError('De maximumleeftijd moet gelijk aan of hoger dan de minimumleeftijd zijn.');
       return;
@@ -94,11 +86,7 @@ export const AgeCategoriesEditor: React.FC<AgeCategoriesEditorProps> = ({
         raceProfileId: uniqueProfileIds[0],
       });
 
-      await db.participants.where('categoryId').equals(id).modify((participant) => {
-        if (uniqueProfileIds.length > 0 && !uniqueProfileIds.includes(participant.raceProfileId)) {
-          participant.raceProfileId = uniqueProfileIds[0];
-        }
-      });
+
     });
 
     await operationService.logAudit('CATEGORY_UPDATED', `Categorie "${name.trim()}" opgeslagen.`);
@@ -129,7 +117,7 @@ export const AgeCategoriesEditor: React.FC<AgeCategoriesEditorProps> = ({
           </span>
           <h3 className="text-xl font-black text-white mt-1">Leeftijdscategorieën</h3>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            Maak en wijzig de categorieën hier. De koppeling met één of meer wedstrijdprofielen kan hier én bij het profiel ingesteld worden.
+            Maak en wijzig de categorieën hier. Leeftijd = evenementjaar min geboortejaar: de leeftijd op 31 december. Koppel de toegestane profielen hier of bij het wedstrijdprofiel.
           </p>
         </div>
         <button
@@ -206,7 +194,7 @@ export const AgeCategoriesEditor: React.FC<AgeCategoriesEditorProps> = ({
           <fieldset className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
             <legend className="px-1 text-slate-300 font-semibold text-xs">Toegestane wedstrijdprofielen</legend>
             <p className="text-[11px] text-slate-500 mb-3">
-              Selecteer één of meer profielen. Het eerste geselecteerde profiel wordt de standaardkeuze voor deelnemers.
+              Selecteer de toegestane profielen. Bij import bepaalt de combinatie van artikel en leeftijdscategorie welk profiel past. Je kunt de profielen ook later koppelen.
             </p>
             {profiles.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

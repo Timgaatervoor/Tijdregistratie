@@ -14,6 +14,7 @@ import {
   Clock,
 } from 'lucide-react';
 import type { RaceResult, Category, Wave, RaceEvent } from '../../types';
+import { formatDuration } from '../../services/timingEngine';
 import { downloadCsvFile } from '../../services/backupService';
 
 interface LiveLeaderboardViewProps {
@@ -53,6 +54,9 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   onSelectParticipant,
   onKioskModeChange,
 }) => {
+  const profileOptions = [...new Map(results.map(r => [r.raceProfileId ?? '', r.raceProfileName ?? 'Nog niet gekoppeld'])).entries()];
+  const [selectedProfile, setSelectedProfile] = useState('__default');
+  const activeProfile = profileOptions.some(([id]) => id === selectedProfile) ? selectedProfile : profileOptions.find(([id]) => !!id)?.[0] ?? '';
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedWave, setSelectedWave] = useState<string>('ALL');
   const [selectedGender, setSelectedGender] = useState<string>('ALL');
@@ -159,6 +163,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
   // Filter logic
   const filteredResults = results.filter((r) => {
+    if ((r.raceProfileId ?? '') !== activeProfile) return false;
     if (selectedCategory !== 'ALL' && r.categoryId !== selectedCategory) return false;
     if (selectedWave !== 'ALL' && r.waveId !== selectedWave) return false;
     if (selectedGender !== 'ALL' && r.gender !== selectedGender) return false;
@@ -173,22 +178,31 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     return true;
   });
 
+  // Search and status only hide rows; category, wave and gender define the ranking.
+  const ranked = results.filter(r => r.raceProfileId === activeProfile && r.rankOverall !== undefined &&
+    (selectedCategory === 'ALL' || r.categoryId === selectedCategory) &&
+    (selectedWave === 'ALL' || r.waveId === selectedWave) &&
+    (selectedGender === 'ALL' || r.gender === selectedGender)).sort((a, b) => a.rankOverall! - b.rankOverall!);
+  const ranks = new Map(ranked.map((r, index) => [r.participantId, index + 1]));
+  const displayRank = (r: RaceResult) => ranks.get(r.participantId);
+  const displayGap = (r: RaceResult) => displayRank(r) && ranked.length ? `+${formatDuration(r.officialTimeMs! - ranked[0].officialTimeMs!, true, false)}` : '';
+
   // Top 3 Podium finishers for the current filter
   const finishedPodium = filteredResults
-    .filter((r) => r.status === 'FINISHED' && r.rankCategory)
+    .filter((r) => r.status === 'FINISHED' && displayRank(r))
     .slice(0, 3);
 
   const handleExportCsv = () => {
     const headers =
-      'Plaats,Startnummer,Naam,Club,Geslacht,Categorie,Wave,Starttijd,Finishtijd,Looptijd (Raw),Missers,Straftijd,Officiële Tijd,Verschil,Status\n';
+      'Plaats,Startnummer,Naam,Club,Geslacht,Wedstrijdprofiel,Categorie,Wave,Starttijd,Finishtijd,Looptijd (Raw),Missers,Straftijd,Officiële Tijd,Verschil,Status\n';
     const rows = filteredResults.map((r) => {
-      return `${r.rankCategory || r.rankOverall || ''},${r.bibNumber || ''},"${r.name}","${
+      return `${displayRank(r) || ''},${r.bibNumber || ''},"${r.name}","${
         r.club || ''
-      }",${r.gender || ''},"${r.categoryName || ''}","${r.waveName || ''}",${r.startTime || ''},${
+      }",${r.gender || ''},"${r.raceProfileName || ''}","${r.categoryName || ''}","${r.waveName || ''}",${r.startTime || ''},${
         r.finishTime || ''
       },${r.rawElapsedFormatted || ''},${r.totalMisses || 0},${r.penaltyFormatted || ''},${
         r.officialTimeFormatted || ''
-      },${r.gapFormatted || ''},${r.status}`;
+      },${displayGap(r) || ''},${r.status}`;
     });
 
     const csv = headers + rows.join('\n');
@@ -224,6 +238,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               </span>
             )}
           </div>
+          <p className="text-amber-300 font-bold">{profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle leeftijdscategorieën' : categories.find(c => c.id === selectedCategory)?.name}</p>
           <h2 className="text-2xl font-black text-white tracking-tight">
             {event?.name || 'Run Biathlon De Haan 2026'}
           </h2>
@@ -349,6 +364,11 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           />
         </div>
 
+        <label className="text-xs">Wedstrijdprofiel
+          <select aria-label="Wedstrijdprofiel" value={activeProfile} onChange={e => setSelectedProfile(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white ml-2">
+            {profileOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
         {/* Category Filter */}
         <select
           value={selectedCategory}
@@ -537,19 +557,19 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                     >
                       {/* Rank */}
                       <td className="py-3 px-4 text-center font-mono font-bold">
-                        {r.rankCategory ? (
+                        {displayRank(r) ? (
                           <span
                             className={`inline-block w-6 h-6 rounded text-xs leading-6 ${
-                              r.rankCategory === 1
+                              displayRank(r) === 1
                                 ? 'bg-amber-400 text-slate-950 font-black'
-                                : r.rankCategory === 2
+                                : displayRank(r) === 2
                                 ? 'bg-slate-300 text-slate-950 font-black'
-                                : r.rankCategory === 3
+                                : displayRank(r) === 3
                                 ? 'bg-amber-700 text-white font-black'
                                 : 'text-slate-400'
                             }`}
                           >
-                            {r.rankCategory}
+                            {displayRank(r)}
                           </span>
                         ) : (
                           <span className="text-slate-600">-</span>
@@ -614,7 +634,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
                       {/* Gap */}
                       <td className="py-3 px-4 text-right font-mono text-slate-400">
-                        {r.gapFormatted || '-'}
+                        {displayGap(r) || '-'}
                       </td>
 
                       {/* Status */}

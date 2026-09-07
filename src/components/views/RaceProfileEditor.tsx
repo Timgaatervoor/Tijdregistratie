@@ -16,6 +16,7 @@ import {
 import type { RaceProfile, RaceLegConfig, Category, LegType, ShootingStance } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
+import { applyClassification } from '../../services/applyClassification';
 import { soundService } from '../../services/soundService';
 import {
   categoryUsesProfile,
@@ -47,12 +48,17 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
   const [penaltyLaps, setPenaltyLaps] = useState<number>(1);
   const [legs, setLegs] = useState<RaceLegConfig[]>([]);
   const [assignedCategoryIds, setAssignedCategoryIds] = useState<string[]>([]);
+  const [articles, setArticles] = useState<string[]>([]);
+  const [availableArticles, setAvailableArticles] = useState<string[]>([]);
+  const [classificationMessage, setClassificationMessage] = useState('');
+  React.useEffect(() => { void db.participants.toArray().then(rows => setAvailableArticles([...new Set(rows.map(p => p.article ?? String(p.stamhoofdRegistration?.product ?? '')).filter(Boolean))])); }, [profiles]);
   const [savedMessage, setSavedMessage] = useState<boolean>(false);
 
   const loadProfileIntoForm = (prof: RaceProfile | undefined) => {
     if (prof) {
       setSelectedProfileId(prof.id);
       setName(prof.name);
+      setArticles(prof.articles ?? []);
       setDescription(prof.description || '');
       setPenaltySeconds(prof.penaltySecondsPerMiss || 20);
       setPenaltyLaps(prof.penaltyLapsPerMiss || 1);
@@ -68,6 +74,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
 
   const startNewProfile = () => {
     setSelectedProfileId('new-profile');
+    setArticles([]);
     setName('Nieuw Wedstrijdprofiel (Loop - Schiet - Loop...)');
     setDescription('Aangepast parcours: Loop, schiet, loop, schiet, loop...');
     setPenaltySeconds(20);
@@ -176,6 +183,7 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
       penaltySecondsPerMiss: penaltySeconds,
       penaltyLapsPerMiss: penaltyLaps,
       legs,
+      articles,
       isDefault: profiles.length === 0 || profiles.find((p) => p.id === selectedProfileId)?.isDefault,
     };
 
@@ -183,9 +191,6 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     await db.raceProfiles.put(updatedProfile);
 
     const currentCategories = await db.categories.toArray();
-    const fallbackProfileId =
-      profiles.find((profile) => profile.id !== profileId && profile.isDefault)?.id ||
-      profiles.find((profile) => profile.id !== profileId)?.id;
     await db.transaction('rw', db.categories, db.participants, async () => {
       for (const cat of currentCategories) {
         const currentProfileIds = getCategoryProfileIds(cat);
@@ -194,17 +199,10 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
           nextProfileIds = [...new Set([...currentProfileIds, profileId])];
         } else {
           nextProfileIds = currentProfileIds.filter((id) => id !== profileId);
-          if (nextProfileIds.length === 0 && fallbackProfileId) nextProfileIds = [fallbackProfileId];
+
         }
 
         await db.categories.put(withCategoryProfiles(cat, nextProfileIds));
-        if (!assignedCategoryIds.includes(cat.id) && currentProfileIds.includes(profileId)) {
-          await db.participants.where('categoryId').equals(cat.id).modify((participant) => {
-            if (participant.raceProfileId === profileId) {
-              participant.raceProfileId = nextProfileIds[0] || '';
-            }
-          });
-        }
       }
     });
 
@@ -229,18 +227,15 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     }
 
     const currentCategories = await db.categories.toArray();
-    const fallbackProfileId =
-      profiles.find((profile) => profile.id !== profToDelete.id && profile.isDefault)?.id ||
-      profiles.find((profile) => profile.id !== profToDelete.id)?.id;
     await db.transaction('rw', db.raceProfiles, db.categories, db.participants, async () => {
       await db.raceProfiles.delete(profToDelete.id);
       for (const category of currentCategories) {
         const nextProfileIds = getCategoryProfileIds(category).filter((id) => id !== profToDelete.id);
-        if (nextProfileIds.length === 0 && fallbackProfileId) nextProfileIds.push(fallbackProfileId);
+
         await db.categories.put(withCategoryProfiles(category, nextProfileIds));
         await db.participants.where('categoryId').equals(category.id).modify((participant) => {
           if (participant.raceProfileId === profToDelete.id) {
-            participant.raceProfileId = nextProfileIds[0] || '';
+            participant.raceProfileId = '';
           }
         });
       }
@@ -321,6 +316,11 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
         </div>
       </div>
 
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <p className="text-sm">Sla eerst de profielen en leeftijdscategorieën op. Pas daarna de opgeslagen regels toe op geïmporteerde deelnemers. Handmatige keuzes en deelnemers die al gestart zijn blijven behouden.</p>
+        <button type="button" className="bg-blue-600 rounded px-4 py-2 font-bold" onClick={async () => { try { const result = await applyClassification(); setClassificationMessage(`${result.updated} indelingen bijgewerkt. ${result.problems.length} te controleren.\n${result.problems.join('\n')}`); onRefresh(); } catch (error) { setClassificationMessage((error as Error).message); } }}>Artikel + leeftijdscategorie toepassen</button>
+        {classificationMessage && <p role="status" className="whitespace-pre-wrap max-h-72 overflow-auto text-sm">{classificationMessage}</p>}
+      </div>
       {/* Editor Form */}
       <form onSubmit={handleSaveProfile} className="space-y-6">
         {/* Profile Details Card */}
@@ -600,6 +600,12 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
           </div>
         </div>
 
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <h4 className="font-bold">Artikelen voor dit wedstrijdprofiel</h4>
+          <p className="text-sm text-slate-400">Een deelnemer komt in aanmerking als zowel het artikel als een hieronder geselecteerde leeftijdscategorie past. Importeer eerst deelnemers om hun artikelen hier te kiezen, of voeg een exacte artikelnaam toe.</p>
+          {[...new Set([...availableArticles, ...articles])].map(article => <label key={article} className="block"><input type="checkbox" checked={articles.includes(article)} onChange={e => setArticles(current => e.target.checked ? [...current, article] : current.filter(a => a !== article))} /> {article}</label>)}
+          <input aria-label="Artikelnaam toevoegen" placeholder="Exacte artikelnaam; druk Enter om toe te voegen" className="w-full bg-slate-800 p-2 rounded" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const value = e.currentTarget.value.trim(); if (value) setArticles(current => [...new Set([...current, value])]); e.currentTarget.value = ''; } }} />
+        </div>
         {/* Assigned Categories Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow space-y-3 text-xs">
           <div className="flex flex-wrap items-start justify-between gap-3">

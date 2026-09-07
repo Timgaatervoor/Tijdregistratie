@@ -7,7 +7,6 @@ import type {
   RaceProfile,
   RaceResult,
 } from '../types';
-import { getDefaultCategoryProfileId } from './categoryProfileService';
 
 /**
  * Format milliseconds into HH:mm:ss.SSS or mm:ss.SSS
@@ -132,7 +131,7 @@ export function calculateRaceResults(
   const computed: RaceResult[] = participants.map((p) => {
     const cat = categoryMap.get(p.categoryId);
     const wave = p.waveId ? waveMap.get(p.waveId) : undefined;
-    const profile = profileMap.get(p.raceProfileId) || profileMap.get(getDefaultCategoryProfileId(cat));
+    const profile = profileMap.get(p.raceProfileId);
     const penaltyPerMiss = profile?.penaltySecondsPerMiss ?? penaltySecondsPerMissDefault;
 
     const startRecord = p.bibNumber ? startMap.get(p.bibNumber) : undefined;
@@ -172,6 +171,8 @@ export function calculateRaceResults(
       name: `${p.firstName} ${p.lastName}`.trim(),
       categoryName: cat?.name || 'Onbekend',
       categoryId: p.categoryId,
+      raceProfileId: profile?.id ?? '',
+      raceProfileName: profile?.name ?? 'Nog niet gekoppeld',
       waveName: wave?.name || 'Geen wave',
       waveId: p.waveId,
       gender: p.gender || 'X',
@@ -189,13 +190,13 @@ export function calculateRaceResults(
       penaltyFormatted: penaltySeconds > 0 ? `+${penaltySeconds}s` : '0s',
       officialTimeMs,
       officialTimeFormatted: officialTimeMs !== undefined ? formatDuration(officialTimeMs, false, true) : '--:--',
-      isPendingShooting: participantShooting.length < 2 && p.status === 'STARTED',
+      isPendingShooting: participantShooting.length < (profile?.legs.filter(leg => leg.type === 'SHOOT').length ?? 0) && p.status === 'STARTED',
     };
   });
 
   // Ranking overall (only participants with official finish and officialTimeMs)
   const finishers = computed.filter(
-    (r) => r.officialTimeMs !== undefined && r.status === 'FINISHED'
+    (r) => r.officialTimeMs !== undefined && r.status === 'FINISHED' && !!r.raceProfileId
   );
 
   // Tie breaking rules:
@@ -218,23 +219,25 @@ export function calculateRaceResults(
     return aFin - bFin;
   });
 
-  // Assign overall ranks & gap to winner
-  const overallWinnerTime = finishers[0]?.officialTimeMs;
-  finishers.forEach((item, idx) => {
-    item.rankOverall = idx + 1;
-    if (overallWinnerTime !== undefined && item.officialTimeMs !== undefined) {
-      const gap = item.officialTimeMs - overallWinnerTime;
-      item.gapMs = gap;
-      item.gapFormatted = idx === 0 ? '+00:00.0' : `+${formatDuration(gap, true, false)}`;
-    }
+  // Each course has an independent overall ranking and winner.
+  const profileGroups = new Map<string, RaceResult[]>();
+  finishers.forEach(item => {
+    const group = profileGroups.get(item.raceProfileId!) ?? [];
+    group.push(item);
+    profileGroups.set(item.raceProfileId!, group);
   });
+  profileGroups.forEach(group => group.forEach((item, idx) => {
+    item.rankOverall = idx + 1;
+    item.gapMs = item.officialTimeMs! - group[0].officialTimeMs!;
+    item.gapFormatted = `+${formatDuration(item.gapMs, true, false)}`;
+  }));
 
   // Rank per category
   const categoryGroups = new Map<string, RaceResult[]>();
   finishers.forEach((item) => {
-    const list = categoryGroups.get(item.categoryId) || [];
+    const list = categoryGroups.get(JSON.stringify([item.raceProfileId, item.categoryId])) || [];
     list.push(item);
-    categoryGroups.set(item.categoryId, list);
+    categoryGroups.set(JSON.stringify([item.raceProfileId, item.categoryId]), list);
   });
 
   categoryGroups.forEach((group) => {
@@ -246,9 +249,9 @@ export function calculateRaceResults(
   // Rank per gender
   const genderGroups = new Map<string, RaceResult[]>();
   finishers.forEach((item) => {
-    const list = genderGroups.get(item.gender) || [];
+    const list = genderGroups.get(JSON.stringify([item.raceProfileId, item.gender])) || [];
     list.push(item);
-    genderGroups.set(item.gender, list);
+    genderGroups.set(JSON.stringify([item.raceProfileId, item.gender]), list);
   });
 
   genderGroups.forEach((group) => {
@@ -260,7 +263,7 @@ export function calculateRaceResults(
   // Return full list sorted: finishers by rank, then started, then ready/registered, then DNF/DNS/DSQ
   return computed.sort((a, b) => {
     if (a.rankOverall !== undefined && b.rankOverall !== undefined) {
-      return a.rankOverall - b.rankOverall;
+      return (a.raceProfileName ?? '').localeCompare(b.raceProfileName ?? '') || a.rankOverall - b.rankOverall;
     }
     if (a.rankOverall !== undefined) return -1;
     if (b.rankOverall !== undefined) return 1;

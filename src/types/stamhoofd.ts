@@ -11,6 +11,7 @@ export interface StamhoofdConfig {
   shop?: StamhoofdShop;
   fields: string[];
   mapping: Record<string, string>;
+  /** Legacy backup field; new imports use profile articles and age categories. */
   productCategories: Record<string, string>;
   lastSyncAt?: string;
 }

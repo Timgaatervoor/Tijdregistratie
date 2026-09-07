@@ -62,6 +62,7 @@ export interface RaceProfile {
   penaltySecondsPerMiss: number;
   penaltyLapsPerMiss: number;
   isDefault?: boolean;
+  articles?: string[];
 }
 
 export interface Category {
@@ -105,6 +106,9 @@ export interface Participant extends StamhoofdSource {
   team?: string;
   categoryId: string;
   raceProfileId: string;
+  article?: string;
+  categoryAssignment?: 'automatic' | 'manual';
+  profileAssignment?: 'automatic' | 'manual';
   bibNumber?: number;
   waveId?: string;
   notes?: string;
@@ -270,6 +274,8 @@ export interface DeviceConfig {
 }
 
 export interface RaceResult {
+  raceProfileId?: string;
+  raceProfileName?: string;
   participantId: string;
   bibNumber: number;
   name: string;

@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { BibAssignmentModal } from '../BibAssignmentModal';
+import { updateBibs } from '../../services/bibAssignment';
 import { StamhoofdIntegrationModal } from '../StamhoofdIntegrationModal';
 import {
   Users,
@@ -55,6 +57,9 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   onSelectParticipant,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showBibAssignment, setShowBibAssignment] = useState(false);
+  const [bibMessage, setBibMessage] = useState('');
+  const [clearingBibs, setClearingBibs] = useState(false);
   const [showStamhoofd, setShowStamhoofd] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -157,34 +162,16 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
     onRefresh();
   };
 
-  // Auto assign bibs per category
-  const handleAutoAssignBibs = async () => {
-    if (!confirm('Startnummers automatisch hernummeren per categorie volgens bib ranges?')) return;
-
-    let bibSeq = 1;
-    const updated: Participant[] = [];
-
-    // Order by category then lastName
-    const sorted = [...participants].sort((a, b) => {
-      if (a.categoryId !== b.categoryId) return a.categoryId.localeCompare(b.categoryId);
-      return a.lastName.localeCompare(b.lastName);
-    });
-
-    for (const p of sorted) {
-      updated.push({
-        ...p,
-        bibNumber: bibSeq++,
-        updatedAt: new Date().toISOString(),
-      });
-    }
-
-    await db.participants.bulkPut(updated);
-    await operationService.logAudit(
-      'BIBS_RENUMBERED',
-      `${updated.length} startnummers automatisch gehernummeerd (1 t/m ${bibSeq - 1})`
-    );
-
-    onRefresh();
+  const handleClearBibs = async () => {
+    if (!confirm('Alle borstnummers van alle deelnemers verwijderen? Dit geldt ook voor deelnemers buiten het huidige lijstfilter. De deelnemers blijven behouden.')) return;
+    setClearingBibs(true);
+    setBibMessage('');
+    try {
+      const count = await updateBibs({ clear: true });
+      setBibMessage(`${count} borstnummers verwijderd.`);
+      onRefresh();
+    } catch (error) { setBibMessage((error as Error).message); }
+    finally { setClearingBibs(false); }
   };
 
   // Process uploaded file (supports CSV and multi-sheet Excel)
@@ -539,6 +526,8 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   return (
     <div className="space-y-6">
       {showStamhoofd && <StamhoofdIntegrationModal participants={participants} categories={categories} onRefresh={onRefresh} onClose={() => setShowStamhoofd(false)} />}
+      {showBibAssignment && <BibAssignmentModal participants={participants} onClose={() => setShowBibAssignment(false)} onRefresh={onRefresh} />}
+      {bibMessage && <p role="status" className="rounded-xl bg-slate-800 p-3 text-amber-300">{bibMessage}</p>}
       {/* Top Banner & Action Buttons */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -562,12 +551,13 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             <Upload className="w-4 h-4" /> Stamhoofd CSV/Excel Import
           </button>
           <button
-            onClick={handleAutoAssignBibs}
+            onClick={() => setShowBibAssignment(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-semibold transition"
-            title="Wijs startnummers automatisch toe volgens categorieën"
+            title="Wijs borstnummers toe per leeftijdsbereik"
           >
-            <ArrowUpDown className="w-4 h-4" /> Auto Bib Toewijzing
+            <ArrowUpDown className="w-4 h-4" /> Borstnummers per leeftijd
           </button>
+          <button disabled={clearingBibs || !participants.some(p => p.bibNumber !== undefined)} onClick={handleClearBibs} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-950 text-red-300 border border-red-800 text-xs font-semibold disabled:opacity-40"><Trash2 className="w-4 h-4" /> Alle borstnummers verwijderen</button>
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition"

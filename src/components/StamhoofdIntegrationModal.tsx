@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { Category, Participant } from '../types';
 import type { StamhoofdConfig, StamhoofdShop, StamhoofdSnapshot } from '../types/stamhoofd';
 import { db } from '../db/dexieDb';
-import { searchShops, loadStamhoofd, LOCAL_STAMHOOFD, isLocalApp, localConnectionStatus, saveLocalApiKey } from '../services/stamhoofdApi';
+import { searchShops, loadStamhoofd, LOCAL_STAMHOOFD, isLocalApp, localConnectionStatus } from '../services/stamhoofdApi';
 import { applySync, defaultFields, discoverFields, importFields, previewSync } from '../services/stamhoofdSync';
 
 const input = 'w-full bg-slate-800 border border-slate-600 rounded-lg p-2 text-white';
@@ -11,7 +11,6 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
   const [config, setConfig] = useState<StamhoofdConfig>({ id: '', workerUrl: LOCAL_STAMHOOFD, domain: 'shop.kidsatletiekdehaan.be', fields: defaultFields, mapping: {}, productCategories: {} });
   const [token, setToken] = useState(''); // Worker access only; never persisted.
   const [apiKey, setApiKey] = useState('');
-  const [localConfigured, setLocalConfigured] = useState(false);
   const localMode = config.workerUrl === LOCAL_STAMHOOFD;
   const [shops, setShops] = useState<StamhoofdShop[]>([]);
   const [selected, setSelected] = useState('');
@@ -27,7 +26,7 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
       if (!event) throw new Error('Maak eerst een lokaal evenement aan.');
       const saved = await db.stamhoofdConfigs.get(event.id);
       setConfig(c => saved ? { ...saved, workerUrl: isLocalApp() ? LOCAL_STAMHOOFD : saved.workerUrl } : { ...c, id: event.id });
-      if (isLocalApp()) setLocalConfigured((await localConnectionStatus()).configured);
+      if (isLocalApp()) await localConnectionStatus();
     } catch (e) { setError((e as Error).message); }
   })(); }, []);
   const run = async (label: string, action: () => Promise<void>) => {
@@ -53,10 +52,8 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
         <label>Koppeling<select className={input} value={localMode ? 'local' : 'worker'} onChange={e => { update({ workerUrl: e.target.value === 'local' ? LOCAL_STAMHOOFD : '' }); setSnapshot(undefined); setShops([]); setApiKey(''); setToken(''); }}><option value="local">Op deze computer — geen Cloudflare nodig</option><option value="worker">Cloudflare Worker (optioneel)</option></select></label>
         {localMode && <div className="rounded-lg bg-slate-800 p-3 space-y-3">
           {isLocalApp() ? <>
-            <p className="text-sm">{localConfigured ? 'API-key is opgeslagen op deze computer.' : 'Vul je read-only Stamhoofd API-key één keer in.'} De koppeling start automatisch samen met de app.</p>
-            <label>{localConfigured ? 'API-key vervangen' : 'Stamhoofd API-key'}<input className={input} type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} /></label>
-            <button className={button} disabled={!apiKey.trim()} onClick={() => run('API-key lokaal bewaren', async () => { await saveLocalApiKey(apiKey); setApiKey(''); setLocalConfigured(true); setMessage('API-key opgeslagen op deze computer. Je kunt nu webshops zoeken.'); })}>Bewaar op deze computer</button>
-            <p className="text-xs text-slate-400">De key staat in de lokale appmap, buiten Git en browseropslag. Je hebt geen Worker URL nodig.</p>
+            <p className="text-sm">Zoek eerst je webshop. Geef je read-only API-key mee bij het ophalen van de gegevens; de key wordt niet opgeslagen.</p>
+            <label>Stamhoofd API-key voor deze aanvraag<input className={input} type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} /></label>
           </> : <p>Open de app op je computer door <strong>start-windows.bat</strong> (Windows) of <strong>start-mac-linux.sh</strong> (Mac/Linux) te starten. Gebruik daarna <strong>http://localhost:3000</strong>. De lokale koppeling is niet beschikbaar via GitHub Pages.</p>}
         </div>}
         <div className="grid sm:grid-cols-2 gap-3">
@@ -64,9 +61,9 @@ export function StamhoofdIntegrationModal({ participants, categories, onClose, o
           <label>Webshopdomein<input className={input} value={config.domain} onChange={e => { update({ domain: e.target.value, shop: undefined }); setSnapshot(undefined); setShops([]); }} /></label>
           {!localMode && <label>Worker-toegangscode<input className={input} type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} /><span className="text-xs text-slate-400">Aparte SYNC_ACCESS_TOKEN, alleen in geheugen. Vul hier nooit de Stamhoofd API-key in.</span></label>}
         </div>
-        <button className={button} disabled={localMode && (!isLocalApp() || !localConfigured)} onClick={() => run('Webshops zoeken', async () => { const result = await searchShops(config.workerUrl, config.domain, token); setShops(result.shops); setSelected(result.shops[0]?.id ?? ''); if (!result.shops.length) throw new Error('Geen webshops gevonden.'); })}>Zoek webshops</button>
+        <button className={button} disabled={localMode && !isLocalApp()} onClick={() => run('Webshops zoeken', async () => { const result = await searchShops(config.workerUrl, config.domain, token); setShops(result.shops); setSelected(result.shops[0]?.id ?? ''); if (!result.shops.length) throw new Error('Geen webshops gevonden.'); })}>Zoek webshops</button>
         {!!shops.length && <div className="space-y-2"><label>2. Webshop selecteren<select className={input} value={selected} onChange={e => setSelected(e.target.value)}>{shops.map(s => <option key={s.id} value={s.id}>{s.name} — {s.domain} — {s.id}</option>)}</select></label><button className={button} onClick={() => run('Configuratie bewaren', async () => { const shop = shops.find(s => s.id === selected); const next = { ...config, shop, mapping: {}, productCategories: {}, lastSyncAt: undefined }; await db.stamhoofdConfigs.put(next); setConfig(next); setSnapshot(undefined); setShowPreview(false); })}>Gebruik deze webshop</button></div>}
-        {config.shop && <div className="p-3 bg-slate-800 rounded-lg space-y-2"><p>Geselecteerd: <strong>{config.shop.name}</strong> — {config.shop.domain}<br /><span className="text-xs">{config.shop.id}</span></p><button className={button} onClick={() => run('Webshop, orders en private tickets ophalen', async () => { setSnapshot(undefined); setShowPreview(false); setSnapshot(await loadStamhoofd(config, token)); })}>3. Beschikbare gegevens ophalen</button></div>}
+        {config.shop && <div className="p-3 bg-slate-800 rounded-lg space-y-2"><p>Geselecteerd: <strong>{config.shop.name}</strong> — {config.shop.domain}<br /><span className="text-xs">{config.shop.id}</span></p><button className={button} disabled={localMode && (!isLocalApp() || !apiKey.trim())} onClick={() => run('Webshop, orders en private tickets ophalen', async () => { setSnapshot(undefined); setShowPreview(false); try { setSnapshot(await loadStamhoofd(config, token, localMode ? apiKey : undefined)); } finally { setApiKey(''); } })}>3. Beschikbare gegevens ophalen</button></div>}
         {analysis && <>
           {analysis.error && <p role="alert" className="text-red-300">{analysis.error}</p>}
           <h3 className="font-bold">4. Velden bewaren en koppelen</h3>

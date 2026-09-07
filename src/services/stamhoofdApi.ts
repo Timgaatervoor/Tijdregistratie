@@ -18,13 +18,12 @@ async function localRequest<T>(path: string, apiKey?: string): Promise<T> {
   if (!response.ok) throw new Error(data.error || 'Lokale koppeling niet bereikbaar.');
   return data;
 }
-export const localConnectionStatus = () => localRequest<{ local: boolean; configured: boolean }>('/health');
-export const saveLocalApiKey = (apiKey: string) => localRequest<{ configured: boolean }>('/configure', apiKey);
+export const localConnectionStatus = () => localRequest<{ local: boolean }>('/health');
 
-export async function workerRequest<T>(workerUrl: string, path: string, accessToken: string): Promise<T> {
+export async function workerRequest<T>(workerUrl: string, path: string, accessToken: string, apiKey?: string): Promise<T> {
   if (!navigator.onLine || syncService.getIsSimulatedOffline()) throw new Error('Je bent offline. Lokale wedstrijdregistratie blijft beschikbaar.');
   if (workerUrl === LOCAL_STAMHOOFD) {
-    try { return await localRequest<T>(path); }
+    try { return await localRequest<T>(path, apiKey); }
     catch (error) {
       if (error instanceof TypeError) throw new Error('Lokale koppeling niet bereikbaar. Herstart de app op deze computer.');
       throw error;
@@ -49,9 +48,9 @@ export async function workerRequest<T>(workerUrl: string, path: string, accessTo
 export function searchShops(url: string, domain: string, token: string) {
   return workerRequest<{ shops: StamhoofdShop[] }>(url, `/webshop/search?${new URLSearchParams({ domain })}`, token);
 }
-export async function loadStamhoofd(config: StamhoofdConfig, token: string): Promise<StamhoofdSnapshot> {
+export async function loadStamhoofd(config: StamhoofdConfig, token: string, apiKey?: string): Promise<StamhoofdSnapshot> {
   if (!config.shop) throw new Error('Selecteer eerst een webshop.');
-  const data = await workerRequest<StamhoofdSnapshot>(config.workerUrl, `/sync?${new URLSearchParams({ organizationId: config.shop.organizationId, webshopId: config.shop.id })}`, token);
+  const data = await workerRequest<StamhoofdSnapshot>(config.workerUrl, `/sync?${new URLSearchParams({ organizationId: config.shop.organizationId, webshopId: config.shop.id })}`, token, apiKey);
   if (data.shop.id !== config.shop.id || data.shop.organizationId !== config.shop.organizationId || !Array.isArray(data.orders) || !Array.isArray(data.tickets) || !data.webshop) throw new Error('Onvolledig synchronisatieantwoord.');
   return { ...data, shop: config.shop };
 }

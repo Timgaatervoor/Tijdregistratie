@@ -64,7 +64,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === '/health') return reply({ ok: true });
-      if (!env.STAMHOOFD_API_KEY || !env.SYNC_ACCESS_TOKEN || env.SYNC_ACCESS_TOKEN.length < 32 || !uuid.test(env.ORGANIZATION_ID) || !/^v\d+$/.test(env.STAMHOOFD_VERSION)) throw new ApiError('Worker is nog niet volledig geconfigureerd.', 503);
+      if ((url.pathname === '/sync' && !env.STAMHOOFD_API_KEY) || !env.SYNC_ACCESS_TOKEN || env.SYNC_ACCESS_TOKEN.length < 32 || !uuid.test(env.ORGANIZATION_ID) || !/^v\d+$/.test(env.STAMHOOFD_VERSION)) throw new ApiError('Worker is nog niet volledig geconfigureerd.', 503);
       if (!await authorized(request, env)) throw new ApiError('Ongeldige Worker-toegangscode.', 401);
       let lastRequest = 0;
       const get = async (path: string, global = false) => {

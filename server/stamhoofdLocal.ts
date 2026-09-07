@@ -1,13 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import path from 'node:path';
-import { parse } from 'dotenv';
 import type { Plugin } from 'vite';
 import worker from '../worker/index';
 
 export const localPrefix = '/api/stamhoofd';
-const secretFile = '.env.stamhoofd.local';
 const organizationId = 'af201d93-dcd6-4cfe-bfc7-ed3d2a209236';
 const loopbackAddresses = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
@@ -24,14 +20,9 @@ export function isLocalRequest(request: IncomingMessage): boolean {
   return true;
 }
 
-export function createLocalStamhoofd(root: string) {
-  const filename = path.join(root, secretFile);
+export function createLocalStamhoofd() {
   const accessToken = randomBytes(32).toString('hex');
   let syncing = false;
-  const readKey = async () => {
-    try { return parse(await readFile(filename)).STAMHOOFD_API_KEY ?? ''; }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''; throw error; }
-  };
   return async (request: IncomingMessage, response: ServerResponse, next: () => void) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (url.pathname !== localPrefix && !url.pathname.startsWith(`${localPrefix}/`)) return next();
@@ -42,26 +33,21 @@ export function createLocalStamhoofd(root: string) {
     if (!isLocalRequest(request)) return reply(403, { error: 'Open deze koppeling op deze computer via localhost.' });
     const route = url.pathname.slice(localPrefix.length);
     try {
-      if (route === '/health' && request.method === 'GET') return reply(200, { local: true, configured: !!await readKey() });
-      if (route === '/configure' && request.method === 'POST') {
+      if (route === '/health' && request.method === 'GET') return reply(200, { local: true });
+      if (route !== '/webshop/search' && route !== '/sync') return reply(404, { error: 'Endpoint niet gevonden.' });
+      if (request.method !== (route === '/sync' ? 'POST' : 'GET')) return reply(405, { error: 'Deze actie wordt niet ondersteund.' });
+      let apiKey = '';
+      if (route === '/sync') {
         if (!request.headers['content-type']?.startsWith('application/json')) return reply(415, { error: 'JSON verwacht.' });
         let body = '';
         for await (const chunk of request) {
           body += chunk.toString();
           if (Buffer.byteLength(body) > 8192) return reply(413, { error: 'Invoer te groot.' });
         }
-        let apiKey: unknown;
         try { apiKey = JSON.parse(body).apiKey; } catch { return reply(400, { error: 'Ongeldige invoer.' }); }
         if (typeof apiKey !== 'string' || !apiKey.trim() || /[\s"'\\#\r\n]/.test(apiKey.trim()) || apiKey.length > 4096) return reply(400, { error: 'Vul een geldige Stamhoofd API-key in.' });
-        // This specific .env file is ignored by Git and denied by Vite's file
-        // server. No key is written into frontend configuration or IndexedDB.
-        await writeFile(filename, `STAMHOOFD_API_KEY="${apiKey.trim()}"\n`, { mode: 0o600 });
-        return reply(200, { local: true, configured: true });
+        apiKey = apiKey.trim();
       }
-      if (request.method !== 'GET') return reply(405, { error: 'Deze actie wordt niet ondersteund.' });
-      if (route !== '/webshop/search' && route !== '/sync') return reply(404, { error: 'Endpoint niet gevonden.' });
-      const apiKey = await readKey();
-      if (!apiKey) return reply(400, { error: 'Bewaar eerst je Stamhoofd API-key op deze computer.' });
       if (syncing) return reply(409, { error: 'Er loopt al een Stamhoofd-aanvraag op deze computer. Wacht tot deze klaar is.' });
       syncing = true;
       try {
@@ -77,11 +63,11 @@ export function createLocalStamhoofd(root: string) {
         const body = await result.text();
         response.statusCode = result.status;
         response.end(body);
-      } finally { syncing = false; }
+      } finally { apiKey = ''; syncing = false; }
     } catch {
       // Do not log request bodies or filesystem/environment contents.
       console.error('Lokale Stamhoofd-koppeling: aanvraag mislukt.');
-      reply(500, { error: 'De lokale koppeling kon de aanvraag niet uitvoeren. Controleer de verbinding en schrijfrechten van de appmap.' });
+      reply(500, { error: 'De lokale koppeling kon de aanvraag niet uitvoeren. Controleer de verbinding.' });
     }
   };
 }
@@ -89,7 +75,7 @@ export function createLocalStamhoofd(root: string) {
 export function stamhoofdLocalPlugin(): Plugin {
   return {
     name: 'stamhoofd-local',
-    configureServer(server) { server.middlewares.use(createLocalStamhoofd(server.config.root)); },
-    configurePreviewServer(server) { server.middlewares.use(createLocalStamhoofd(server.config.root)); },
+    configureServer(server) { server.middlewares.use(createLocalStamhoofd()); },
+    configurePreviewServer(server) { server.middlewares.use(createLocalStamhoofd()); },
   };
 }

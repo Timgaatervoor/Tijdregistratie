@@ -10,7 +10,6 @@ import {
   Trophy,
   AlertTriangle,
   Settings,
-  ChevronDown,
   Lock,
 } from 'lucide-react';
 import type { DeviceConfig, UserRole } from '../types';
@@ -28,6 +27,7 @@ export type ActiveTab =
   | 'settings';
 
 interface NavigationProps {
+  variant?: 'stations' | 'sections';
   activeTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
   conflictCount: number;
@@ -91,6 +91,7 @@ const operationButtonClasses = (tab: ActiveTab, active: boolean) => {
 };
 
 export const Navigation: React.FC<NavigationProps> = ({
+  variant = 'sections',
   activeTab,
   onSelectTab,
   conflictCount,
@@ -108,10 +109,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       <button
         key={tab}
         type="button"
-        onClick={(event) => {
-          onSelectTab(tab);
-          event.currentTarget.closest('details')?.removeAttribute('open');
-        }}
+        onClick={() => onSelectTab(tab)}
         aria-current={isActive ? 'page' : undefined}
         className={
           operation
@@ -131,81 +129,28 @@ export const Navigation: React.FC<NavigationProps> = ({
   };
 
   if (lockedTab) {
-    return (
-      <nav aria-label="Vergrendelde postnavigatie" className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 py-2">
-          {renderTabButton(lockedTab, ['start', 'shooting', 'finish'].includes(lockedTab))}
-          <span className="flex items-center gap-1.5 text-[11px] text-amber-300 font-semibold">
-            <Lock className="w-3.5 h-3.5" /> Toestel vergrendeld voor deze post
-          </span>
-        </div>
-      </nav>
-    );
+    if (variant === 'sections') return null;
+    return <nav aria-label="Vergrendelde postnavigatie" className="flex flex-wrap items-center gap-2">
+      {renderTabButton(lockedTab, ['start', 'shooting', 'finish'].includes(lockedTab))}
+      <Lock aria-label="Toestel vergrendeld voor deze post" className="w-4 h-4 text-amber-300" />
+    </nav>;
   }
+  if (variant === 'stations') return <nav aria-label="Wedstrijdregistratie" className="flex items-center gap-1.5 shrink-0">
+    {renderTabButton('start', true)}
+    {renderTabButton('shooting', true)}
+    {renderTabButton('finish', true)}
+  </nav>;
 
-  const mobileTabs: ActiveTab[] = [
-    'event',
-    'participants',
-    'waves',
-    'start',
-    'shooting',
-    'finish',
-    'live',
-    'results',
-    'attention',
-    'settings',
-  ];
-
-  const renderMenu = (label: string, tabs: ActiveTab[]) => {
-    const groupActive = tabs.includes(activeTab);
-    return (
-      <details className="relative group">
-        <summary className={`${standardButtonClasses(groupActive)} cursor-pointer list-none`}>
-          <span>{label}</span>
-          <ChevronDown className="w-3.5 h-3.5 transition group-open:rotate-180" />
-        </summary>
-        <div className="absolute right-0 top-full mt-1 min-w-52 z-50 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
-          {tabs.map((tab) => renderTabButton(tab))}
-        </div>
-      </details>
-    );
-  };
-
-  return (
-    <nav aria-label="Hoofdnavigatie" className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4">
-      <div className="md:hidden max-w-7xl mx-auto py-2 space-y-2">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Wedstrijdregistratie">
-          {renderTabButton('start', true)}
-          {renderTabButton('shooting', true)}
-          {renderTabButton('finish', true)}
-        </div>
-        <label htmlFor="mobile-main-navigation" className="sr-only">Open onderdeel</label>
-        <select
-          id="mobile-main-navigation"
-          value={activeTab}
-          onChange={(event) => onSelectTab(event.target.value as ActiveTab)}
-          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm font-bold text-white"
-        >
-          {mobileTabs.map((tab) => (
-            <option key={tab} value={tab}>
-              {tabConfig[tab].label}{tab === 'attention' && problemCount > 0 ? ` (${problemCount})` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="hidden md:flex flex-wrap max-w-7xl mx-auto items-center gap-1.5 py-2">
-        {renderTabButton('start', true)}
-        {renderTabButton('shooting', true)}
-        {renderTabButton('finish', true)}
-        <div className="h-6 w-px bg-slate-700 mx-1" aria-hidden="true" />
-        {renderMenu('Uitslagen', ['live', 'results'])}
-        {renderTabButton('attention')}
-        <div className="ml-auto flex items-center gap-1.5">
-          {renderMenu('Evenement', ['event', 'participants', 'waves'])}
-          {renderTabButton('settings')}
-        </div>
-      </div>
-    </nav>
-  );
+  return <nav aria-label="Hoofdnavigatie" className="border-t border-slate-800">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-wrap items-center gap-1.5">
+      {renderTabButton('event')}
+      {renderTabButton('participants')}
+      {renderTabButton('waves')}
+      <span className="hidden sm:block w-px h-5 bg-slate-700 mx-1" aria-hidden="true" />
+      {renderTabButton('live')}
+      {renderTabButton('results')}
+      {renderTabButton('attention')}
+      {renderTabButton('settings')}
+    </div>
+  </nav>;
 };

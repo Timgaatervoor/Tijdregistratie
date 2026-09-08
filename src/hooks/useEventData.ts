@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { liveQuery } from 'dexie';
 import { db } from '../db/dexieDb';
 import { operationService } from '../services/operationService';
 import { syncService } from '../services/syncService';
@@ -71,13 +72,13 @@ export function useEventData() {
       }
 
       setEvent(ev || null);
-      setParticipants(pList);
-      setTimingRecords(tList);
-      setShootingResults(sList);
-      setWaves(wList);
-      setCategories(cList);
-      setRaceProfiles(profList);
-      setConflicts(confList);
+      setParticipants(pList.filter(p => !p.eventId || p.eventId === ev?.id));
+      setTimingRecords(tList.filter(p => p.eventId === ev?.id));
+      setShootingResults(sList.filter(p => p.eventId === ev?.id));
+      setWaves(wList.filter(p => p.eventId === ev?.id));
+      setCategories(cList.filter(p => !p.eventId || p.eventId === ev?.id));
+      setRaceProfiles(profList.filter(p => !p.eventId || p.eventId === ev?.id));
+      setConflicts(confList.filter(p => p.eventId === ev?.id));
       setAuditLogs(aList);
       setDeviceConfig(devList || null);
       setPendingSyncCount(pendingCount);
@@ -90,6 +91,11 @@ export function useEventData() {
 
   useEffect(() => {
     refresh();
+    const changes = liveQuery(() => Promise.all([
+      db.events.toArray(), db.participants.toArray(), db.waves.toArray(), db.categories.toArray(),
+      db.raceProfiles.toArray(), db.timingRecords.toArray(), db.shootingResults.toArray(), db.conflicts.toArray(),
+    ])).subscribe(() => { void refresh(); });
+    void syncService.syncNow();
 
     // Listen to operations and local BroadcastChannel messages
     operationService.onBroadcastMessage(() => {
@@ -109,6 +115,7 @@ export function useEventData() {
 
     return () => {
       unsubSync();
+      changes.unsubscribe();
       clearInterval(interval);
       clearInterval(syncInterval);
     };

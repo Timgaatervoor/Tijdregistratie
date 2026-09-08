@@ -54,7 +54,15 @@ export interface RaceLegConfig {
   penaltyLapsPerMiss?: number;
 }
 
-export interface RaceProfile {
+export interface SyncMetadata {
+  eventId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  updatedByDeviceId?: string;
+}
+
+export interface RaceProfile extends SyncMetadata {
   id: string;
   name: string;
   description: string;
@@ -65,7 +73,7 @@ export interface RaceProfile {
   articles?: string[];
 }
 
-export interface Category {
+export interface Category extends SyncMetadata {
   id: string;
   name: string;
   code: string;
@@ -81,7 +89,7 @@ export interface Category {
   bibRangeEnd?: number;
 }
 
-export interface Wave {
+export interface Wave extends SyncMetadata {
   id: string;
   eventId: string;
   name: string;
@@ -94,7 +102,7 @@ export interface Wave {
   status: 'SCHEDULED' | 'STARTED' | 'COMPLETED';
 }
 
-export interface Participant extends StamhoofdSource {
+export interface Participant extends StamhoofdSource, SyncMetadata {
   id: string;
   externalId?: string;
   firstName: string;
@@ -127,7 +135,7 @@ export interface Participant extends StamhoofdSource {
   updatedAt: string;
 }
 
-export interface TimingRecord {
+export interface TimingRecord extends SyncMetadata {
   localTimestamp?: string;
   clockSource?: string;
   clockUncertaintyMs?: number;
@@ -149,7 +157,7 @@ export interface TimingRecord {
   syncStatus: SyncStatus;
 }
 
-export interface ShootingResult {
+export interface ShootingResult extends SyncMetadata {
   supersedesIds?: string[];
   id: string;
   eventId: string;
@@ -175,6 +183,8 @@ export interface RaceOperation {
   eventId: string;
   participantId?: string;
   type:
+    | 'ENTITY_UPSERT'
+    | 'ENTITY_DELETED'
     | 'PARTICIPANT_CREATED'
     | 'PARTICIPANT_UPDATED'
     | 'BIB_ASSIGNED'
@@ -227,6 +237,7 @@ export interface EventSnapshot {
   timestamp: string;
   checksum: string;
   data: {
+    syncEntities?: import('../db/syncJournal').EntityVersion[];
     event: RaceEvent;
     participants: Participant[];
     timingRecords: TimingRecord[];

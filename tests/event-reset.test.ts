@@ -70,7 +70,7 @@ test('an in-flight Supabase response cannot restore old operations after a compl
   const calls: string[] = [];
   globalThis.fetch = async (_url, init) => { calls.push(init?.method ?? 'GET'); startRequest(); return delayed; };
   try {
-    await db.operations.put({ operationId: 'pending-old', eventId: oldEventId, syncStatus: 'LOCAL_ONLY' } as any);
+    // No pending upload: exercise a download that returns after an event reset.
     const inFlight = syncService.syncNow();
     await started;
     await resetToBlankEvent('Nieuwe race tijdens sync', '2029-09-19', 'De Haan');

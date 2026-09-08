@@ -134,11 +134,11 @@ test('sync reads beyond 1000 operations and applies revocation before original r
   rows[0] = { ...rows[0], type: 'RECORD_UNDO', payload: { recordId: 'revoked' } };
   rows[1202] = { ...rows[1202], type: 'START_RECORDED', payload: { recordId: 'revoked', bibNumber: 8, timestamp: '2026-09-07T10:00:00Z' } };
   const offsets: number[] = [];
-  globalThis.fetch = async input => { const offset = Number(new URL(String(input)).searchParams.get('offset') || 0); offsets.push(offset); return Response.json(rows.slice(offset, offset + 500)); };
+  globalThis.fetch = async (input, init) => { if (init?.method === 'POST') return new Response(null, { status: 201 }); const offset = Number(new URL(String(input)).searchParams.get('offset') || 0); offsets.push(offset); return Response.json(rows.slice(offset, offset + 500)); };
   try {
     const result = await syncService.syncNow();
     assert.equal(result.error, undefined);
-    assert.equal(await db.operations.count(), 1203);
+    assert.equal(await db.operations.filter(op => op.operationId.startsWith('remote-')).count(), 1203);
     assert.deepEqual(offsets, [0, 500, 1000]);
     assert.equal((await db.timingRecords.get('revoked'))?.isReversed, true);
     globalThis.fetch = async () => new Response('', { status: 403 });

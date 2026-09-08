@@ -3,11 +3,12 @@ import { Copy, ExternalLink } from 'lucide-react';
 import { syncStyles as ui } from './syncSettingsStyles';
 import reliabilitySql from '../../supabase/reliability.sql?raw';
 import operationsSql from '../../supabase/operations-test-setup.sql?raw';
+import entitySyncSql from '../../supabase/migrations/202609080001_entity_sync.sql?raw';
 
 export function SupabaseSetupGuide() {
   const [existing, setExisting] = useState(false);
   const [copyMessage, setCopyMessage] = useState('');
-  const sql = existing ? reliabilitySql : `${operationsSql}\n\n${reliabilitySql}`;
+  const sql = `${existing ? reliabilitySql : `${operationsSql}\n\n${reliabilitySql}`}\n\n${entitySyncSql}`;
   return <div className="space-y-5 text-slate-400 leading-relaxed">
     <div>
       <h4 className="font-bold text-white">A. Maak een online werkruimte</h4>
@@ -24,7 +25,7 @@ export function SupabaseSetupGuide() {
     <div className="border-t border-slate-800 pt-4 space-y-3">
       <h4 className="font-bold text-white">B. Maak de werkruimte klaar voor de app</h4>
       <p>De onderstaande insteltekst maakt de opslag en de tijdservice klaar. Je hoeft deze code niet te begrijpen of aan te passen.</p>
-      <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={existing} onChange={e => { setExisting(e.target.checked); setCopyMessage(''); }} className="w-4 h-4 mt-0.5 accent-amber-500" /><span>Dit project heeft al werkende online synchronisatie voor deze app.<span className="block text-slate-500">Aangevinkt: alleen de uitbreiding voor centrale tijd en koppellinks. Niet aangevinkt: inrichting van een nieuw testproject.</span></span></label>
+      <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={existing} onChange={e => { setExisting(e.target.checked); setCopyMessage(''); }} className="w-4 h-4 mt-0.5 accent-amber-500" /><span>Dit project heeft al werkende online synchronisatie voor deze app.<span className="block text-slate-500">Aangevinkt: uitbreidingen voor gedeelde wedstrijddata, centrale tijd en koppellinks. Niet aangevinkt: inrichting van een nieuw testproject.</span></span></label>
       {!existing && <p className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 text-amber-200">Deze eerste inrichting is bedoeld om te oefenen met fictieve deelnemers. Iedereen met de publieke projectkey kan de wedstrijdgegevens lezen en wijzigen. Voor echte deelnemers moet een beheerder eerst de toegang tot jouw medewerkers beperken.</p>}
       <button type="button" className={ui.secondary} onClick={async () => { try { await navigator.clipboard.writeText(sql); setCopyMessage('Insteltekst gekopieerd. Plak deze nu in de SQL Editor van Supabase.'); } catch { setCopyMessage('Kopiëren lukt hier niet automatisch. Open de insteltekst hieronder, selecteer alles en kopieer met Ctrl+C.'); } }}><Copy className="w-4 h-4" />Insteltekst kopiëren</button>
       {copyMessage && <p role="status" className="text-slate-200">{copyMessage}</p>}

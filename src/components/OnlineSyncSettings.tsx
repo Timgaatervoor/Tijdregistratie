@@ -5,6 +5,7 @@ import { ClockStatus } from './ClockStatus';
 import { DevicePairingPanel } from './DevicePairingPanel';
 import { syncStyles as ui } from './syncSettingsStyles';
 import { SupabaseSetupGuide } from './SupabaseSetupGuide';
+import { SyncDiagnostics } from './SyncDiagnostics';
 
 function connectionHelp(error?: string) {
   if (error?.includes('401')) return 'De toegangssleutel wordt niet herkend. Kopieer de volledige Publishable key opnieuw uit Supabase en plak die hieronder.';
@@ -30,6 +31,7 @@ export function OnlineSyncSettings({ eventId, eventName, onJoined }: { eventId: 
     finally { setTesting(false); }
   };
   return <div className="space-y-6">
+    <SyncDiagnostics />
     <section className={ui.card}>
       <div><h3 className={ui.heading}><Cloud className="w-4 h-4 text-amber-400" />Samenwerken met meerdere pc's</h3><p className="mt-2 text-slate-400 leading-relaxed">Supabase is de online opslag die de pc's met elkaar verbindt. Op de hoofd-pc stel je dit eenmaal in. Op extra pc's volstaat daarna een koppellink. Met alleen lokale registratie kun je zonder Supabase werken; de centrale internettijd vereist wel deze verbinding.</p></div>
       <div className="flex flex-wrap gap-3" role="group" aria-label="Hoe wil je beginnen?">

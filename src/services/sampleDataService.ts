@@ -1,4 +1,5 @@
 import { db } from '../db/dexieDb';
+import { suppressSyncJournal } from '../db/syncJournal';
 import { generateUUID } from './operationService';
 import { syncService } from './syncService';
 import type { RaceEvent, RaceProfile, Category, Wave, Participant } from '../types';
@@ -32,19 +33,13 @@ export async function initializeSampleData(force = false): Promise<void> {
 
   // Clear previous if force
   if (force) {
-    await Promise.all([
-      db.stamhoofdConfigs.clear(),
-      db.events.clear(),
-      db.raceProfiles.clear(),
-      db.categories.clear(),
-      db.waves.clear(),
-      db.participants.clear(),
-      db.timingRecords.clear(),
-      db.shootingResults.clear(),
-      db.operations.clear(),
-      db.conflicts.clear(),
-      db.auditLogs.clear(),
-    ]);
+    syncService.saveConfig({ ...syncService.getConfig(), enabled: false });
+    await db.transaction('rw', db.tables, async () => {
+      suppressSyncJournal();
+      await Promise.all([db.syncEntities, db.stamhoofdConfigs, db.events, db.raceProfiles,
+        db.categories, db.waves, db.participants, db.timingRecords, db.shootingResults,
+        db.operations, db.conflicts, db.auditLogs].map(table => table.clear()));
+    });
   }
 
   const eventId = generateUUID();
@@ -258,7 +253,7 @@ export async function resetTimingAndShooting(): Promise<void> {
     async () => {
       await db.timingRecords.clear();
       await db.shootingResults.clear();
-      await db.operations.clear();
+      // Keep queued tombstones and the immutable operation history.
       await db.conflicts.clear();
       await db.participants.toCollection().modify({ status: 'READY', statusReason: undefined });
       await db.auditLogs.add({
@@ -285,7 +280,8 @@ export async function resetToBlankEvent(
   syncService.saveConfig({ ...syncService.getConfig(), enabled: false, eventId: event.id });
   await db.transaction(
     'rw',
-    [
+      [
+        db.syncEntities,
       db.stamhoofdConfigs,
       db.events,
       db.raceProfiles,
@@ -298,8 +294,10 @@ export async function resetToBlankEvent(
       db.conflicts,
       db.auditLogs,
     ],
-    async () => {
-      await Promise.all([
+      async () => {
+        suppressSyncJournal();
+        await Promise.all([
+          db.syncEntities.clear(),
         db.stamhoofdConfigs.clear(),
         db.events.clear(),
         db.raceProfiles.clear(),

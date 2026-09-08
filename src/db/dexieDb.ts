@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { installSyncJournal, suppressSyncJournal, type EntityVersion } from './syncJournal';
 import type { StamhoofdConfig } from '../types/stamhoofd';
 import type {
   RaceEvent,
@@ -16,6 +17,7 @@ import type {
 } from '../types';
 
 export class BiathlonDatabase extends Dexie {
+  syncEntities!: Table<EntityVersion, string>;
   stamhoofdConfigs!: Table<StamhoofdConfig, string>;
   events!: Table<RaceEvent, string>;
   raceProfiles!: Table<RaceProfile, string>;
@@ -75,6 +77,19 @@ export class BiathlonDatabase extends Dexie {
       participants: 'id, externalId, bibNumber, waveId, categoryId, status, [categoryId+status], stamhoofdItemId, stamhoofdTicketSecret, [stamhoofdEventId+stamhoofdWebshopId]',
       stamhoofdConfigs: 'id',
     });
+    this.version(4).stores({
+      syncEntities: 'key, eventId, table, recordId',
+      participants: 'id, eventId, externalId, bibNumber, waveId, categoryId, status, [categoryId+status], stamhoofdItemId, stamhoofdTicketSecret, [stamhoofdEventId+stamhoofdWebshopId]',
+      raceProfiles: 'id, eventId, name',
+      categories: 'id, eventId, code, raceProfileId, *raceProfileIds',
+    }).upgrade(async tx => {
+      suppressSyncJournal();
+      const events = await tx.table('events').toArray();
+      if (events.length === 1) for (const name of ['participants', 'raceProfiles', 'categories']) {
+        await tx.table(name).toCollection().modify(record => { record.eventId ??= events[0].id; });
+      }
+    });
+    installSyncJournal(this);
   }
 }
 

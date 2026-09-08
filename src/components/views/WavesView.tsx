@@ -112,8 +112,10 @@ export const WavesView: React.FC<WavesViewProps> = ({
       return;
     }
 
-    await db.waves.delete(w.id);
-    await db.participants.where('waveId').equals(w.id).modify({ waveId: undefined });
+    await db.transaction('rw', db.waves, db.participants, async () => {
+      await db.waves.delete(w.id);
+      await db.participants.where('waveId').equals(w.id).modify({ waveId: undefined });
+    });
 
     await operationService.logAudit(
       'WAVE_DELETED',

@@ -1,4 +1,5 @@
 import { db } from '../db/dexieDb';
+import { suppressSyncJournal } from '../db/syncJournal';
 import type { EventSnapshot, RaceEvent } from '../types';
 import { syncService } from './syncService';
 import { getCategoryProfileIds } from './categoryProfileService';
@@ -47,6 +48,7 @@ export async function createFullSnapshot(event: RaceEvent): Promise<EventSnapsho
   ]);
 
   const rawData = {
+    syncEntities: await db.syncEntities.where('eventId').equals(event.id).toArray(),
     event,
     participants,
     timingRecords,
@@ -193,6 +195,7 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
   await db.transaction(
     'rw',
     [
+      db.syncEntities,
       db.events,
       db.participants,
       db.timingRecords,
@@ -207,8 +210,10 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       db.stamhoofdConfigs,
     ],
     async () => {
+      suppressSyncJournal();
       // Clear existing
       await Promise.all([
+        db.syncEntities.clear(),
         db.events.clear(),
         db.participants.clear(),
         db.timingRecords.clear(),
@@ -224,6 +229,7 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       ]);
 
       // Bulk restore
+      if (data.syncEntities?.length) await db.syncEntities.bulkPut(data.syncEntities);
       if (data.event) await db.events.put(data.event);
       if (data.participants?.length) await db.participants.bulkPut(data.participants);
       if (data.timingRecords?.length) await db.timingRecords.bulkPut(data.timingRecords);

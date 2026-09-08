@@ -1,6 +1,9 @@
 import { raceClock } from './raceClock';
+import { RealtimeClient } from '@supabase/realtime-js';
 import { db } from '../db/dexieDb';
 import type { RaceOperation, ShootingResult, TimingRecord } from '../types';
+import { suppressSyncJournal, syncedTables, getSyncDeviceId, entityKey } from '../db/syncJournal';
+import { applyEntityOperation, acceptLegacyPatch, seedSyncJournal } from './entitySync';
 
 export type NetworkState = 'ONLINE_SYNCED' | 'OFFLINE_PENDING' | 'SYNCING' | 'SYNC_ERROR';
 
@@ -20,17 +23,50 @@ const defaultConfig: SyncConfig = {
   eventId: '',
 };
 
-class SyncService {
+export class SyncService {
   private isSimulatedOffline = false;
   private listeners: Array<() => void> = [];
   private clockCheck?: Promise<number>;
   private syncing?: Promise<{ syncedCount: number; error?: string }>;
   private lastError?: string;
   private lastSyncAt?: string;
+  private cloudRecords = 0;
+  private replayUploads = false;
+  private realtime?: RealtimeClient;
+  private realtimeKey?: string;
+  private realtimeStatus = 'disconnected';
 
-  constructor() {
+  private stopRealtime() {
+    this.realtime?.disconnect();
+    this.realtime = undefined;
+    this.realtimeKey = undefined;
+    this.realtimeStatus = 'disconnected';
+  }
+  private ensureRealtime(config: SyncConfig) {
+    if (typeof window === 'undefined') return;
+    const key = JSON.stringify(config);
+    if (this.realtimeKey === key) return;
+    this.stopRealtime();
+    this.realtimeKey = key;
+    this.realtime = new RealtimeClient(`${config.projectUrl.replace(/^http/, 'ws')}/realtime/v1`, {
+      params: { apikey: config.anonKey },
+      // Publishable keys are API keys, not JWTs. The gateway supplies anon auth.
+      ...(config.anonKey.startsWith('eyJ') ? { accessToken: async () => config.anonKey } : {}),
+    });
+    this.realtime.channel(`race:${config.eventId}`).on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'race_operations', filter: `event_id=eq.${config.eventId}`,
+    }, () => { if (this.isCurrentConnection(config)) void this.syncNow(); }).subscribe(status => {
+      if (this.realtimeKey !== key) return;
+      this.realtimeStatus = status === 'SUBSCRIBED' ? 'connected' : 'disconnected';
+      console.info('[SYNC] Realtime', this.realtimeStatus);
+      this.triggerChange();
+      if (status === 'SUBSCRIBED' && this.isCurrentConnection(config)) void this.syncNow();
+    });
+  }
+
+  constructor(private readonly database = db) {
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => this.triggerChange());
+      window.addEventListener('online', () => { this.triggerChange(); void this.syncNow(); });
       window.addEventListener('offline', () => this.triggerChange());
 
       // Periodic check of clock sync against reference
@@ -64,6 +100,9 @@ class SyncService {
   }
 
   public saveConfig(config: SyncConfig): void {
+    this.stopRealtime();
+    this.lastSyncAt = undefined;
+    this.cloudRecords = 0;
     const normalized = {
       ...config,
       projectUrl: config.projectUrl.trim().replace(/\/$/, ''),
@@ -111,12 +150,21 @@ class SyncService {
 
   public setSimulatedOffline(offline: boolean) {
     this.isSimulatedOffline = offline;
+    if (offline) this.stopRealtime();
+    else if (typeof window !== 'undefined') void this.syncNow();
     this.triggerChange();
   }
 
   public getClockOffsetMs(): number { return raceClock.status().offsetMs; }
   public getClockStatus() { return raceClock.status(); }
-  public getSyncHealth() { return { lastError: this.lastError, lastSyncAt: this.lastSyncAt }; }
+  public getSyncHealth() { return { lastError: this.lastError, lastSyncAt: this.lastSyncAt, cloudRecords: this.cloudRecords, syncing: !!this.syncing, deviceId: getSyncDeviceId(), realtime: this.realtimeStatus }; }
+  public async getDiagnostics() {
+    const eventId = this.getConfig().eventId;
+    const pending = await this.database.operations.where('eventId').equals(eventId).filter(op => op.syncStatus === 'LOCAL_ONLY').toArray();
+    return syncedTables.map(table => ({ table, pending: pending.filter(op => op.payload?.table === table ||
+      (table === 'timingRecords' && ['START_RECORDED', 'FINISH_RECORDED', 'RECORD_UNDO'].includes(op.type)) ||
+      (table === 'shootingResults' && op.type === 'SHOOTING_RECORDED')).length }));
+  }
   public checkClockOffset(): Promise<number> {
     if (this.clockCheck) return this.clockCheck;
     const config = this.getConfig();
@@ -133,15 +181,15 @@ class SyncService {
   }
 
   private async refreshParticipantStatus(participantId: string) {
-    const p = await db.participants.get(participantId);
-    if (!p || ['DNS', 'DNF', 'DSQ'].includes(p.status)) return;
-    const timing = (await db.timingRecords.toArray()).filter(t => !t.isReversed && (t.participantId === p.id || t.bibNumber === p.bibNumber));
-    await db.participants.update(p.id, { status: timing.some(t => t.type === 'FINISH') ? 'FINISHED' : timing.some(t => t.type === 'START') ? 'STARTED' : 'READY' });
+    const p = await this.database.participants.get(participantId);
+    if (!p || (p.eventId && p.eventId !== this.getConfig().eventId) || ['DNS', 'DNF', 'DSQ'].includes(p.status)) return;
+    const timing = (await this.database.timingRecords.toArray()).filter(t => t.eventId === this.getConfig().eventId && !t.isReversed && (t.participantId === p.id || t.bibNumber === p.bibNumber));
+    await this.database.participants.update(p.id, { status: timing.some(t => t.type === 'FINISH') ? 'FINISHED' : timing.some(t => t.type === 'START') ? 'STARTED' : 'READY' });
   }
 
   public async getPendingCount(): Promise<number> {
     try {
-      return await db.operations.where('syncStatus').equals('LOCAL_ONLY').count();
+      return await this.database.operations.where('syncStatus').equals('LOCAL_ONLY').filter(op => op.eventId === this.getConfig().eventId).count();
     } catch {
       return 0;
     }
@@ -149,10 +197,19 @@ class SyncService {
 
   private async applyRemoteOperation(operation: RaceOperation): Promise<void> {
     const payload = operation.payload || {};
+    if (operation.type === 'ENTITY_UPSERT' || operation.type === 'ENTITY_DELETED') {
+      await applyEntityOperation(this.database, operation);
+      const participantId = payload.table === 'participants' ? payload.recordId : payload.table === 'timingRecords' ? payload.record?.participantId : undefined;
+      if (participantId && (payload.table === 'timingRecords' || await this.database.timingRecords.where('participantId').equals(participantId).filter(t => t.eventId === operation.eventId).count())) {
+        await this.refreshParticipantStatus(participantId);
+      }
+      return;
+    }
 
     if (operation.type === 'START_RECORDED' || operation.type === 'FINISH_RECORDED') {
       const recordId = String(payload.recordId || '');
-      if (!recordId || (await db.timingRecords.get(recordId))) return;
+      if ((await this.database.syncEntities.get(entityKey(operation.eventId, 'timingRecords', recordId)))?.deletedAt) return;
+      if (!recordId || (await this.database.timingRecords.get(recordId))) return;
 
       const record: TimingRecord = {
         id: recordId,
@@ -172,20 +229,21 @@ class SyncService {
         syncStatus: 'SYNCED',
       };
       // A revoke can arrive before its original record (same upload batch or offline devices).
-      const revokes = (await db.operations.toArray()).filter(op => op.eventId === record.eventId && ((op.type === 'RECORD_UNDO' && op.payload.recordId === record.id) || (op.type === 'CONFLICT_RESOLVED' && op.payload.discardedRecordId === record.id)));
+      const revokes = (await this.database.operations.toArray()).filter(op => op.eventId === record.eventId && ((op.type === 'RECORD_UNDO' && op.payload.recordId === record.id) || (op.type === 'CONFLICT_RESOLVED' && op.payload.discardedRecordId === record.id)));
       if (revokes.length) { record.isReversed = true; record.reversedReason = 'Herroepen door gesynchroniseerde correctie'; }
-      const participant = record.participantId ? await db.participants.get(record.participantId) : undefined;
+      const participant = record.participantId ? await this.database.participants.get(record.participantId) : undefined;
       if (participant?.bibNumber) record.bibNumber = participant.bibNumber;
-      await db.timingRecords.put(record);
-      const duplicates = await db.timingRecords.where({ bibNumber: record.bibNumber, type: record.type }).filter(t => t.eventId === record.eventId && !t.isReversed && t.id !== record.id).toArray();
-      for (const other of record.isReversed ? [] : duplicates) await db.conflicts.put({ id: `conflict-${[other.id, record.id].sort().join('-')}`, eventId: record.eventId, participantId: record.participantId ?? '', bibNumber: record.bibNumber, type: record.type === 'START' ? 'START_CONFLICT' : 'FINISH_CONFLICT', recordA: other, recordB: record, createdAt: operation.deviceTimestamp });
+      await this.database.timingRecords.put(record);
+      const duplicates = await this.database.timingRecords.where({ bibNumber: record.bibNumber, type: record.type }).filter(t => t.eventId === record.eventId && !t.isReversed && t.id !== record.id).toArray();
+      for (const other of record.isReversed ? [] : duplicates) await this.database.conflicts.put({ id: `conflict-${[other.id, record.id].sort().join('-')}`, eventId: record.eventId, participantId: record.participantId ?? '', bibNumber: record.bibNumber, type: record.type === 'START' ? 'START_CONFLICT' : 'FINISH_CONFLICT', recordA: other, recordB: record, createdAt: operation.deviceTimestamp });
       if (operation.participantId) await this.refreshParticipantStatus(operation.participantId);
       return;
     }
 
     if (operation.type === 'SHOOTING_RECORDED') {
       const recordId = String(payload.recordId || '');
-      if (!recordId || (await db.shootingResults.get(recordId))) return;
+      if ((await this.database.syncEntities.get(entityKey(operation.eventId, 'shootingResults', recordId)))?.deletedAt) return;
+      if (!recordId || (await this.database.shootingResults.get(recordId))) return;
 
       const result: ShootingResult = {
         id: recordId,
@@ -198,6 +256,7 @@ class SyncService {
         shots: Number(payload.shots || Number(payload.hits || 0) + Number(payload.misses || 0)),
         hits: Number(payload.hits || 0),
         misses: Number(payload.misses || 0),
+        targetDetails: payload.targetDetails,
         isCorrection: Boolean(payload.isCorrection),
         supersedesIds: Array.isArray(payload.supersedesIds) ? payload.supersedesIds : undefined,
         correctionReason: payload.correctionReason,
@@ -205,12 +264,13 @@ class SyncService {
         deviceId: operation.deviceId,
         syncStatus: 'SYNCED',
       };
-      await db.shootingResults.put(result);
+      await this.database.shootingResults.put(result);
       return;
     }
 
     if (operation.type === 'WAVE_STARTED' && payload.waveId) {
-      await db.waves.update(String(payload.waveId), {
+      if (!await acceptLegacyPatch(this.database, operation, 'waves', String(payload.waveId))) return;
+      await this.database.waves.update(String(payload.waveId), {
         actualStartTime: String(payload.timestamp || operation.deviceTimestamp),
         status: 'STARTED',
       });
@@ -218,24 +278,29 @@ class SyncService {
     }
 
     if ((operation.type === 'PARTICIPANT_UPDATED' || operation.type === 'STATUS_CHANGED' || operation.type === 'BIB_ASSIGNED') && operation.participantId) {
+      if (!await acceptLegacyPatch(this.database, operation, 'participants', operation.participantId)) return;
       const patch = payload.updates || payload;
       const allowed = Object.fromEntries(['firstName','lastName','birthDate','gender','categoryId','raceProfileId','waveId','bibNumber','status','statusReason','penaltyLapsCompleted'].filter(key => key in patch).map(key => [key, patch[key]]));
-      await db.participants.update(operation.participantId, allowed);
+      await this.database.participants.update(operation.participantId, allowed);
       if (allowed.bibNumber) {
-        await db.timingRecords.where('participantId').equals(operation.participantId).modify({ bibNumber: allowed.bibNumber });
-        await db.shootingResults.where('participantId').equals(operation.participantId).modify({ bibNumber: allowed.bibNumber });
+        await this.database.timingRecords.where('participantId').equals(operation.participantId).modify({ bibNumber: allowed.bibNumber });
+        await this.database.shootingResults.where('participantId').equals(operation.participantId).modify({ bibNumber: allowed.bibNumber });
       }
       return;
     }
 
     if (operation.type === 'CONFLICT_RESOLVED' && payload.discardedRecordId) {
-      await db.timingRecords.update(payload.discardedRecordId, { isReversed: true, reversedReason: payload.reason });
-      await db.conflicts.filter(c => c.id === payload.conflictId || (c.recordA.id === payload.discardedRecordId && c.recordB.id === payload.chosenRecordId) || (c.recordB.id === payload.discardedRecordId && c.recordA.id === payload.chosenRecordId)).modify({ resolvedAt: operation.deviceTimestamp, resolvedReason: payload.reason, resolvedWinner: payload.selectedWinner });
+      const target = await this.database.timingRecords.get(payload.discardedRecordId);
+      if (target && target.eventId !== operation.eventId) throw new Error('Correctie verwijst naar ander evenement.');
+      await this.database.timingRecords.update(payload.discardedRecordId, { isReversed: true, reversedReason: payload.reason });
+      await this.database.conflicts.filter(c => c.id === payload.conflictId || (c.recordA.id === payload.discardedRecordId && c.recordB.id === payload.chosenRecordId) || (c.recordB.id === payload.discardedRecordId && c.recordA.id === payload.chosenRecordId)).modify({ resolvedAt: operation.deviceTimestamp, resolvedReason: payload.reason, resolvedWinner: payload.selectedWinner });
       if (operation.participantId) await this.refreshParticipantStatus(operation.participantId);
       return;
     }
     if (operation.type === 'RECORD_UNDO' && payload.recordId) {
-      await db.timingRecords.update(String(payload.recordId), {
+      const target = await this.database.timingRecords.get(String(payload.recordId));
+      if (target && target.eventId !== operation.eventId) throw new Error('Correctie verwijst naar ander evenement.');
+      await this.database.timingRecords.update(String(payload.recordId), {
         isReversed: true,
         reversedReason: String(payload.reason || 'Online undo'),
       });
@@ -245,10 +310,12 @@ class SyncService {
 
   private async pullRemoteOperations(config: SyncConfig): Promise<number> {
     let applied = 0;
+    let cloudRecords = 0;
     for (let offset = 0; ; offset += 500) {
     const response = await fetch(
       `${config.projectUrl}/rest/v1/race_operations?event_id=eq.${encodeURIComponent(config.eventId)}&order=created_at.asc,operation_id.asc&limit=500&offset=${offset}`,
       {
+        signal: AbortSignal.timeout(15000), cache: 'no-store',
         headers: {
           apikey: config.anonKey,
           Authorization: `Bearer ${config.anonKey}`,
@@ -258,6 +325,7 @@ class SyncService {
     if (!response.ok) throw new Error(`Download synchronisatie mislukt (HTTP ${response.status}).`);
 
     const rows = (await response.json()) as Array<Record<string, any>>;
+    cloudRecords += rows.length;
     for (const row of rows) {
       if (String(row.event_id) !== config.eventId) continue;
       const operation: RaceOperation = {
@@ -274,18 +342,20 @@ class SyncService {
         revision: Number(row.revision || 1),
       };
 
-      await db.transaction('rw', [db.events, db.operations, db.timingRecords, db.shootingResults, db.participants, db.waves, db.conflicts], async () => {
+      await this.database.transaction('rw', [this.database.events, this.database.operations, this.database.timingRecords, this.database.shootingResults, this.database.participants, this.database.waves, this.database.conflicts, this.database.raceProfiles, this.database.categories, this.database.syncEntities], async () => {
+        suppressSyncJournal();
         // A reset can finish while the HTTP request is still in flight. Check
         // inside the transaction so old operations cannot repopulate a new event.
-        if (!this.isCurrentConnection(config) || !await db.events.get(config.eventId)) return;
-        if (await db.operations.get(operation.operationId)) return;
-        await db.operations.put(operation);
+        if (!this.isCurrentConnection(config) || !await this.database.events.get(config.eventId)) return;
+        if (await this.database.operations.get(operation.operationId)) return;
+        await this.database.operations.put(operation);
         await this.applyRemoteOperation(operation);
         applied += 1;
       });
     }
     if (rows.length < 500 || !this.isCurrentConnection(config)) break;
     }
+    if (this.isCurrentConnection(config)) this.cloudRecords = cloudRecords;
     return applied;
   }
 
@@ -301,17 +371,26 @@ class SyncService {
       if (!result.error) this.lastSyncAt = raceClock.nowISO();
       this.triggerChange();
       return result;
-    }).finally(() => { this.syncing = undefined; });
+    }).finally(() => { this.syncing = undefined; this.triggerChange(); });
+    this.triggerChange();
     return this.syncing;
   }
+  /** A complete log merge; never clears IndexedDB or treats absence as deletion. */
+  public async fullSync() {
+    if (this.syncing) await this.syncing;
+    this.replayUploads = true;
+    const first = await this.syncNow();
+    if (first.error) return first;
+    // Also uploads edits made while the first HTTP cycle was in flight.
+    const second = await this.syncNow();
+    return { syncedCount: first.syncedCount + second.syncedCount, error: second.error };
+  }
   private async performSync(): Promise<{ syncedCount: number; error?: string }> {
-    if (this.isSimulatedOffline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    if (this.isSimulatedOffline || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
       return { syncedCount: 0, error: 'Apparaat is offline' };
     }
 
     try {
-      const pending = await db.operations.where('syncStatus').equals('LOCAL_ONLY').toArray();
-
       const config = this.getConfig();
       if (!config.enabled) {
         return { syncedCount: 0, error: 'Online synchronisatie is niet geconfigureerd.' };
@@ -319,28 +398,32 @@ class SyncService {
       if (!config.projectUrl || !config.anonKey) {
         return { syncedCount: 0, error: 'Supabase Project URL en anon key ontbreken.' };
       }
-      const activeEvent = await db.events.toCollection().first();
+      const activeEvent = await this.database.events.toCollection().first();
       if (!config.eventId || activeEvent?.id !== config.eventId) {
         return { syncedCount: 0, error: 'Het Supabase Event-ID moet overeenkomen met het huidige evenement.' };
       }
 
-      const uploadable = pending.filter(
-        (operation) => operation.eventId === config.eventId
-      );
-      const pulledCount = await this.pullRemoteOperations(config);
-      if (!this.isCurrentConnection(config) || !await db.events.get(config.eventId)) return { syncedCount: 0 };
-      if (uploadable.length === 0) return { syncedCount: pulledCount };
-
+      try { this.ensureRealtime(config); }
+      catch { this.stopRealtime(); console.warn('[SYNC] Realtime niet beschikbaar; periodieke sync blijft actief.'); }
+      await seedSyncJournal(this.database, config.eventId);
+      const replay = this.replayUploads;
+      this.replayUploads = false;
+      const uploadable = await this.database.operations.where('eventId').equals(config.eventId).filter(op => replay || op.syncStatus === 'LOCAL_ONLY').toArray();
+      let uploaded = 0;
+      for (let offset = 0; offset < uploadable.length; offset += 200) {
+      if (!this.isCurrentConnection(config) || !await this.database.events.get(config.eventId)) return { syncedCount: uploaded };
+      const batch = uploadable.slice(offset, offset + 200);
       const response = await fetch(`${config.projectUrl}/rest/v1/race_operations?on_conflict=operation_id`, {
         method: 'POST',
+        signal: AbortSignal.timeout(15000),
         headers: {
           apikey: config.anonKey,
           Authorization: `Bearer ${config.anonKey}`,
           'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal',
+          Prefer: 'resolution=ignore-duplicates,return=minimal',
         },
         body: JSON.stringify(
-          uploadable.map((operation) => ({
+          batch.map((operation) => ({
             operation_id: operation.operationId,
             event_id: operation.eventId,
             participant_id: operation.participantId || null,
@@ -363,15 +446,20 @@ class SyncService {
         };
       }
 
-      for (const op of uploadable) {
-        await db.operations.update(op.operationId, {
-          syncStatus: 'SYNCED',
-          serverTimestamp: new Date().toISOString(),
+      await this.database.transaction('rw', this.database.events, this.database.operations, async () => {
+        if (!this.isCurrentConnection(config) || !await this.database.events.get(config.eventId)) return;
+        for (const op of batch) await this.database.operations.update(op.operationId, {
+          syncStatus: 'SYNCED', serverTimestamp: new Date().toISOString(),
         });
+      });
+      uploaded += batch.length;
+      console.info('[SYNC] Upload bevestigd', batch.length);
       }
-
+      if (!this.isCurrentConnection(config) || !await this.database.events.get(config.eventId)) return { syncedCount: uploaded };
+      const pulledCount = await this.pullRemoteOperations(config);
       this.triggerChange();
-      return { syncedCount: uploadable.length + pulledCount };
+      console.info('[SYNC] Sync complete', { uploaded, downloaded: pulledCount });
+      return { syncedCount: uploaded + pulledCount };
     } catch (err: any) {
       return { syncedCount: 0, error: err?.message || 'Synchronisatiefout' };
     }

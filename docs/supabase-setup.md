@@ -1,5 +1,8 @@
 # Supabase online synchronisatie
 
+Voor het delen van waves, deelnemers en overige wedstrijddata: voer na deze
+basisinstallatie de migratie uit en volg [Supabase synchronisatie](supabase-sync.md).
+
 Voor centrale tijd en het toevoegen van extra pc's via een eenmalige koppellink: volg na de basisinstallatie [Centrale tijd en extra pc's](reliability.md) en voer de aanvullende SQL uit.
 
 ## 1. Maak een gratis project

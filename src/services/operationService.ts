@@ -10,16 +10,8 @@ import type {
   SyncStatus,
 } from '../types';
 
-export function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+import { generateUUID } from './uuid';
+export { generateUUID } from './uuid';
 
 // BroadcastChannel for cross-tab and multi-device local simulated synchronization
 let broadcastChannel: BroadcastChannel | null = null;
@@ -92,7 +84,7 @@ export class OperationService {
     if (participant) {
       existingFinish = await db.timingRecords
         .where({ bibNumber, type: 'FINISH' })
-        .and((r) => !r.isReversed)
+        .and((r) => r.eventId === eventId && !r.isReversed)
         .first();
     }
 

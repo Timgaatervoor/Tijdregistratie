@@ -40,6 +40,9 @@ export async function applyEntityOperation(database: BiathlonDatabase, op: RaceO
   }
   if (deleting) {
     await table.delete(recordId);
+    if (name === 'timingRecords' || name === 'shootingResults') await database.conflicts
+      .filter(c => c.eventId === op.eventId && (c.recordA.id === recordId || c.recordB.id === recordId))
+      .modify({ resolvedWinner: 'MANUAL', resolvedAt: op.deviceTimestamp, resolvedReason: 'Registratie gewist' });
     if (name === 'waves') await database.participants.where('waveId').equals(recordId)
       .filter(p => !p.eventId || p.eventId === op.eventId).modify({ waveId: undefined });
   }

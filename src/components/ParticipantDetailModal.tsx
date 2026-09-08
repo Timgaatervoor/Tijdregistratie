@@ -4,6 +4,7 @@ import type { RaceResult, AuditLog, ParticipantStatus, Participant, Category, Wa
 import { db, getActiveEventId } from '../db/dexieDb';
 import { operationService, generateUUID } from '../services/operationService';
 import { formatLocalTime } from '../services/timingEngine';
+import { ParticipantDeletePanel } from './ParticipantDeletePanel';
 import {
   getCategoryProfileIds,
   getProfilesForCategory,
@@ -841,6 +842,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         )}
 
         {/* Footer */}
+        <ParticipantDeletePanel key={activeResult.participantId} participantId={activeResult.participantId} name={activeResult.name} onDeleted={() => { onUpdated(); onClose(); }} />
         <div className="px-6 py-3 border-t border-slate-800 bg-slate-850 flex justify-end">
           <button
             onClick={onClose}

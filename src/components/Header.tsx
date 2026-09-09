@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Printer,
   LockOpen,
+  Activity,
 } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { soundService } from '../services/soundService';
@@ -34,6 +35,7 @@ interface HeaderProps {
   deviceConfig: DeviceConfig | null;
   pendingSyncCount: number;
   onOpenPreRaceCheck: () => void;
+  onOpenSystemHealth: () => void;
   onOpenPrint: () => void;
   onUnlockDevice: () => void;
   isTestMode: boolean;
@@ -45,6 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
   deviceConfig,
   pendingSyncCount,
   onOpenPreRaceCheck,
+  onOpenSystemHealth,
   onOpenPrint,
   onUnlockDevice,
   isTestMode,
@@ -214,6 +217,16 @@ export const Header: React.FC<HeaderProps> = ({
               {isSimulatedOffline ? 'Offline simulatie aan' : 'Offline simuleren'}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={onOpenSystemHealth}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
+            title="Systeemstatus en diagnostiek"
+          >
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Systeemstatus</span>
+          </button>
 
           {/* Sound Toggle (Req 52) */}
           <button

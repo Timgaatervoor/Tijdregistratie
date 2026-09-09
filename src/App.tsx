@@ -17,6 +17,7 @@ import { AttentionView } from './components/views/AttentionView';
 import { SettingsView } from './components/views/SettingsView';
 
 // Modals
+import { SystemHealthModal } from './components/SystemHealthModal';
 import { PreRaceCheckModal } from './components/PreRaceCheckModal';
 import { PrintModal } from './components/PrintModal';
 import { ConflictResolverModal } from './components/ConflictResolverModal';
@@ -63,6 +64,7 @@ export default function App() {
 
   // Modals state
   const [showPreRaceModal, setShowPreRaceModal] = useState(false);
+  const [showSystemHealthModal, setShowSystemHealthModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [activeConflict, setActiveConflict] = useState<RaceConflict | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -189,6 +191,7 @@ export default function App() {
           deviceConfig={deviceConfig}
           pendingSyncCount={pendingSyncCount}
           onOpenPreRaceCheck={() => setShowPreRaceModal(true)}
+          onOpenSystemHealth={() => setShowSystemHealthModal(true)}
           onOpenPrint={() => setShowPrintModal(true)}
           onUnlockDevice={handleUnlockDevice}
           isTestMode={event?.isTestMode ?? false}
@@ -311,6 +314,11 @@ export default function App() {
       </main>
 
       {/* Global Modals */}
+      <SystemHealthModal
+        isOpen={showSystemHealthModal}
+        onClose={() => setShowSystemHealthModal(false)}
+        deviceConfig={deviceConfig}
+      />
       <PreRaceCheckModal
         isOpen={showPreRaceModal}
         onClose={() => setShowPreRaceModal(false)}

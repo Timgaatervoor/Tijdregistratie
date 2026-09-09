@@ -23,6 +23,24 @@ class SoundService {
     return this.isEnabled;
   }
 
+  public isAudioSupported(): boolean {
+    return typeof window !== 'undefined' && !!(window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+  }
+
+  public getAudioState(): string {
+    return this.audioCtx?.state ?? 'nog niet gestart';
+  }
+
+  public async testSound(): Promise<void> {
+    if (!this.isEnabled) throw new Error('Geluid is uitgeschakeld. Schakel het in via de kopbalk.');
+    const ctx = this.getContext();
+    if (!ctx) throw new Error('Deze browser ondersteunt geen Web Audio.');
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (ctx.state !== 'running') throw new Error('De browser heeft het geluid nog niet vrijgegeven.');
+    this.playSuccess();
+  }
+
   private getContext(): AudioContext | null {
     if (!this.isEnabled) return null;
     if (typeof window === 'undefined') return null;
@@ -34,7 +52,7 @@ class SoundService {
       }
     }
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
+      void this.audioCtx.resume().catch(() => {});
     }
     return this.audioCtx;
   }

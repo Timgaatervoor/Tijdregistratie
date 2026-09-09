@@ -41,5 +41,16 @@ export class RaceClock {
     else this.error = failure;
     return this.status();
   }
+  async syncWithNetwork(source = 'network', sample?: () => Promise<number>) {
+    return this.synchronize(source, sample ?? (async () => {
+      const response = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC', {
+        cache: 'no-store', signal: AbortSignal.timeout(3000),
+      });
+      if (!response.ok) throw new Error(`Tijdserver HTTP ${response.status}.`);
+      const data = await response.json();
+      // A failed network sample must never be replaced with the local wall clock.
+      return new Date(data.utc_datetime).getTime();
+    }));
+  }
 }
 export const raceClock = new RaceClock();

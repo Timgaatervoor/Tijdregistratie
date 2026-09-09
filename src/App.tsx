@@ -53,6 +53,7 @@ export default function App() {
     pendingSyncCount,
     refresh,
     loading,
+    loadError,
   } = useEventData();
 
   const { isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
@@ -135,6 +136,16 @@ export default function App() {
     if (p) setSelectedParticipant(p);
   };
 
+  if (!event && loadError) {
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-slate-200">
+      <div className="max-w-lg space-y-4 rounded-xl border border-amber-500/40 bg-slate-900 p-6">
+        <h1 className="text-lg font-bold">Lokale wedstrijddata laden lukt nog niet</h1>
+        <p role="alert" className="text-sm leading-relaxed break-words">{loadError}</p>
+        <p className="text-sm text-slate-400">Je wedstrijddata wordt niet gewist. Sluit andere tabbladen of vensters van deze app en probeer opnieuw.</p>
+        <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-amber-500 px-4 py-2 font-bold text-slate-950">Opnieuw laden</button>
+      </div>
+    </div>;
+  }
   if (loading && !event) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 space-y-3">

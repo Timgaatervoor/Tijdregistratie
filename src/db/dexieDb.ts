@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { DatabaseStartup } from './databaseStartup';
 import { installSyncJournal, suppressSyncJournal, type EntityVersion } from './syncJournal';
 import type { StamhoofdConfig } from '../types/stamhoofd';
 import type {
@@ -95,6 +96,7 @@ export class BiathlonDatabase extends Dexie {
 
 // Node has no browser IndexedDB. Keep test/CLI storage explicitly separate.
 export const db = new BiathlonDatabase(typeof window === 'undefined' ? 'BiathlonDeHaanDB-node-test' : 'BiathlonDeHaanDB');
+export const databaseStartup = new DatabaseStartup(db);
 
 export async function getActiveEventId(): Promise<string> {
   const event = await db.events.toCollection().first();

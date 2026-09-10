@@ -66,6 +66,14 @@ De SQL-migratie voegt race_operations toe aan de bestaande supabase_realtime
 publication als dat nog niet gebeurd is. Zie de officiële
 [Supabase Postgres Changes-documentatie](https://supabase.com/docs/guides/realtime/postgres-changes).
 
+De knop **Toestellen** gebruikt op hetzelfde eventkanaal Realtime Presence voor
+de lijst met actieve wedstrijdposten en Realtime Broadcast voor korte berichten.
+Dit maakt geen extra databaserijen en opent geen tweede websocket. Een bericht
+wordt alleen aan op dat moment verbonden toestellen geleverd en maximaal 50
+berichten blijven tijdelijk in het geheugen van elke geopende app. Na herladen
+verdwijnt die berichtenhistoriek. De installatie-UUID is de unieke ontvanger;
+postnaam, rol en operator zijn alleen zichtbare context.
+
 ## Conflicten en verwijderingen
 
 Configuratie gebruikt de laatste updatedAt; bij gelijke timestamps wint de

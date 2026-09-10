@@ -13,6 +13,7 @@ import {
   Printer,
   LockOpen,
   Activity,
+  MessageSquare,
 } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { soundService } from '../services/soundService';
@@ -36,6 +37,7 @@ interface HeaderProps {
   pendingSyncCount: number;
   onOpenPreRaceCheck: () => void;
   onOpenSystemHealth: () => void;
+  onOpenDeviceCommunication: () => void;
   onOpenPrint: () => void;
   onUnlockDevice: () => void;
   isTestMode: boolean;
@@ -48,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   pendingSyncCount,
   onOpenPreRaceCheck,
   onOpenSystemHealth,
+  onOpenDeviceCommunication,
   onOpenPrint,
   onUnlockDevice,
   isTestMode,
@@ -58,12 +61,33 @@ export const Header: React.FC<HeaderProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [messageToast, setMessageToast] = useState<string | null>(null);
+  const knownMessageIds = React.useRef(new Set(syncService.getDeviceMessages().map(message => message.id)));
+  const messageToastTimer = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
     const updateFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', updateFullscreen);
     updateFullscreen();
     return () => document.removeEventListener('fullscreenchange', updateFullscreen);
+  }, []);
+
+  React.useEffect(() => syncService.subscribe(() => {
+    const ownInstallationId = syncService.getSyncHealth().deviceId;
+    const messages = syncService.getDeviceMessages();
+    const incoming = messages.filter(message => !knownMessageIds.current.has(message.id) && message.senderInstallationId !== ownInstallationId);
+    messages.forEach(message => knownMessageIds.current.add(message.id));
+    if (!incoming.length) return;
+    setUnreadMessages(count => count + incoming.length);
+    const latest = incoming[incoming.length - 1];
+    setMessageToast(`${latest.senderDeviceId}: ${latest.text}`);
+    if (messageToastTimer.current) window.clearTimeout(messageToastTimer.current);
+    messageToastTimer.current = window.setTimeout(() => setMessageToast(null), 6000);
+  }), []);
+
+  React.useEffect(() => () => {
+    if (messageToastTimer.current) window.clearTimeout(messageToastTimer.current);
   }, []);
 
   const toggleSound = () => {
@@ -238,6 +262,17 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Systeemstatus</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => { setUnreadMessages(0); setMessageToast(null); onOpenDeviceCommunication(); }}
+            className="relative h-9 flex items-center gap-1.5 px-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
+            title="Online toestellen bekijken en berichten sturen"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden xl:inline">Toestellen</span>
+            {unreadMessages > 0 && <span className="min-w-5 h-5 px-1 inline-flex items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-black" aria-label={`${unreadMessages} ongelezen berichten`}>{unreadMessages}</span>}
+          </button>
+
           {/* Sound Toggle (Req 52) */}
           <button
             onClick={toggleSound}
@@ -292,6 +327,12 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="bg-slate-800 border-t border-slate-700 text-slate-200 text-xs py-1 px-4 text-center">
           {syncToast}
         </div>
+      )}
+
+      {messageToast && (
+        <button type="button" onClick={() => { setUnreadMessages(0); setMessageToast(null); onOpenDeviceCommunication(); }} className="w-full bg-blue-950 border-t border-blue-700/60 text-blue-100 text-xs py-2 px-4 text-center hover:bg-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
+          Nieuw bericht · {messageToast}
+        </button>
       )}
 
     </header>

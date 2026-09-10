@@ -19,6 +19,7 @@ import { WavePlanningPanel } from '../WavePlanningPanel';
 import { defaultWaveSettings, nextWaveTime, timeSeconds, waveAllows, type WaveSettings } from '../../services/wavePlanning';
 import { soundService } from '../../services/soundService';
 import { SafeConfirmButton } from '../SafeConfirmButton';
+import { syncStyles as ui } from '../syncSettingsStyles';
 
 interface WavesViewProps {
   waves: Wave[];
@@ -221,7 +222,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
             setNewWaveName(`Wave ${nextNum}`);
             setShowAddModal(true);
           }}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition uppercase tracking-wider"
+          className={`${ui.primary} h-11`}
         >
           <Plus className="w-4 h-4" /> Nieuwe startgroep
         </button>
@@ -259,7 +260,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenEditModal(w)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                      className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       title="Wave bewerken"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -267,7 +268,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                     <SafeConfirmButton
                       mode="double-click"
                       onConfirm={() => handleDeleteWave(w)}
-                      className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-200 border border-red-800/40 transition"
+                      className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-200 border border-red-800/40 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       title="Wave verwijderen"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -288,19 +289,19 @@ export const WavesView: React.FC<WavesViewProps> = ({
                           value={inlineTimeValue}
                           onChange={(e) => setInlineTimeValue(e.target.value)}
                           placeholder="10:00:00"
-                          className="w-24 bg-slate-800 border border-amber-500 rounded px-2 py-0.5 text-white font-mono text-xs text-center"
+                          className="h-9 w-28 bg-slate-800 border border-slate-700 rounded-lg px-2 text-white font-mono text-xs text-center focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                           autoFocus
                         />
                         <button
                           onClick={() => handleSaveInlineTime(w)}
-                          className="p-1 rounded bg-amber-500 text-slate-950 hover:bg-amber-400"
+                          className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                           title="Opslaan"
                         >
                           <Check className="w-3 h-3 stroke-[3]" />
                         </button>
                         <button
                           onClick={() => setEditingTimeWaveId(null)}
-                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                          className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                           title="Annuleren"
                         >
                           <X className="w-3 h-3" />
@@ -374,7 +375,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => { setManagingParticipantsWave(w); setParticipantSearch(''); setAssignmentError(''); }}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition"
+                  className={`w-full ${ui.secondary}`}
                 >
                   <Users className="w-3.5 h-3.5 text-amber-400" />
                   <span>Deelnemers in startgroep ({waveParticipants.length})</span>
@@ -385,21 +386,21 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => handleDelayWave(w, 2)}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono text-[11px]"
+                      className="h-9 min-w-12 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       title="Stel wave uit met 2 minuten"
                     >
                       +2m
                     </button>
                     <button
                       onClick={() => handleDelayWave(w, 5)}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono text-[11px]"
+                      className="h-9 min-w-12 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       title="Stel wave uit met 5 minuten"
                     >
                       +5m
                     </button>
                     <button
                       onClick={() => handleDelayWave(w, 10)}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono text-[11px]"
+                      className="h-9 min-w-12 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       title="Stel wave uit met 10 minuten"
                     >
                       +10m
@@ -421,8 +422,9 @@ export const WavesView: React.FC<WavesViewProps> = ({
                 <Edit2 className="w-4 h-4 text-amber-400" /> Wave Bewerken: #{editingWave.waveNumber}
               </h3>
               <button
+                type="button"
                 onClick={() => setEditingWave(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -438,7 +440,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="bv. Wave 1 - Jeugd & Recreanten"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-medium focus:border-amber-400"
+                  className={`${ui.input} h-11`}
                 />
               </div>
 
@@ -453,7 +455,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                     value={editStartTime}
                     onChange={(e) => setEditStartTime(e.target.value)}
                     placeholder="10:00:00"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold focus:border-amber-400"
+                    className={`${ui.input} h-11 font-mono font-bold`}
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">Formaat: uu:mm:ss</span>
                 </div>
@@ -468,35 +470,35 @@ export const WavesView: React.FC<WavesViewProps> = ({
                     max={1000}
                     value={editCapacity}
                     onChange={(e) => setEditCapacity(parseInt(e.target.value, 10) || 25)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold focus:border-amber-400"
+                    className={`${ui.input} h-11 font-mono font-bold`}
                   />
                 </div>
               </div>
 
               <div className="flex justify-between items-center gap-2 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => {
+                <SafeConfirmButton
+                  mode="double-click"
+                  onConfirm={() => {
                     const w = editingWave;
                     setEditingWave(null);
                     handleDeleteWave(w);
                   }}
-                  className="px-3 py-2 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 text-xs font-bold flex items-center gap-1.5"
+                  className="h-10 px-4 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 text-xs font-bold flex items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Verwijderen
-                </button>
+                </SafeConfirmButton>
 
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setEditingWave(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-semibold"
+                    className={`${ui.secondary} h-11`}
                   >
                     Annuleren
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold uppercase tracking-wider"
+                    className={`${ui.primary} h-11`}
                   >
                     Opslaan
                   </button>
@@ -516,8 +518,9 @@ export const WavesView: React.FC<WavesViewProps> = ({
                 <Plus className="w-4 h-4 text-amber-400" /> Nieuwe startgroep
               </h3>
               <button
+                type="button"
                 onClick={() => setShowAddModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -533,7 +536,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   value={newWaveName}
                   onChange={(e) => setNewWaveName(e.target.value)}
                   placeholder={`bv. Wave ${waves.length + 1}`}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium"
+                  className={`${ui.input} h-11`}
                 />
               </div>
 
@@ -547,7 +550,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   value={newStartTime}
                   onChange={(e) => setNewStartTime(e.target.value)}
                   placeholder="10:00:00"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
+                  className={`${ui.input} h-11 font-mono font-bold`}
                 />
               </div>
 
@@ -561,7 +564,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                   max={1000}
                   value={newCapacity}
                   onChange={(e) => setNewCapacity(parseInt(e.target.value, 10) || 25)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold"
+                  className={`${ui.input} h-11 font-mono font-bold`}
                 />
               </div>
 
@@ -569,13 +572,13 @@ export const WavesView: React.FC<WavesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 font-medium"
+                  className={`${ui.secondary} h-11`}
                 >
                   Annuleren
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold uppercase tracking-wider"
+                  className={`${ui.primary} h-11`}
                 >
                   Wave Aanmaken
                 </button>
@@ -599,15 +602,16 @@ export const WavesView: React.FC<WavesViewProps> = ({
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setManagingParticipantsWave(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <label className="block text-slate-300">Deelnemers zoeken
-              <input type="search" value={participantSearch} onChange={e => setParticipantSearch(e.target.value)} placeholder="Naam, borstnummer, artikel of leeftijdscategorie" className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" />
+              <input type="search" value={participantSearch} onChange={e => setParticipantSearch(e.target.value)} placeholder="Naam, borstnummer, artikel of leeftijdscategorie" className={`${ui.input} h-11 mt-1.5`} />
             </label>
             {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden">
@@ -649,7 +653,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                             type="button"
                             disabled={assignmentBusy}
                             onClick={() => handleRemoveParticipantFromWave(p.id)}
-                            className="p-1.5 rounded bg-red-950/40 text-red-400 hover:bg-red-900/50 border border-red-800/40"
+                            className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/50 border border-red-800/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 disabled:opacity-50"
                             title="Verwijder uit wave"
                           >
                             <UserMinus className="w-3.5 h-3.5" />
@@ -698,7 +702,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
                             type="button"
                             disabled={assignmentBusy}
                             onClick={() => handleAssignParticipantToWave(p.id, managingParticipantsWave.id)}
-                            className="px-2 py-1 rounded bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 flex items-center gap-1 text-[11px]"
+                            className="h-9 px-3 rounded-lg bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 inline-flex items-center gap-1 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 disabled:opacity-50"
                           >
                             <UserPlus className="w-3 h-3" /> Toevoegen
                           </button>
@@ -713,7 +717,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setManagingParticipantsWave(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700"
+                className={`${ui.secondary} h-11`}
               >
                 Sluiten
               </button>

@@ -1,7 +1,7 @@
 import { raceClock } from './raceClock';
-import { RealtimeClient } from '@supabase/realtime-js';
+import { RealtimeClient, type RealtimeChannel } from '@supabase/realtime-js';
 import { db } from '../db/dexieDb';
-import type { RaceOperation, ShootingResult, TimingRecord } from '../types';
+import type { DeviceConfig, RaceOperation, ShootingResult, TimingRecord, UserRole } from '../types';
 import { suppressSyncJournal, syncedTables, getSyncDeviceId, entityKey } from '../db/syncJournal';
 import { applyEntityOperation, acceptLegacyPatch, seedSyncJournal } from './entitySync';
 
@@ -23,6 +23,26 @@ const defaultConfig: SyncConfig = {
   eventId: '',
 };
 
+export interface OnlineDevice {
+  installationId: string;
+  deviceId: string;
+  deviceName: string;
+  stationName: string;
+  operatorName: string;
+  role: UserRole;
+  onlineAt: string;
+}
+
+export interface DeviceMessage {
+  id: string;
+  text: string;
+  sentAt: string;
+  senderInstallationId: string;
+  senderDeviceId: string;
+  senderName: string;
+  targetInstallationId?: string;
+}
+
 export class SyncService {
   private isSimulatedOffline = false;
   private listeners: Array<() => void> = [];
@@ -33,15 +53,54 @@ export class SyncService {
   private cloudRecords = 0;
   private replayUploads = false;
   private realtime?: RealtimeClient;
+  private communicationChannel?: RealtimeChannel;
   private realtimeKey?: string;
   private realtimeStatus = 'disconnected';
+  private onlineDevices: OnlineDevice[] = [];
+  private deviceMessages: DeviceMessage[] = [];
 
   private stopRealtime() {
     this.realtime?.disconnect();
     this.realtime = undefined;
+    this.communicationChannel = undefined;
     this.realtimeKey = undefined;
     this.realtimeStatus = 'disconnected';
+    this.onlineDevices = [];
   }
+
+  private async localPresence(): Promise<OnlineDevice> {
+    const device: DeviceConfig | undefined = await this.database.devices.toCollection().first();
+    return {
+      installationId: getSyncDeviceId(),
+      deviceId: device?.id || 'ONBEKEND',
+      deviceName: device?.name || device?.stationName || 'Onbekend toestel',
+      stationName: device?.stationName || '',
+      operatorName: device?.operatorName || '',
+      role: device?.role || 'VIEWER',
+      onlineAt: new Date().toISOString(),
+    };
+  }
+
+  private updatePresenceState() {
+    if (!this.communicationChannel) return;
+    const raw = this.communicationChannel.presenceState<OnlineDevice>();
+    const devices = Object.values(raw).flat().map(item => item as unknown as OnlineDevice).filter(item =>
+      Boolean(item && typeof item.installationId === 'string' && typeof item.deviceId === 'string'));
+    this.onlineDevices = [...new Map(devices.map(device => [device.installationId, device])).values()]
+      .sort((a, b) => a.deviceId.localeCompare(b.deviceId, 'nl'));
+    this.triggerChange();
+  }
+
+  private receiveDeviceMessage(value: unknown) {
+    if (!value || typeof value !== 'object') return;
+    const message = value as DeviceMessage;
+    if (!message.id || typeof message.text !== 'string' || !message.senderInstallationId || !message.sentAt) return;
+    if (message.targetInstallationId && message.targetInstallationId !== getSyncDeviceId()) return;
+    if (this.deviceMessages.some(item => item.id === message.id)) return;
+    this.deviceMessages = [...this.deviceMessages, { ...message, text: message.text.slice(0, 500) }].slice(-50);
+    this.triggerChange();
+  }
+
   private ensureRealtime(config: SyncConfig) {
     if (typeof window === 'undefined') return;
     const key = JSON.stringify(config);
@@ -53,14 +112,23 @@ export class SyncService {
       // Publishable keys are API keys, not JWTs. The gateway supplies anon auth.
       ...(config.anonKey.startsWith('eyJ') ? { accessToken: async () => config.anonKey } : {}),
     });
-    this.realtime.channel(`race:${config.eventId}`).on('postgres_changes', {
+    const channel = this.realtime.channel(`race:${config.eventId}`, {
+      config: { broadcast: { self: false, ack: true }, presence: { key: getSyncDeviceId(), enabled: true } },
+    });
+    this.communicationChannel = channel;
+    channel.on('presence', { event: 'sync' }, () => this.updatePresenceState())
+      .on('broadcast', { event: 'device-message' }, event => this.receiveDeviceMessage(event.payload))
+      .on('postgres_changes', {
       event: 'INSERT', schema: 'public', table: 'race_operations', filter: `event_id=eq.${config.eventId}`,
     }, () => { if (this.isCurrentConnection(config)) void this.syncNow(); }).subscribe(status => {
       if (this.realtimeKey !== key) return;
       this.realtimeStatus = status === 'SUBSCRIBED' ? 'connected' : 'disconnected';
       console.info('[SYNC] Realtime', this.realtimeStatus);
       this.triggerChange();
-      if (status === 'SUBSCRIBED' && this.isCurrentConnection(config)) void this.syncNow();
+      if (status === 'SUBSCRIBED' && this.isCurrentConnection(config)) {
+        void this.refreshPresence();
+        void this.syncNow();
+      }
     });
   }
 
@@ -158,6 +226,32 @@ export class SyncService {
   public getClockOffsetMs(): number { return raceClock.status().offsetMs; }
   public getClockStatus() { return raceClock.status(); }
   public getSyncHealth() { return { lastError: this.lastError, lastSyncAt: this.lastSyncAt, cloudRecords: this.cloudRecords, syncing: !!this.syncing, deviceId: getSyncDeviceId(), realtime: this.realtimeStatus }; }
+  public getOnlineDevices(): OnlineDevice[] { return [...this.onlineDevices]; }
+  public getDeviceMessages(): DeviceMessage[] { return [...this.deviceMessages]; }
+  public async refreshPresence(): Promise<void> {
+    const config = this.getConfig();
+    if (!config.enabled || !this.isCurrentConnection(config) || !this.communicationChannel || this.realtimeStatus !== 'connected') return;
+    const response = await this.communicationChannel.track(await this.localPresence());
+    if (response !== 'ok') console.warn('[SYNC] Toestelstatus kon niet worden bijgewerkt.');
+  }
+  public async sendDeviceMessage(text: string, targetInstallationId?: string): Promise<void> {
+    const cleanText = text.trim().slice(0, 500);
+    if (!cleanText) throw new Error('Vul eerst een bericht in.');
+    if (!this.getConfig().enabled || this.realtimeStatus !== 'connected' || !this.communicationChannel) {
+      throw new Error('Berichten vereisen een actieve Supabase Realtime-verbinding.');
+    }
+    const sender = await this.localPresence();
+    const message: DeviceMessage = {
+      id: crypto.randomUUID(), text: cleanText, sentAt: new Date().toISOString(),
+      senderInstallationId: sender.installationId, senderDeviceId: sender.deviceId,
+      senderName: sender.operatorName || sender.deviceName,
+      ...(targetInstallationId ? { targetInstallationId } : {}),
+    };
+    const response = await this.communicationChannel.send({ type: 'broadcast', event: 'device-message', payload: message });
+    if (response !== 'ok') throw new Error('Het bericht kon niet worden verzonden.');
+    this.deviceMessages = [...this.deviceMessages, message].slice(-50);
+    this.triggerChange();
+  }
   public async getDiagnostics() {
     const eventId = this.getConfig().eventId;
     const pending = await this.database.operations.where('eventId').equals(eventId).filter(op => op.syncStatus === 'LOCAL_ONLY').toArray();

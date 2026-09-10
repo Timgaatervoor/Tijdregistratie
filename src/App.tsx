@@ -22,6 +22,7 @@ import { PreRaceCheckModal } from './components/PreRaceCheckModal';
 import { PrintModal } from './components/PrintModal';
 import { ConflictResolverModal } from './components/ConflictResolverModal';
 import { ParticipantDetailModal } from './components/ParticipantDetailModal';
+import { DeviceCommunicationModal } from './components/DeviceCommunicationModal';
 
 import type { RaceConflict, Participant, RaceResult } from './types';
 import { AlertTriangle, KeyRound, Lock, Unlock } from 'lucide-react';
@@ -68,6 +69,7 @@ export default function App() {
   // Modals state
   const [showPreRaceModal, setShowPreRaceModal] = useState(false);
   const [showSystemHealthModal, setShowSystemHealthModal] = useState(false);
+  const [showDeviceCommunicationModal, setShowDeviceCommunicationModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [activeConflict, setActiveConflict] = useState<RaceConflict | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
@@ -216,6 +218,7 @@ export default function App() {
           pendingSyncCount={pendingSyncCount}
           onOpenPreRaceCheck={() => setShowPreRaceModal(true)}
           onOpenSystemHealth={() => setShowSystemHealthModal(true)}
+          onOpenDeviceCommunication={() => setShowDeviceCommunicationModal(true)}
           onOpenPrint={() => setShowPrintModal(true)}
           onUnlockDevice={handleOpenUnlockModal}
           isTestMode={event?.isTestMode ?? false}
@@ -387,6 +390,7 @@ export default function App() {
         onClose={() => setSelectedParticipant(null)}
         onUpdated={refresh}
       />
+      <DeviceCommunicationModal isOpen={showDeviceCommunicationModal} onClose={() => setShowDeviceCommunicationModal(false)} />
 
       {showUnlockModal && deviceConfig?.isLocked && (
         <div role="dialog" aria-modal="true" aria-labelledby="unlock-device-title" className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4">

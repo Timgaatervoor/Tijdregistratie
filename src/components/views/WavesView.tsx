@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Layers,
+  Settings,
   Clock,
   Users,
   Plus,
@@ -16,6 +17,7 @@ import type { Wave, Category, Participant } from '../../types';
 import { db, getActiveEventId } from '../../db/dexieDb';
 import { generateUUID, operationService } from '../../services/operationService';
 import { WavePlanningPanel } from '../WavePlanningPanel';
+import { updateWaveSettings } from '../../services/waveEditing';
 import { defaultWaveSettings, nextWaveTime, timeSeconds, waveAllows, type WaveSettings } from '../../services/wavePlanning';
 import { soundService } from '../../services/soundService';
 import { SafeConfirmButton } from '../SafeConfirmButton';
@@ -35,6 +37,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
   onRefresh,
 }) => {
   const [waveSettings, setWaveSettings] = useState<WaveSettings>(defaultWaveSettings);
+  const [showWaveSettings, setShowWaveSettings] = useState(false);
   const [participantSearch, setParticipantSearch] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
   const [assignmentBusy, setAssignmentBusy] = useState(false);
@@ -55,6 +58,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
   // Edit modal state
   const [editName, setEditName] = useState('');
+  const [editNumber, setEditNumber] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
   const [editCapacity, setEditCapacity] = useState(25);
 
@@ -82,6 +86,8 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
   const handleOpenEditModal = (w: Wave) => {
     setEditingWave(w);
+    setAssignmentError('');
+    setEditNumber(String(w.waveNumber));
     setEditName(w.name);
     setEditStartTime(w.scheduledStartTime);
     setEditCapacity(w.maxParticipants || 25);
@@ -93,11 +99,18 @@ export const WavesView: React.FC<WavesViewProps> = ({
     try { timeSeconds(editStartTime.trim()); } catch (error) { setAssignmentError((error as Error).message); return; }
     if (editCapacity < participants.filter(p => p.waveId === editingWave.id).length) { setAssignmentError('De capaciteit kan niet lager zijn dan het huidige aantal deelnemers.'); return; }
 
-    await db.waves.update(editingWave.id, {
-      name: editName.trim(),
-      scheduledStartTime: editStartTime.trim(),
-      maxParticipants: editCapacity,
-    });
+    setAssignmentError('');
+    try {
+      await updateWaveSettings(editingWave.id, {
+        waveNumber: Number(editNumber),
+        name: editName.trim(),
+        scheduledStartTime: editStartTime.trim(),
+        maxParticipants: editCapacity,
+      });
+    } catch (error) {
+      setAssignmentError((error as Error).message);
+      return;
+    }
 
     await operationService.logAudit(
       'WAVE_UPDATED',
@@ -142,7 +155,11 @@ export const WavesView: React.FC<WavesViewProps> = ({
       status: 'SCHEDULED',
     };
 
-    await db.waves.put(wave);
+    await db.transaction('rw', db.waves, async () => {
+      const currentWaves = await db.waves.where('eventId').equals(wave.eventId).toArray();
+      wave.waveNumber = Math.max(0, ...currentWaves.map(current => current.waveNumber)) + 1;
+      await db.waves.add(wave);
+    });
     await operationService.logAudit('WAVE_CREATED', `Wave ${wave.name} aangemaakt met startuur ${wave.scheduledStartTime}`);
     setShowAddModal(false);
     setNewWaveName('');
@@ -214,6 +231,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
           </p>
         </div>
 
+        <div className="flex items-center gap-2">
         <button
           onClick={() => {
             const nextNum = waves.length > 0 ? Math.max(...waves.map((w) => w.waveNumber)) + 1 : 1;
@@ -224,12 +242,21 @@ export const WavesView: React.FC<WavesViewProps> = ({
           }}
           className={`${ui.primary} h-11`}
         >
-          <Plus className="w-4 h-4" /> Nieuwe startgroep
+          <Plus className="w-4 h-4" /> Nieuwe startgroep maken
         </button>
+        <button type="button" onClick={() => setShowWaveSettings(value => !value)}
+          aria-label="Instellingen voor nieuwe startgroepen" title="Instellingen voor nieuwe startgroepen"
+          aria-expanded={showWaveSettings} aria-controls="new-wave-settings"
+          className={`${ui.secondary} h-11 w-11 p-0`}>
+          <Settings className="w-5 h-5" />
+        </button>
+        </div>
       </div>
 
       {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
-      <WavePlanningPanel waves={waves} participants={participants} settings={waveSettings} onChange={setWaveSettings} onRefresh={onRefresh} />
+      <div id="new-wave-settings" hidden={!showWaveSettings}>
+        <WavePlanningPanel waves={waves} participants={participants} settings={waveSettings} onChange={setWaveSettings} onRefresh={onRefresh} />
+      </div>
       {/* Wave Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {waves.map((w) => {
@@ -432,6 +459,12 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
             {assignmentError && <p role="alert" className="text-amber-300">{assignmentError}</p>}
             <form onSubmit={handleSaveEditWave} className="space-y-4">
+              <div>
+                <label htmlFor="edit-wave-number" className="text-slate-300 font-semibold block mb-1">Startgroepnummer:</label>
+                <input id="edit-wave-number" type="number" min={1} step={1} required
+                  value={editNumber} onChange={e => setEditNumber(e.target.value)}
+                  className={`${ui.input} h-11 font-mono font-bold`} />
+              </div>
               <div>
                 <label className="text-slate-300 font-semibold block mb-1">Naam van de startgroep:</label>
                 <input

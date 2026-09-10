@@ -12,7 +12,7 @@ export function WavePlanningPanel({ waves, participants, settings, onChange, onR
   const run = async (fn: () => Promise<void>) => { setBusy(true); setMessage(''); try { await fn(); } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); } };
   const update = (patch: Partial<WaveSettings>) => { onChange({ ...settings, ...patch }); setPreview(undefined); };
   return <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 text-white">
-    <h3 className="font-bold">Instellingen voor nieuwe waves</h3>
+    <h3 className="font-bold">Instellingen voor nieuwe startgroepen</h3>
     <fieldset disabled={busy} className="space-y-4">
       <div className="grid sm:grid-cols-3 gap-3">
         <label className="text-sm font-semibold text-slate-300">Eerste startuur<input type="time" step="1" value={settings.firstStartTime} onChange={e => update({ firstStartTime: e.target.value })} className={`${ui.input} h-11 mt-1.5`} /></label>

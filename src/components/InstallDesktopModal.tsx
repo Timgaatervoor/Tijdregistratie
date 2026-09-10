@@ -222,7 +222,7 @@ export const InstallDesktopModal: React.FC<InstallDesktopModalProps> = ({
           {backupSuccess && (
             <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 font-semibold">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Back-up bestand succesvol opgeslagen op uw computer!</span>
+              <span>Download gestart. Controleer of het back-upbestand in uw downloadmap staat.</span>
             </div>
           )}
         </div>

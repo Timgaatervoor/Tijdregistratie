@@ -23,6 +23,7 @@ import {
   type RecoveryValidation,
 } from '../../services/backupService';
 import { InstallDesktopModal } from '../InstallDesktopModal';
+import { LocalBackupPanel } from '../LocalBackupPanel';
 import { SafeConfirmButton } from '../SafeConfirmButton';
 
 interface BackupRecoveryViewProps {
@@ -77,6 +78,7 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
 
     setIsRestoring(true);
     try {
+      if (event) await createFullSnapshot(event);
       await restoreSnapshot(validationResult.snapshot);
       setRestoreSuccess(true);
       setRestoreIdentityWarning(true);
@@ -114,6 +116,8 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
           <span>{isCreatingSnapshot ? 'Bezig met snapshot...' : 'Volledige Back-up Downloaden'}</span>
         </button>
       </div>
+
+      <LocalBackupPanel event={event} />
 
       {/* Local Standalone & Desktop Program Execution Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/30 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
@@ -170,7 +174,7 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
         <div className="p-4 bg-emerald-950/40 border border-emerald-500/40 rounded-xl space-y-2 text-xs text-emerald-200">
           <div className="flex items-center gap-2 font-bold text-emerald-300">
             <CheckCircle2 className="w-4 h-4" />
-            <span>Snapshot succesvol gegenereerd en gedownload!</span>
+            <span>Back-up gemaakt; download aan de browser doorgegeven. Controleer of het bestand in je downloadmap staat.</span>
           </div>
           <div className="font-mono text-[11px] break-all bg-emerald-950/80 p-2 rounded border border-emerald-800">
             SHA-256 Checksum: {createdSnapshot.checksum}

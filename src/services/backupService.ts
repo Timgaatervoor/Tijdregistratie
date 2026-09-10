@@ -3,6 +3,7 @@ import { suppressSyncJournal } from '../db/syncJournal';
 import type { EventSnapshot, RaceEvent } from '../types';
 import { syncService } from './syncService';
 import { getCategoryProfileIds } from './categoryProfileService';
+import { generateUUID } from './uuid';
 
 export async function calculateSHA256(text: string): Promise<string> {
   if (typeof crypto !== 'undefined' && crypto.subtle) {
@@ -23,52 +24,54 @@ export async function calculateSHA256(text: string): Promise<string> {
 }
 
 export async function createFullSnapshot(event: RaceEvent): Promise<EventSnapshot> {
-  const [
-    participants,
-    timingRecords,
-    shootingResults,
-    waves,
-    profiles,
-    categories,
-    operations,
-    conflicts,
-    auditLogs,
-    devices,
-  ] = await Promise.all([
-    db.participants.toArray(),
-    db.timingRecords.toArray(),
-    db.shootingResults.toArray(),
-    db.waves.toArray(),
-    db.raceProfiles.toArray(),
-    db.categories.toArray(),
-    db.operations.toArray(),
-    db.conflicts.toArray(),
-    db.auditLogs.toArray(),
-    db.devices.toArray(),
-  ]);
+  const rawData = await db.transaction('r', [db.events, db.participants, db.timingRecords, db.shootingResults, db.waves, db.raceProfiles, db.categories, db.operations, db.conflicts, db.auditLogs, db.devices, db.syncEntities, db.stamhoofdConfigs], async () => {
+    const [
+      participants,
+      timingRecords,
+      shootingResults,
+      waves,
+      profiles,
+      categories,
+      operations,
+      conflicts,
+      auditLogs,
+      devices,
+    ] = await Promise.all([
+      db.participants.toArray(),
+      db.timingRecords.toArray(),
+      db.shootingResults.toArray(),
+      db.waves.toArray(),
+      db.raceProfiles.toArray(),
+      db.categories.toArray(),
+      db.operations.toArray(),
+      db.conflicts.toArray(),
+      db.auditLogs.toArray(),
+      db.devices.toArray(),
+    ]);
 
-  const rawData = {
-    syncEntities: await db.syncEntities.where('eventId').equals(event.id).toArray(),
-    event,
-    participants,
-    timingRecords,
-    shootingResults,
-    waves,
-    profiles,
-    categories,
-    operations,
-    conflicts,
-    auditLogs,
-    devices,
-    syncConfig: syncService.getConfig(),
-    stamhoofdConfigs: await db.stamhoofdConfigs.toArray(),
-  };
+    return {
+      syncEntities: await db.syncEntities.where('eventId').equals(event.id).toArray(),
+      event: await db.events.get(event.id) ?? event,
+      participants,
+      timingRecords,
+      shootingResults,
+      waves,
+      profiles,
+      categories,
+      operations,
+      conflicts,
+      auditLogs,
+      devices,
+      syncConfig: syncService.getConfig(),
+      stamhoofdConfigs: await db.stamhoofdConfigs.toArray(),
+    };
+  });
 
   const jsonString = JSON.stringify(rawData);
   const checksum = await calculateSHA256(jsonString);
 
   const snapshot: EventSnapshot = {
-    snapshotId: `snapshot_${Date.now()}`,
+    snapshotId: `snapshot_${Date.now()}_${generateUUID()}`,
     eventId: event.id,
     timestamp: new Date().toISOString(),
     checksum,
@@ -89,7 +92,7 @@ export function downloadJsonFile(data: any, fileName: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function downloadCsvFile(csvContent: string, fileName: string) {
@@ -101,7 +104,7 @@ export function downloadCsvFile(csvContent: string, fileName: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export interface RecoveryValidation {
@@ -147,11 +150,28 @@ export async function validateRecoveryFile(fileContent: string): Promise<Recover
       };
     }
 
+    if (typeof data.event.id !== 'string' || !data.event.id || !Array.isArray(data.participants)) {
+      throw new Error('Evenement-ID of deelnemerslijst ontbreekt.');
+    }
+    for (const key of ['timingRecords', 'shootingResults', 'waves', 'profiles', 'categories'] as const) {
+      if (!Array.isArray(data[key])) throw new Error(`Onvolledige herstelback-up: ${key} ontbreekt.`);
+    }
+    for (const key of ['participants', 'timingRecords', 'shootingResults', 'waves', 'profiles', 'categories', 'operations', 'conflicts', 'auditLogs', 'devices', 'syncEntities', 'stamhoofdConfigs'] as const) {
+      const rows = data[key];
+      if (rows !== undefined && (!Array.isArray(rows) || rows.some(row => !row || typeof row !== 'object'))) {
+        throw new Error(`Ongeldige lijst: ${key}.`);
+      }
+    }
+    if (data.syncConfig && ['projectUrl', 'anonKey', 'eventId'].some(key => typeof data.syncConfig[key] !== 'string')) {
+      throw new Error('Ongeldige synchronisatie-instellingen.');
+    }
+
     // Checksum verification
     let checksumMatch = true;
     if (snapshot.checksum) {
       const computedHash = await calculateSHA256(JSON.stringify(data));
       checksumMatch = computedHash === snapshot.checksum;
+      if (!checksumMatch) throw new Error('De checksum wijkt af. Het back-upbestand is beschadigd of gewijzigd en kan niet worden hersteld.');
     }
 
     const currentParticipants = await db.participants.count();
@@ -191,6 +211,8 @@ export async function validateRecoveryFile(fileContent: string): Promise<Recover
 }
 
 export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
+  const validation = await validateRecoveryFile(JSON.stringify(snapshot));
+  if (!validation.isValid) throw new Error(validation.error || 'Ongeldige back-up.');
   const data = snapshot.data;
   await db.transaction(
     'rw',
@@ -250,10 +272,6 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       if (data.devices?.length) await db.devices.bulkPut(data.devices);
       if (data.stamhoofdConfigs?.length) await db.stamhoofdConfigs.bulkPut(data.stamhoofdConfigs);
 
-      if (data.syncConfig) {
-        syncService.saveConfig(data.syncConfig);
-      }
-
       await db.auditLogs.add({
         id: `audit_${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -264,4 +282,5 @@ export async function restoreSnapshot(snapshot: EventSnapshot): Promise<void> {
       });
     }
   );
+  if (data.syncConfig) syncService.saveConfig(data.syncConfig);
 }

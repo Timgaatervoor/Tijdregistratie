@@ -4,6 +4,7 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 import {stamhoofdLocalPlugin} from './server/stamhoofdLocal';
+import {localBackupPlugin} from './server/localBackup';
 
 export default defineConfig(() => {
   const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1];
@@ -12,6 +13,7 @@ export default defineConfig(() => {
   return {
     base,
     plugins: [
+      localBackupPlugin(),
       stamhoofdLocalPlugin(),
       react(),
       tailwindcss(),
@@ -94,6 +96,7 @@ export default defineConfig(() => {
       },
     },
     server: {
+      fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/backups/**'] },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

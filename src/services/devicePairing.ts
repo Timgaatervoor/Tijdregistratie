@@ -62,6 +62,7 @@ export async function joinEvent(preview: { snapshot: EventSnapshot; config: Sync
   const snapshot = structuredClone(preview.snapshot);
   snapshot.data.devices = [{ id: deviceId, name: deviceId, role, stationName: role, operatorName: '', isLocked: true, clockOffsetMs: 0 }];
   snapshot.data.syncConfig = { ...preview.config, enabled: false };
+  snapshot.checksum = await calculateSHA256(JSON.stringify(snapshot.data));
   await restoreSnapshot(snapshot);
   syncService.saveConfig(preview.config);
   await syncService.checkClockOffset();

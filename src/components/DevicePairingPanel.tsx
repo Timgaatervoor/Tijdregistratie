@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Laptop, Link, Copy } from 'lucide-react';
+import { Laptop, Link, Copy, Mail } from 'lucide-react';
 import type { UserRole } from '../types';
 import { createDeviceInvite, readDeviceInvite, joinEvent } from '../services/devicePairing';
 import { RealQrCode } from './RealQrCode';
 import { syncStyles as ui } from './syncSettingsStyles';
+import { deviceInviteEmail } from '../services/deviceInviteEmail';
 
 export function DevicePairingPanel({ initialLink = '', initialMode = 'share', title = 'Toestel koppelen aan evenement', onJoined }: { initialLink?: string; initialMode?: 'share' | 'join'; title?: string; onJoined: () => void }) {
   const [mode, setMode] = useState<'share' | 'join'>(initialLink ? 'join' : initialMode);
@@ -35,6 +36,18 @@ export function DevicePairingPanel({ initialLink = '', initialMode = 'share', ti
               <p className="font-bold text-white">Open deze link op de andere pc of scan de QR-code.</p>
               <p className="text-slate-400">De koppeling is 10 minuten geldig en kan eenmaal worden opgehaald.</p>
               <label className="block font-semibold">Koppellink<textarea readOnly value={invitation.link} className={`${ui.input} mt-1.5 h-24 text-xs font-mono`} /></label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={ui.primary} onClick={() => {
+                  window.location.href = deviceInviteEmail(invitation).mailto;
+                  setMessage({ text: 'Het e-mailbericht wordt geopend in je mailprogramma. Vul de ontvanger in en klik op Verzenden. Opent er niets? Gebruik ‘E-mailtekst kopiëren’.' });
+                }}><Mail className="w-4 h-4" />Koppeling via e-mail sturen</button>
+                <button type="button" className={ui.secondary} onClick={() => run(async () => {
+                  const email = deviceInviteEmail(invitation);
+                  try { await navigator.clipboard.writeText(`${email.subject}\r\n\r\n${email.body}`); setMessage({ text: 'E-mailtekst met koppellink en koppelcode gekopieerd. Plak deze in een nieuw bericht.' }); }
+                  catch { throw new Error('Kopiëren lukt niet. Kopieer de koppellink en code handmatig.'); }
+                })}><Copy className="w-4 h-4" />E-mailtekst kopiëren</button>
+              </div>
+              <p className="text-xs text-slate-400">Je mailprogramma opent met de URL en koppelcode ingevuld. Kies zelf de ontvanger en verstuur het bericht.</p>
               <button type="button" className={ui.secondary} onClick={() => run(async () => {
                 try { await navigator.clipboard.writeText(invitation.link); setMessage({ text: 'Koppellink gekopieerd.' }); }
                 catch { throw new Error('Kopieer de link handmatig uit het tekstvak.'); }

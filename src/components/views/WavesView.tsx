@@ -247,8 +247,8 @@ export const WavesView: React.FC<WavesViewProps> = ({
         <button type="button" onClick={() => setShowWaveSettings(value => !value)}
           aria-label="Instellingen voor nieuwe startgroepen" title="Instellingen voor nieuwe startgroepen"
           aria-expanded={showWaveSettings} aria-controls="new-wave-settings"
-          className={`${ui.secondary} h-11 w-11 p-0`}>
-          <Settings className="w-5 h-5" />
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${showWaveSettings ? 'border-amber-400 bg-amber-500 text-slate-950 hover:bg-amber-400' : 'border-slate-600 bg-slate-800 text-amber-400 hover:border-amber-400 hover:bg-slate-700'}`}>
+          <Settings aria-hidden="true" className="h-6 w-6 shrink-0" strokeWidth={2.25} />
         </button>
         </div>
       </div>

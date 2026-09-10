@@ -11,17 +11,19 @@ import {
   Calendar,
   Edit3,
 } from 'lucide-react';
-import type { Wave, Participant, TimingRecord, Category } from '../../types';
+import type { Wave, Participant, TimingRecord, Category, RaceEvent } from '../../types';
 import { db, getActiveEventId } from '../../db/dexieDb';
 import { operationService, generateUUID } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
+import { SafeConfirmDialog } from '../SafeConfirmDialog';
 
 interface StartStationViewProps {
   waves: Wave[];
   participants: Participant[];
   categories: Category[];
   timingRecords: TimingRecord[];
+  event: RaceEvent | null;
   onRefresh: () => void;
 }
 
@@ -30,6 +32,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
   participants,
   categories,
   timingRecords,
+  event,
   onRefresh,
 }) => {
   const [activeTab, setActiveTab] = useState<'mass' | 'individual' | 'manual'>('mass');
@@ -39,6 +42,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
 
   // Individual start state (Requirement 16)
   const [singleBibInput, setSingleBibInput] = useState('');
+  const [pendingSingleStart, setPendingSingleStart] = useState<{ bib: number; participant?: Participant; iso: string; monotonic: number } | null>(null);
   const singleInputRef = useRef<HTMLInputElement>(null);
 
   // Manual scheduled start state (Requirement 15)
@@ -116,31 +120,38 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     }, 1000);
   };
 
-  const handleSingleStart = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const bib = parseInt(singleBibInput.trim(), 10);
-    if (isNaN(bib) || bib <= 0) return;
-
-    const p = participants.find((item) => item.bibNumber === bib);
-    const nowIso = raceClock.nowISO();
-
+  const executeSingleStart = async ({ bib, participant: p, iso, monotonic }: { bib: number; participant?: Participant; iso: string; monotonic: number }) => {
     await operationService.recordStart(
       await getActiveEventId(),
       bib,
       p,
-      nowIso,
-      performance.now()
+      iso,
+      monotonic
     );
 
     soundService.playGoFanfare();
     setFeedbackMsg({
-      text: `Individuele start geregistreerd voor Bib #${bib} (${p ? `${p.firstName} ${p.lastName}` : 'Onbekend'}) om ${formatLocalTime(nowIso, true)}`,
+      text: `Individuele start geregistreerd voor Bib #${bib} (${p ? `${p.firstName} ${p.lastName}` : 'Onbekend'}) om ${formatLocalTime(iso, true)}`,
       type: 'success',
     });
     setSingleBibInput('');
     singleInputRef.current?.focus();
     onRefresh();
     setTimeout(() => setFeedbackMsg(null), 3500);
+  };
+
+  const handleSingleStart = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const bib = parseInt(singleBibInput.trim(), 10);
+    if (isNaN(bib) || bib <= 0) return;
+    const request = {
+      bib,
+      participant: participants.find((item) => item.bibNumber === bib),
+      iso: raceClock.nowISO(),
+      monotonic: performance.now(),
+    };
+    if (event?.requireStartConfirmation) setPendingSingleStart(request);
+    else await executeSingleStart(request);
   };
 
   // Manual Scheduled Start Handler (Requirement 15: MANUAL SCHEDULED START)
@@ -265,6 +276,22 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
 
   return (
     <div className="space-y-6">
+      <SafeConfirmDialog
+        isOpen={pendingSingleStart !== null}
+        title="Individuele start bevestigen?"
+        message={pendingSingleStart
+          ? `Startnummer #${pendingSingleStart.bib}${pendingSingleStart.participant ? ` · ${pendingSingleStart.participant.firstName} ${pendingSingleStart.participant.lastName}` : ' · onbekende deelnemer'}\nDe starttijd werd vastgelegd op ${formatLocalTime(pendingSingleStart.iso, true)}.`
+          : ''}
+        confirmLabel="Start registreren"
+        variant="info"
+        onCancel={() => {
+          setPendingSingleStart(null);
+          window.setTimeout(() => singleInputRef.current?.focus(), 0);
+        }}
+        onConfirm={async () => {
+          if (pendingSingleStart) await executeSingleStart(pendingSingleStart);
+        }}
+      />
       {/* 3 Start Modes Navigation (Requirement 15) */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
         <div className="flex items-center gap-2">

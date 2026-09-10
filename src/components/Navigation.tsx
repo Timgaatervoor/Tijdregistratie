@@ -67,7 +67,7 @@ const tabConfig: Record<ActiveTab, TabConfig> = {
 };
 
 const standardButtonClasses = (active: boolean) =>
-  `flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
+  `h-9 flex items-center gap-2 px-3 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
     active
       ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700'
       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -113,7 +113,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         aria-current={isActive ? 'page' : undefined}
         className={
           operation
-            ? `flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${operationButtonClasses(tab, isActive)}`
+            ? `h-9 flex items-center gap-1.5 px-3.5 rounded-lg text-xs font-black uppercase tracking-wider transition ${operationButtonClasses(tab, isActive)}`
             : standardButtonClasses(isActive)
         }
       >

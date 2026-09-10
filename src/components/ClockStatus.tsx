@@ -20,7 +20,7 @@ export function ClockStatus({ embedded = false, compact = false }: { embedded?: 
   </div>;
   if (!compact) return details;
   return <details className="group">
-    <summary className={`list-none cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${clock.state === 'SYNCED' && !clock.error ? 'bg-slate-800 border-slate-700 text-emerald-300' : 'bg-slate-800 border-amber-500/40 text-amber-300'}`}>
+    <summary className={`h-9 list-none cursor-pointer flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${clock.state === 'SYNCED' && !clock.error ? 'bg-slate-800 border-slate-700 text-emerald-300' : 'bg-slate-800 border-amber-500/40 text-amber-300'}`}>
       <Clock className="w-3.5 h-3.5" />
       <span>Centrale tijd: {clock.state === 'SYNCED' ? (clock.error ? 'hermeting mislukt' : 'gemeten') : clock.state === 'STALE' ? 'verouderd' : 'niet gemeten'}</span>
       <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition" />

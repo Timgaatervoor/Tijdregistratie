@@ -34,13 +34,17 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
   onRefresh,
 }) => {
   const [bibString, setBibString] = useState('');
-  const [quickFinish, setQuickFinish] = useState(true);
+  const [quickFinish, setQuickFinish] = useState(() => !(event?.requireFinishConfirmation ?? true));
   const [confirmModalBib, setConfirmModalBib] = useState<number | null>(null);
   const [capturedTime, setCapturedTime] = useState<{ iso: string; monotonic: number } | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'warn' | 'conflict' } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setQuickFinish(!(event?.requireFinishConfirmation ?? true));
+  }, [event?.id, event?.requireFinishConfirmation]);
 
   // Auto-focus hidden/direct input so keyboard works everywhere
   useEffect(() => {

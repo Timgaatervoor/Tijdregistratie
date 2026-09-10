@@ -59,6 +59,13 @@ export const Header: React.FC<HeaderProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    const updateFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', updateFullscreen);
+    updateFullscreen();
+    return () => document.removeEventListener('fullscreenchange', updateFullscreen);
+  }, []);
+
   const toggleSound = () => {
     const next = soundService.toggleSound();
     setIsSoundOn(next);
@@ -77,12 +84,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleSyncNow = async () => {
     setIsSyncing(true);
-    const res = await syncService.syncNow();
-    setIsSyncing(false);
-    if (res.error) {
-      setSyncToast(`Sync fout: ${res.error}`);
-    } else {
-      setSyncToast(`${res.syncedCount} items gesynchroniseerd`);
+    try {
+      const res = await syncService.syncNow();
+      if (res.error) setSyncToast(`Sync fout: ${res.error}`);
+      else setSyncToast(`${res.syncedCount} items gesynchroniseerd`);
+    } catch (error) {
+      setSyncToast(`Sync fout: ${error instanceof Error ? error.message : 'onbekende fout'}`);
+    } finally {
+      setIsSyncing(false);
     }
     setTimeout(() => setSyncToast(null), 3000);
   };
@@ -137,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Network & Sync Badge (Req 30) */}
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${
+            className={`h-9 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border ${
               isOnline
                 ? pendingSyncCount > 0
                   ? 'bg-amber-950/40 border-amber-500/40 text-amber-400'
@@ -153,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {pendingSyncCount > 0
                     ? `${pendingSyncCount} in wachtrij`
                     : syncConfigured
-                    ? 'ONLINE & GESYNCHRONISEERD'
+                    ? 'ONLINE · CLOUD INGESTELD'
                     : 'ONLINE - LOKAAL'}
                 </span>
               </>
@@ -170,15 +179,16 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Sync Button */}
           <button
             onClick={handleSyncNow}
-            disabled={isSyncing || !isOnline}
-            title="Nu synchroniseren met cloud"
-            className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition disabled:opacity-40"
+            disabled={isSyncing || !isOnline || !syncConfigured}
+            title={!syncConfigured ? 'Stel eerst online synchronisatie in' : 'Nu synchroniseren met cloud'}
+            aria-label="Nu synchroniseren met cloud"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition disabled:opacity-40"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-amber-400' : ''}`} />
           </button>
 
           {/* Device & Operator Badge (Req 31) */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 border border-slate-700 text-xs text-slate-300 font-mono">
+          <div className="hidden lg:flex h-9 items-center gap-1.5 px-2.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300 font-mono">
             <Laptop className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-amber-400 font-semibold">{deviceConfig?.id || 'FINISH-01'}</span>
             <span className="text-slate-500">|</span>
@@ -196,7 +206,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onUnlockDevice}
               title="Toestel ontgrendelen met beheerderscode"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-950/60 border border-amber-600/50 text-amber-300 hover:bg-amber-900/60 transition text-xs font-semibold"
+              className="h-9 flex items-center gap-1.5 px-2.5 rounded-lg bg-amber-950/60 border border-amber-600/50 text-amber-300 hover:bg-amber-900/60 transition text-xs font-semibold"
             >
               <LockOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Ontgrendelen</span>
@@ -208,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={toggleSimulatedOffline}
               title={isSimulatedOffline ? 'Offline simulatie uitschakelen' : 'Offline netwerk simuleren'}
-              className={`px-2 py-1 rounded text-xs font-medium border transition ${
+              className={`h-9 px-2.5 rounded-lg text-xs font-medium border transition ${
                 isSimulatedOffline
                   ? 'bg-amber-600 border-amber-500 text-slate-950 font-bold'
                   : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
@@ -221,7 +231,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenSystemHealth}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
+            className="h-9 flex items-center gap-1.5 px-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
             title="Systeemstatus en diagnostiek"
           >
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
@@ -232,7 +242,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={toggleSound}
             title={isSoundOn ? 'Geluid uitschakelen' : 'Geluid inschakelen'}
-            className={`p-1.5 rounded-md border transition ${
+            aria-label={isSoundOn ? 'Geluid uitschakelen' : 'Geluid inschakelen'}
+            className={`h-9 w-9 inline-flex items-center justify-center rounded-lg border transition ${
               isSoundOn
                 ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
                 : 'bg-slate-800/60 border-slate-800 text-slate-500 hover:bg-slate-800'
@@ -245,7 +256,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={toggleFullscreen}
             title="Volledig scherm (Fullscreen event mode)"
-            className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+            aria-label={isFullscreen ? 'Volledig scherm verlaten' : 'Volledig scherm openen'}
+            className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
           </button>
@@ -254,7 +266,7 @@ export const Header: React.FC<HeaderProps> = ({
           {!deviceConfig?.isLocked && (
             <button
               onClick={onOpenPreRaceCheck}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-950/60 border border-blue-600/40 text-blue-300 hover:bg-blue-900/60 transition text-xs font-semibold"
+              className="h-9 flex items-center gap-1.5 px-2.5 rounded-lg bg-blue-950/60 border border-blue-600/40 text-blue-300 hover:bg-blue-900/60 transition text-xs font-semibold"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
               <span className="hidden lg:inline">Voorcontrole</span>
@@ -265,7 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenPrint}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
+              className="h-9 flex items-center gap-1.5 px-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition text-xs font-semibold"
               title="Startlijsten, startnummers en noodformulieren afdrukken"
             >
               <Printer className="w-3.5 h-3.5" />

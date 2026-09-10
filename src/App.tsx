@@ -81,9 +81,8 @@ export default function App() {
   const finishedBibs = new Set(
     activeTimingRecords.filter((record) => record.type === 'FINISH').map((record) => record.bibNumber)
   );
-  const shootingBibs = new Set(shootingResults.map((result) => result.bibNumber));
   const missingStartCount = [...finishedBibs].filter((bib) => !startedBibs.has(bib)).length;
-  const missingShootingCount = [...finishedBibs].filter((bib) => !shootingBibs.has(bib)).length;
+  const missingShootingCount = results.filter((result) => result.status === 'FINISHED' && result.isPendingShooting).length;
   const attentionCount = unknownBibCount + missingStartCount + missingShootingCount;
   const lockedTab = deviceConfig?.isLocked ? getLockedTabForRole(deviceConfig.role) : null;
   const displayedTab = lockedTab || currentTab;
@@ -250,6 +249,7 @@ export default function App() {
 
         {displayedTab === 'start' && (
           <StartStationView
+            event={event}
             categories={categories}
             waves={waves}
             participants={participants}

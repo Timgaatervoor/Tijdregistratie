@@ -247,7 +247,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('general')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
               activeSection === 'general'
                 ? 'bg-amber-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -260,7 +260,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('profiles')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
               activeSection === 'profiles'
                 ? 'bg-amber-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -273,7 +273,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('categories')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
               activeSection === 'categories'
                 ? 'bg-amber-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -285,21 +285,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveSection('event_setup')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
-              activeSection === 'event_setup'
-                ? 'bg-amber-500 text-slate-950 shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>Gevarenzone & reset</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveSection('sync')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
               activeSection === 'sync'
                 ? 'bg-amber-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -312,7 +299,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('backup')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
               activeSection === 'backup'
                 ? 'bg-amber-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -325,7 +312,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('tests')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
               activeSection === 'tests'
                 ? 'bg-amber-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -333,6 +320,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <FlaskConical className="w-4 h-4" />
             <span>Tests</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('event_setup')}
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-lg text-xs font-bold transition ${
+              activeSection === 'event_setup'
+                ? 'bg-red-600 text-white shadow'
+                : 'text-red-300 hover:text-red-200 hover:bg-red-950/40'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Gevarenzone & reset</span>
           </button>
         </div>
       </div>
@@ -449,7 +449,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div>
               <label className="text-slate-300 font-semibold block mb-1">
-                Straftijd per gemiste schijf (seconden):
+                Noodwaarde straftijd per misser (seconden):
               </label>
               <input
                 type="number"
@@ -459,7 +459,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-base font-mono font-bold text-amber-400"
               />
               <span className="text-[11px] text-slate-500 block mt-1">
-                Standaard biathlon tijdstraf: 20 seconden per misser
+                Alleen gebruikt voor oudere gegevens zonder strafinstelling. Stel de echte strafregels in bij Wedstrijdinhoud.
               </span>
             </div>
 
@@ -482,14 +482,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={requireStartConfirmation}
+                  onChange={(e) => setRequireStartConfirmation(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500"
+                />
+                <div>
+                  <span className="font-bold text-white block">Bevestiging bij start</span>
+                  <span className="text-[11px] text-slate-400">
+                    Vraagt bevestiging voordat een individuele start wordt geregistreerd
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
                   checked={requireFinishConfirmation}
                   onChange={(e) => setRequireFinishConfirmation(e.target.checked)}
                   className="w-4 h-4 rounded text-amber-500"
                 />
                 <div>
-                  <span className="font-bold text-white block">Bevestiging bij Finish</span>
+                  <span className="font-bold text-white block">Standaard bevestiging bij finish</span>
                   <span className="text-[11px] text-slate-400">
-                    Voorkomt per ongeluk direct toewijzen van finish pulsen
+                    De finishpost kan dit tijdens de wedstrijd nog met “Snelle Finish” aanpassen
                   </span>
                 </div>
               </label>

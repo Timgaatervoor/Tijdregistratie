@@ -1,5 +1,15 @@
 import type { RaceProfile, ShootingResult } from '../types';
 
+export function normalizeShootingRound(round: number, shootingRoundCount: number): number {
+  const count = Math.max(1, Math.floor(Number.isFinite(shootingRoundCount) ? shootingRoundCount : 1));
+  return Math.max(1, Math.min(Math.floor(Number.isFinite(round) ? round : 1), count));
+}
+
+export function shootingHitPresets(targetCount: number): number[] {
+  const count = Math.max(1, Math.min(10, Math.floor(Number.isFinite(targetCount) ? targetCount : 5)));
+  return Array.from({ length: count + 1 }, (_, index) => count - index);
+}
+
 export function effectiveShooting(records: ShootingResult[]) {
   const grouped = new Map<string, ShootingResult[]>();
   for (const r of records.filter(r => !r.isCorrected)) {

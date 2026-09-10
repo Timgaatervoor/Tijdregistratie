@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { RaceClock } from '../src/services/raceClock';
-import { effectiveShooting, shootingPenalty } from '../src/services/shootingRules';
+import { effectiveShooting, normalizeShootingRound, shootingHitPresets, shootingPenalty } from '../src/services/shootingRules';
 import { calculateRaceResults } from '../src/services/timingEngine';
 import { db } from '../src/db/dexieDb';
 import { operationService } from '../src/services/operationService';
@@ -14,6 +14,13 @@ after(async () => { assert.equal(db.name, 'BiathlonDeHaanDB-node-test'); await d
 const p: Participant = { id: 'p', firstName: 'Test', lastName: 'Race', categoryId: 'cat', raceProfileId: 'profile', bibNumber: 1, waveId: 'wave', status: 'READY', createdAt: '', updatedAt: '' };
 const profile: RaceProfile = { id: 'profile', name: 'Test', description: '', penaltySecondsPerMiss: 20, penaltyLapsPerMiss: 1, legs: [{ id: 's1', type: 'SHOOT', name: '1', shotCount: 5, penaltyType: 'time', penaltyValueSeconds: 10 }, { id: 's2', type: 'SHOOT', name: '2', shotCount: 5, penaltyType: 'time', penaltyValueSeconds: 30 }] };
 const shot = (id: string, round: number, misses: number, patch = {}): ShootingResult => ({ id, eventId: 'event', participantId: 'p', bibNumber: 1, round, shots: 5, hits: 5 - misses, misses, timestamp: `2026-09-07T10:00:0${id.length}Z`, station: 'S', deviceId: 'D', operatorId: 'O', syncStatus: 'LOCAL_ONLY', ...patch });
+
+test('shooting controls follow dynamic profiles and keep the selected round valid', () => {
+  assert.deepEqual(shootingHitPresets(3), [3, 2, 1, 0]);
+  assert.deepEqual(shootingHitPresets(7), [7, 6, 5, 4, 3, 2, 1, 0]);
+  assert.equal(normalizeShootingRound(4, 2), 2);
+  assert.equal(normalizeShootingRound(0, 3), 1);
+});
 
 test('pairing preserves checksums through jsonb, excludes PINs and backs up before replacing a device', async () => {
   const oldFetch = globalThis.fetch, oldConfig = syncService.getConfig, oldSave = syncService.saveConfig, oldCheck = syncService.checkClockOffset;

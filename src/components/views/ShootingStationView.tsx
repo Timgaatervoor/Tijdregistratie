@@ -1,4 +1,4 @@
-import { effectiveShooting, shootingPenalty } from '../../services/shootingRules';
+import { effectiveShooting, normalizeShootingRound, shootingHitPresets, shootingPenalty } from '../../services/shootingRules';
 import React, { useEffect, useState } from 'react';
 import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
 import type { Category, Participant, ShootingResult, RaceEvent, RaceProfile } from '../../types';
@@ -98,12 +98,12 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     : [];
   const completedRoundMap = new Map<number, ShootingResult>();
   completedRounds.forEach((result) => completedRoundMap.set(result.round, result));
-  const completedRoundResults = [...completedRoundMap.values()].sort((a, b) => a.round - b.round);
-  const selectedShootingLeg = shootingRounds[roundNumber - 1];
-  const targetCount = Math.max(1, Number(selectedShootingLeg?.shotCount) || 5);
+  const selectedRoundNumber = normalizeShootingRound(roundNumber, shootingRounds.length);
+  const selectedShootingLeg = shootingRounds[selectedRoundNumber - 1];
+  const targetCount = Math.max(1, Math.min(10, Number(selectedShootingLeg?.shotCount) || 5));
   const hits = targets.filter(Boolean).length;
   const misses = Math.max(0, targetCount - hits);
-  const activePenalty = shootingPenalty(activeProfile, roundNumber, misses, penaltyPerMiss);
+  const activePenalty = shootingPenalty(activeProfile, selectedRoundNumber, misses, penaltyPerMiss);
   const penaltySummary = activePenalty.laps > 0
     ? `${activePenalty.laps} strafronde${activePenalty.laps === 1 ? '' : 's'}${activePenalty.lapDistanceMeters > 0 ? ` van ${activePenalty.lapDistanceMeters} m (${activePenalty.totalLapDistanceMeters} m totaal)` : ''}`
     : activePenalty.seconds > 0 ? `+${activePenalty.seconds}s straf` : 'geen straf';
@@ -113,7 +113,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
   useEffect(() => {
     setTargets(Array(targetCount).fill(true));
-  }, [matchedParticipant?.id, roundNumber, selectedShootingLeg?.id, targetCount]);
+  }, [matchedParticipant?.id, selectedRoundNumber, selectedShootingLeg?.id, targetCount]);
 
   useEffect(() => {
     if (!matchedParticipant || shootingRounds.length === 0) return;
@@ -163,7 +163,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     if (!forceExtra) {
       const existing = shootingResults.find(
         (r) => (matchedParticipant ? r.participantId === matchedParticipant.id : r.bibNumber === parsedBib)
-          && r.round === roundNumber
+          && r.round === selectedRoundNumber
           && !r.isCorrected
       );
       if (existing) {
@@ -193,7 +193,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           createdAt: '',
           updatedAt: '',
         },
-        roundNumber,
+        selectedRoundNumber,
         stationName,
         targetCount,
         hits,
@@ -203,7 +203,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
       soundService.playSuccess();
       setFeedback({
-        text: `Schietronde ${roundNumber} opgeslagen voor Bib #${parsedBib}: ${hits}/${targetCount} treffers (${penaltySummary})`,
+        text: `Schietronde ${selectedRoundNumber} opgeslagen voor Bib #${parsedBib}: ${hits}/${targetCount} treffers (${penaltySummary})`,
         type: 'success',
       });
 
@@ -212,7 +212,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       setTargets(Array(targetCount).fill(true));
       setDuplicateConflict(null);
       const completedRoundNumbersAfterSave = new Set(completedRoundMap.keys());
-      completedRoundNumbersAfterSave.add(roundNumber);
+      completedRoundNumbersAfterSave.add(selectedRoundNumber);
       const completedAfterSave = Boolean(matchedParticipant)
         && shootingRounds.every((_, index) => completedRoundNumbersAfterSave.has(index + 1));
       setFinishNotice(completedAfterSave && matchedParticipant
@@ -380,11 +380,9 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             <div className="w-full min-h-20 rounded-2xl bg-slate-900 border-2 border-emerald-500/60 flex items-center justify-center text-5xl font-mono font-black text-white tracking-widest">
               {bibInput || '—'}
             </div>
-            {matchedParticipant && (
-              <p className="text-center text-sm text-emerald-400 font-bold">
-                {matchedParticipant.firstName} {matchedParticipant.lastName}
-              </p>
-            )}
+            <p className={`min-h-5 text-center text-sm font-bold ${matchedParticipant ? 'text-emerald-400' : 'text-slate-500'}`}>
+              {matchedParticipant ? `${matchedParticipant.firstName} ${matchedParticipant.lastName}` : bibInput ? 'Onbekend startnummer' : 'Voer een startnummer in'}
+            </p>
 
             <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => (
@@ -406,16 +404,16 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           <div className="space-y-2">
             <div className="text-xs text-slate-300 font-bold flex flex-wrap items-center justify-between gap-2">
               <span>Profiel: <span className="text-emerald-400">{activeProfile?.name || 'Standaard schietproeven'}</span></span>
-              <span>{targetCount} doelen in proef {roundNumber}</span>
+              <span>{targetCount} doelen in proef {selectedRoundNumber}</span>
             </div>
-            <div className="text-xs text-slate-300 font-bold">
+            <div className="h-36 overflow-y-auto pr-1 text-xs text-slate-300 font-bold">
               Alle schietproeven ({shootingRounds.length})
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
                 {shootingRounds.map((leg, index) => {
                   const round = index + 1;
                   const previousResult = completedRoundMap.get(round);
                   return (
-                    <button key={leg.id} type="button" onClick={() => selectRound(round)} className={`py-2 rounded-xl font-bold border text-left px-2 ${roundNumber === round ? 'bg-blue-600 text-white border-blue-400' : previousResult ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                    <button key={leg.id} type="button" onClick={() => selectRound(round)} className={`min-h-16 py-2 rounded-xl font-bold border text-left px-2 ${selectedRoundNumber === round ? 'bg-blue-600 text-white border-blue-400' : previousResult ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
                       <span className="block">{previousResult ? '✓ ' : ''}Proef {round}</span>
                       <span className="block text-[10px] font-normal truncate">{leg.name}</span>
                       {previousResult && (
@@ -434,7 +432,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-5 gap-2 sm:gap-3">
+          <div className="grid grid-cols-5 content-start gap-2 sm:gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-2">
             {targets.map((isHit, index) => (
               <button
                 key={index}
@@ -482,8 +480,8 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
         <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
           <form onSubmit={handleRecordShooting} className="space-y-6">
             {/* Bib Input & Round Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+            <div className="grid min-h-52 grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="min-h-48">
                 <label className="text-xs text-slate-400 font-semibold block mb-1">
                   Startnummer (Bib):
                 </label>
@@ -496,22 +494,23 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                   className="w-full bg-slate-850 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-mono font-bold text-white focus:outline-none focus:border-blue-500"
                 />
                 {matchedParticipant ? (
-                  <span className="text-xs text-emerald-400 font-semibold mt-1 block">
+                  <span className="min-h-5 text-xs text-emerald-400 font-semibold mt-1 block">
                     ✓ {matchedParticipant.firstName} {matchedParticipant.lastName} (
                     {categories.find(c => c.id === matchedParticipant.categoryId)?.name || 'Cat'})
                   </span>
                 ) : bibInput ? (
-                  <span className="text-xs text-amber-400 font-semibold mt-1 block">
+                  <span className="min-h-5 text-xs text-amber-400 font-semibold mt-1 block">
                     ⚠ Onbekend startnummer (wordt als noodrecord gelogd)
                   </span>
-                ) : null}
+                ) : <span className="min-h-5 text-xs text-slate-500 mt-1 block">Voer het vaste borstnummer van de atleet in.</span>}
               </div>
 
-              <div>
-                <label className="text-xs text-slate-400 font-semibold block mb-1">
-                  Schietproeven uit profiel {activeProfile ? `“${activeProfile.name}”` : ''}:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="min-h-48 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <div className="mb-2 flex min-h-8 items-start justify-between gap-2">
+                  <span className="text-xs text-slate-400 font-semibold">Schietprofiel {activeProfile ? `“${activeProfile.name}”` : 'standaard'}</span>
+                  <span className={`shrink-0 text-[11px] font-bold ${allShootingDone ? 'text-emerald-300' : 'text-blue-300'}`}>{completedRoundMap.size}/{shootingRounds.length} klaar{allShootingDone ? ' · naar finish' : ''}</span>
+                </div>
+                <div className="grid h-36 grid-cols-1 content-start gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
                   {shootingRounds.map((leg, index) => {
                     const round = index + 1;
                     const previousResult = completedRoundMap.get(round);
@@ -521,8 +520,8 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                         key={leg.id}
                         type="button"
                         onClick={() => selectRound(round)}
-                        className={`py-3 px-3 rounded-xl font-bold text-xs border transition text-left ${
-                          roundNumber === round
+                        className={`min-h-16 py-2.5 px-3 rounded-xl font-bold text-xs border transition text-left ${
+                          selectedRoundNumber === round
                             ? 'bg-blue-600 text-white border-blue-500 shadow-md'
                             : previousResult
                             ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700'
@@ -545,32 +544,6 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               </div>
             </div>
 
-            {matchedParticipant && completedRoundResults.length > 0 && (
-              <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/20 p-3">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Vorige schietresultaten</span>
-                  <span className="text-[11px] text-slate-400">{completedRoundMap.size}/{shootingRounds.length} afgewerkt</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {completedRoundResults.map((result) => (
-                    <div key={`participant-round-${result.id}`} className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs flex items-center justify-between gap-3">
-                      <div>
-                        <span className="font-bold text-white block">Proef {result.round}: {shootingRounds[result.round - 1]?.name || `Schietproef ${result.round}`}</span>
-                        <span className="text-[10px] text-slate-500">{formatLocalTime(result.timestamp, true)} • {result.station}</span>
-                      </div>
-                      <span className="font-mono font-black text-emerald-400 whitespace-nowrap">{result.hits}/{result.shots} raak</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {matchedParticipant && allShootingDone && (
-              <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-base font-black text-slate-950">
-                Alle schietproeven zijn afgewerkt — deze deelnemer moet naar de FINISH!
-              </div>
-            )}
-
             {/* 5 Big Touch Target Circles (Biathlon Stijl) */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -582,7 +555,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-5 gap-2 sm:gap-4 p-4 bg-slate-950 rounded-2xl border border-slate-800">
+              <div className="grid grid-cols-5 content-start gap-2 sm:gap-4 p-4 bg-slate-950 rounded-2xl border border-slate-800">
                 {targets.map((isHit, idx) => (
                   <button
                     key={`target-circle-${idx}`}
@@ -612,8 +585,8 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               <span className="text-xs font-semibold text-slate-400 block mb-2">
                 Of kies direct aantal treffers (1-touch):
               </span>
-              <div className="grid grid-cols-6 gap-2">
-                {[5, 4, 3, 2, 1, 0].map((h) => (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                {shootingHitPresets(targetCount).map((h) => (
                   <button
                     key={`preset-hits-${h}`}
                     type="button"
@@ -624,7 +597,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                         : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
                     }`}
                   >
-                    {h}/5
+                    {h}/{targetCount}
                   </button>
                 ))}
               </div>
@@ -673,7 +646,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               </span>
               <div>
                 <label className="text-slate-300 block mb-1">Gewijzigde Treffers (0-{editingResult.shots}):</label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {Array.from({ length: editingResult.shots + 1 }, (_, index) => editingResult.shots - index).map((h) => (
                     <button
                       key={`edit-preset-hits-${h}`}

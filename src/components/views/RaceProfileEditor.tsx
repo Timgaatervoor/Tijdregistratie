@@ -567,8 +567,8 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
                           value={leg.shotCount || 5}
                           onChange={(e) =>
                             handleUpdateLeg(idx, {
-                              shotCount: parseInt(e.target.value, 10) || 5,
-                              maxHits: parseInt(e.target.value, 10) || 5,
+                              shotCount: Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 5)),
+                              maxHits: Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 5)),
                             })
                           }
                           className="w-14 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center text-white font-mono"

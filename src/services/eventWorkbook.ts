@@ -131,7 +131,7 @@ export function planEventWorkbook(book: XLSX.WorkBook, current: WorkbookData) {
     return { ...existingProfile, id: code, name: text(r.Naam), description: text(r.Beschrijving), articles: list(r.Artikelen), penaltySecondsPerMiss: number(r['Strafseconden per misser'], code, 20)!, penaltyLapsPerMiss: number(r['Strafrondes per misser'], code, 1)!, penaltyType: defaultPenaltyType, penaltyLapDistanceMeters: number(r['Lengte strafronde meters'], code, existingProfile?.penaltyLapDistanceMeters ?? 100), requirePenaltyLapConfirmation: yesNo(r['Strafrondes controleren'], code, existingProfile?.requirePenaltyLapConfirmation ?? true), legs: ordered.map((l, index) => {
       const type = choice(l.Type, ['RUN', 'SHOOT', 'PENALTY', 'TRANSITION', 'FINISH'], code, 'RUN') as RaceLegConfig['type'];
       const shotCount = type === 'SHOOT' ? number(l.Schoten, code, 5) : undefined;
-      if (type === 'SHOOT' && !shotCount) errors.push(`${code}: een schietproef moet minstens een schot hebben.`);
+      if (type === 'SHOOT' && (!shotCount || shotCount > 10)) errors.push(`${code}: een schietproef moet 1 tot en met 10 schoten hebben.`);
       const priorLeg = existingProfile?.legs[index];
       return { ...priorLeg, id: priorLeg?.id ?? `${code}-${l.Volgorde}`, type, name: text(l.Naam) || type, distanceMeters: number(l['Afstand meters'], code), laps: number(l.Ronden, code), shotCount, stance: choice(l.Houding, ['prone', 'standing', 'free'], code, 'free') as RaceLegConfig['stance'], penaltyType: choice(l.Straftype, ['time', 'lap', 'fixed', 'none'], code, priorLeg?.penaltyType ?? defaultPenaltyType ?? 'time') as RaceLegConfig['penaltyType'], penaltyValueSeconds: number(l.Strafseconden, code), penaltyLapsPerMiss: number(l.Strafrondes, code) };
     }) };

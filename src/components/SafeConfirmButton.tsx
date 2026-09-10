@@ -49,6 +49,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [typeInput, setTypeInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingError, setProcessingError] = useState('');
   const actionGateRef = useRef(createActionGate());
   const firstClickRef = useRef<number | null>(null);
 
@@ -63,18 +64,24 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
   const triggerConfirm = async () => {
     if (!actionGateRef.current.enter()) return;
     setIsProcessing(true);
+    setProcessingError('');
+    let succeeded = false;
     try {
       soundService.playSuccess();
       await onConfirm();
-    } catch {
+      succeeded = true;
+    } catch (error) {
       soundService.playError();
+      setProcessingError(error instanceof Error ? error.message : 'De actie kon niet worden uitgevoerd. Probeer opnieuw.');
     } finally {
       setIsProcessing(false);
       actionGateRef.current.leave();
       resetHold();
       setPendingSecondClick(false);
-      setShowTypeModal(false);
-      setTypeInput('');
+      if (succeeded) {
+        setShowTypeModal(false);
+        setTypeInput('');
+      }
     }
   };
 
@@ -84,6 +91,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
       soundService.playWarning();
       setShowTypeModal(true);
       setTypeInput('');
+      setProcessingError('');
     } else {
       triggerConfirm();
     }
@@ -154,6 +162,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
         if (requireTypeConfirm) {
           setShowTypeModal(true);
           setTypeInput('');
+          setProcessingError('');
         } else {
           triggerConfirm();
         }
@@ -161,8 +170,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
     }
   };
 
-  const handleTypeModalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleTypeModalSubmit = async () => {
     if (!validateTypeConfirmation(typeInput, typeConfirmKeyword)) {
       soundService.playError();
       return;
@@ -240,9 +248,9 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn"
         >
-          <div className="bg-slate-900 border-2 border-red-500/60 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs text-slate-200">
+          <div className="bg-slate-900 border-2 border-red-500/60 rounded-2xl max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-6 shadow-2xl space-y-4 text-xs text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-red-400" />
@@ -253,6 +261,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
                 onClick={() => {
                   setShowTypeModal(false);
                   setTypeInput('');
+                  setProcessingError('');
                 }}
                 className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
               >
@@ -262,7 +271,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
 
             <p className="leading-relaxed text-slate-300">{typeConfirmDescription}</p>
 
-            <form onSubmit={handleTypeModalSubmit} className="space-y-4">
+            <div className="space-y-4">
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">
                   Typ ter bevestiging exact: <strong className="text-red-400 font-mono tracking-widest">{typeConfirmKeyword}</strong>
@@ -273,10 +282,22 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
                   required
                   value={typeInput}
                   onChange={(e) => setTypeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleTypeModalSubmit();
+                    }
+                  }}
                   placeholder={typeConfirmKeyword}
                   className="w-full bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl px-3 py-2.5 text-white font-mono uppercase text-center font-bold tracking-widest text-sm focus:outline-none"
                 />
               </div>
+
+              {processingError && (
+                <div role="alert" className="rounded-xl border border-red-500/50 bg-red-950/40 px-3 py-2 text-red-200">
+                  {processingError}
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
                 <button
@@ -284,21 +305,23 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
                   onClick={() => {
                     setShowTypeModal(false);
                     setTypeInput('');
+                    setProcessingError('');
                   }}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
                 >
                   Annuleren
                 </button>
                 <button
-                  type="submit"
+                  type="button"
                   disabled={!validateTypeConfirmation(typeInput, typeConfirmKeyword) || isProcessing}
+                  onClick={() => void handleTypeModalSubmit()}
                   className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:hover:bg-red-600 text-white font-bold uppercase tracking-wider transition flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Definitief uitvoeren</span>
+                  <span>{isProcessing ? 'Bezig…' : 'Definitief uitvoeren'}</span>
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

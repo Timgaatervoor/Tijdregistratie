@@ -5,6 +5,47 @@ import { operationService } from './operationService';
 
 export interface BibAgeRange { minAge: number; maxAge: number; firstBib: number; lastBib: number }
 export interface BibChange { participantId: string; name: string; age?: number; oldBib?: number; bibNumber?: number }
+export interface BibAssignmentPreferences { ranges: BibAgeRange[]; onlyMissing: boolean }
+
+const DEFAULT_BIB_PREFERENCES: BibAssignmentPreferences = {
+  ranges: [{ minAge: 0, maxAge: 11, firstBib: 1, lastBib: 100 }],
+  onlyMissing: true,
+};
+
+type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+function validRange(value: unknown): value is BibAgeRange {
+  if (!value || typeof value !== 'object') return false;
+  const range = value as Record<string, unknown>;
+  return ['minAge', 'maxAge', 'firstBib', 'lastBib'].every(key => Number.isSafeInteger(range[key])) &&
+    Number(range.minAge) >= 0 && Number(range.maxAge) >= Number(range.minAge) &&
+    Number(range.firstBib) >= 1 && Number(range.lastBib) >= Number(range.firstBib);
+}
+
+export function readBibAssignmentPreferences(eventId: string, storage?: PreferenceStorage): BibAssignmentPreferences {
+  const fallback = { ranges: DEFAULT_BIB_PREFERENCES.ranges.map(range => ({ ...range })), onlyMissing: true };
+  try {
+    const target = storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
+    if (!target || !eventId) return fallback;
+    const parsed = JSON.parse(target.getItem(`biathlon_bib_assignment:${eventId}`) || 'null') as Partial<BibAssignmentPreferences> | null;
+    if (!parsed || !Array.isArray(parsed.ranges) || !parsed.ranges.every(validRange) || typeof parsed.onlyMissing !== 'boolean') return fallback;
+    return { ranges: parsed.ranges.map(range => ({ ...range })), onlyMissing: parsed.onlyMissing };
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveBibAssignmentPreferences(eventId: string, preferences: BibAssignmentPreferences, storage?: PreferenceStorage): boolean {
+  if (!eventId || !Array.isArray(preferences.ranges) || !preferences.ranges.every(validRange)) return false;
+  try {
+    const target = storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
+    if (!target) return false;
+    target.setItem(`biathlon_bib_assignment:${eventId}`, JSON.stringify(preferences));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function planAgeBibs(participants: Participant[], eventDate: string, ranges: BibAgeRange[], onlyMissing: boolean): BibChange[] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate ?? '')) throw new Error('Stel eerst een geldige evenementdatum in.');

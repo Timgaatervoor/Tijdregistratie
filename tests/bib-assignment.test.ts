@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Participant } from '../src/types';
 import { db } from '../src/db/dexieDb';
-import { planAgeBibs, updateBibs } from '../src/services/bibAssignment';
+import { planAgeBibs, readBibAssignmentPreferences, saveBibAssignmentPreferences, updateBibs } from '../src/services/bibAssignment';
 
 const person = (id: string, birthDate?: string, bibNumber?: number): Participant => ({ id, birthDate, bibNumber, firstName: id, lastName: id, categoryId: '', raceProfileId: '', createdAt: '', updatedAt: '', status: 'REGISTERED' });
 const ranges = [{ minAge: 10, maxAge: 11, firstBib: 1, lastBib: 10 }, { minAge: 35, maxAge: 50, firstBib: 100, lastBib: 110 }];
@@ -23,6 +23,23 @@ test('invalid and overlapping ranges and exhausted number ranges fail before wri
   assert.throws(() => planAgeBibs([], '2026-09-07', [ranges[0], { ...ranges[1], minAge: 11 }], true), /Leeftijdsbereiken/);
   assert.throws(() => planAgeBibs([], '2026-09-07', [ranges[0], { ...ranges[1], firstBib: 10 }], true), /Borstnummerbereiken/);
   assert.throws(() => planAgeBibs([person('A', '2015-01-01'), person('B', '2015-01-01')], '2026-09-07', [{ ...ranges[0], lastBib: 1 }], true), /Niet genoeg/);
+});
+
+test('bib assignment preferences persist per event and reject malformed storage', () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+  };
+  assert.equal(saveBibAssignmentPreferences('event-a', { ranges, onlyMissing: false }, storage), true);
+  assert.deepEqual(readBibAssignmentPreferences('event-a', storage), { ranges, onlyMissing: false });
+  assert.deepEqual(readBibAssignmentPreferences('event-b', storage), {
+    ranges: [{ minAge: 0, maxAge: 11, firstBib: 1, lastBib: 100 }],
+    onlyMissing: true,
+  });
+  values.set('biathlon_bib_assignment:event-a', JSON.stringify({ ranges: [{ minAge: 0 }], onlyMissing: false }));
+  assert.equal(readBibAssignmentPreferences('event-a', storage).onlyMissing, true);
+  assert.equal(saveBibAssignmentPreferences('event-a', { ranges: [{ ...ranges[0], firstBib: 0 }], onlyMissing: true }, storage), false);
 });
 
 test('bulk assignment validates fresh preview; clear keeps participants and source data; race records block both actions', async () => {

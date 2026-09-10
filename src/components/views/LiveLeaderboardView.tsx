@@ -49,6 +49,11 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   onKioskModeChange,
 }) => {
   const kioskStorageKey = `biathlon_tv_kiosk_config:${event?.id || 'new'}`;
+  const waveMap = new Map(waves.map((wave) => [wave.id, wave]));
+  const waveLabel = (waveId: string | undefined, fallbackName: string) => {
+    const wave = waveId ? waveMap.get(waveId) : undefined;
+    return wave ? `${wave.name} (${wave.scheduledStartTime})` : fallbackName || '-';
+  };
   const profileOptions = [...new Map(results.map(r => [r.raceProfileId ?? '', r.raceProfileName ?? 'Nog niet gekoppeld'])).entries()];
   const [selectedProfile, setSelectedProfile] = useState('ALL');
   const activeProfile = selectedProfile === 'ALL' || profileOptions.some(([id]) => id === selectedProfile)
@@ -287,7 +292,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     const rows = filteredResults.map((r) => {
       return `${displayRank(r) || ''},${r.bibNumber || ''},"${r.name}","${
         r.club || ''
-      }",${r.gender || ''},"${r.raceProfileName || ''}","${r.categoryName || ''}","${r.waveName || ''}",${r.startTime || ''},${
+      }",${r.gender || ''},"${r.raceProfileName || ''}","${r.categoryName || ''}","${waveLabel(r.waveId, r.waveName)}",${r.startTime || ''},${
         r.finishTime || ''
       },${r.rawElapsedFormatted || ''},${r.totalMisses || 0},${r.penaltyFormatted || ''},${
         r.officialTimeFormatted || ''
@@ -609,7 +614,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                 <span className="block">Startgroep</span>
                 <select value={selectedWave} onChange={e => setSelectedWave(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
                   <option value="ALL">Alle startgroepen</option>
-                  {waves.map(wave => <option key={`kiosk-filter-wave-${wave.id}`} value={wave.id}>{wave.name}</option>)}
+                  {waves.map(wave => <option key={`kiosk-filter-wave-${wave.id}`} value={wave.id}>{wave.name} ({wave.scheduledStartTime})</option>)}
                 </select>
               </label>
               <label className="space-y-1 text-slate-300">
@@ -704,7 +709,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           <option value="ALL">Alle Waves ({waves.length})</option>
           {waves.map((w) => (
             <option key={`lb-wave-${w.id}`} value={w.id}>
-              {w.name}
+              {w.name} ({w.scheduledStartTime})
             </option>
           ))}
         </select>
@@ -918,7 +923,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                       </td>
 
                       {/* Wave */}
-                      <td className="py-3 px-4 text-slate-400">{r.waveName || '-'}</td>
+                      <td className="py-3 px-4 text-slate-400 whitespace-nowrap">{waveLabel(r.waveId, r.waveName)}</td>
 
                       {/* Shooting Splits */}
                       <td className="py-3 px-4 text-center">

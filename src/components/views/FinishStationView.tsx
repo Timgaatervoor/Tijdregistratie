@@ -125,7 +125,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
           type: 'conflict',
         });
       } else {
-        soundService.playSuccess();
+        soundService.playFinishChord();
         setFeedback({
           text: `Finish geregistreerd voor Bib #${bib} om ${formatLocalTime(record.timestamp, true)}`,
           type: 'success',
@@ -184,7 +184,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
       performance.now()
     );
 
-    soundService.playSuccess();
+    soundService.playFinishChord();
     setFeedback({
       text: `NOODTIJD geregistreerd voor Onbekende Loper (Tijdelijke Bib #${emergencyBib}) om ${formatLocalTime(
         record.timestamp,

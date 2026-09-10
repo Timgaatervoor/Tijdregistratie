@@ -6,6 +6,8 @@ import {
   Lock,
   Unlock,
   Volume2,
+  VolumeX,
+  Play,
   Laptop,
   Clock,
   CheckCircle2,
@@ -70,6 +72,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deviceLocked, setDeviceLocked] = useState(deviceConfig?.isLocked ?? false);
   const [devicePin, setDevicePin] = useState(deviceConfig?.pin || '');
   const [savedMessage, setSavedMessage] = useState(false);
+  const [audioVolume, setAudioVolume] = useState(() => Math.round(soundService.getVolume() * 100));
+  const [audioMuted, setAudioMuted] = useState(() => soundService.isMuted());
+  const [audioTestMessage, setAudioTestMessage] = useState<string | null>(null);
+
+  const handleVolumeSliderChange = (newVolumePercent: number) => {
+    setAudioVolume(newVolumePercent);
+    soundService.setVolume(newVolumePercent / 100);
+    if (audioMuted && newVolumePercent > 0) {
+      setAudioMuted(false);
+      soundService.setMuted(false);
+    }
+  };
+
+  const handleToggleAudioMute = () => {
+    const nextMuted = !audioMuted;
+    setAudioMuted(nextMuted);
+    soundService.setMuted(nextMuted);
+    setAudioTestMessage(null);
+  };
+
+  const handleTestAudio = async (type: 'fanfare' | 'finish' | 'hit' | 'miss' | 'warning') => {
+    if (audioMuted) {
+      setAudioTestMessage('Schakel geluid eerst in om een signaal te testen.');
+      return;
+    }
+    if (audioVolume === 0) {
+      setAudioTestMessage('Zet het hoofdvolume boven 0% om een signaal te testen.');
+      return;
+    }
+    if (!(await soundService.resume())) {
+      setAudioTestMessage('De browser heeft audio niet vrijgegeven of ondersteunt Web Audio niet.');
+      return;
+    }
+    if (type === 'fanfare') soundService.playGoFanfare();
+    else if (type === 'finish') soundService.playFinishChord();
+    else if (type === 'hit') soundService.playHit();
+    else if (type === 'miss') soundService.playMiss();
+    else soundService.playWarning();
+    setAudioTestMessage('Testsignaal afgespeeld.');
+  };
 
   // Synchronize on initial mount without overwriting during active typing
   const initialLoadRef = React.useRef(false);
@@ -557,6 +599,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 />
                 <span className="text-[11px] text-slate-500 block mt-1">Nodig om een vergrendelde post te openen.</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow space-y-4 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              {audioMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5 text-amber-400" />}
+              <div>
+                <h3 className="text-sm font-bold text-white">Audiofeedback & geluidssignalen</h3>
+                <p className="text-slate-400 text-[11px]">Signalen voor starten, finishen, treffers, missers en waarschuwingen.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleAudioMute}
+              className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition flex items-center gap-1.5 ${
+                audioMuted
+                  ? 'bg-red-950/60 text-red-300 border-red-800/60 hover:bg-red-900/60'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              {audioMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {audioMuted ? 'Geluid gedempt' : 'Geluid actief'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="volume-slider" className="text-slate-300 font-semibold">Hoofdvolume</label>
+                <span className="text-amber-400 font-mono font-bold text-sm">{audioVolume}%</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <VolumeX className="w-4 h-4 text-slate-500" />
+                <input
+                  id="volume-slider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={audioMuted ? 0 : audioVolume}
+                  onChange={(e) => handleVolumeSliderChange(Number(e.target.value))}
+                  className="w-full accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+                />
+                <Volume2 className="w-4 h-4 text-amber-400" />
+              </div>
+              <p className="text-[11px] text-slate-500">Volume en dempstand worden op dit toestel bewaard.</p>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-slate-300 font-semibold block">Geluidstests</span>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void handleTestAudio('fanfare')} className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold transition flex items-center gap-1.5">
+                  <Play className="w-3.5 h-3.5 fill-current" /> Start
+                </button>
+                <button type="button" onClick={() => void handleTestAudio('finish')} className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium transition">Finish</button>
+                <button type="button" onClick={() => void handleTestAudio('hit')} className="px-2.5 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 font-medium transition">Treffer</button>
+                <button type="button" onClick={() => void handleTestAudio('miss')} className="px-2.5 py-2 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 font-medium transition">Misser</button>
+                <button type="button" onClick={() => void handleTestAudio('warning')} className="px-2.5 py-2 rounded-xl bg-orange-950/40 hover:bg-orange-900/60 text-orange-300 border border-orange-800/40 font-medium transition">Waarschuwing</button>
+              </div>
+              {audioTestMessage && <p className="text-[11px] text-slate-400" role="status">{audioTestMessage}</p>}
             </div>
           </div>
         </div>

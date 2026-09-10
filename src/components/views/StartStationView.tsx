@@ -86,19 +86,19 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
     if (!selectedWave) return;
 
     setIsStarting(true);
-    soundService.playWarning(); // warning beep
+    soundService.playCountdownPip();
 
     // 3 second visual & acoustic countdown
     setCountdown(3);
     setTimeout(() => {
-      soundService.playWarning();
+      soundService.playCountdownPip();
       setCountdown(2);
       setTimeout(() => {
-        soundService.playWarning();
+        soundService.playCountdownPip();
         setCountdown(1);
         setTimeout(async () => {
           setCountdown(null);
-          soundService.playSuccess();
+          soundService.playGoFanfare();
 
           const nowIso = raceClock.nowISO();
           const monotonicNow = performance.now();
@@ -132,7 +132,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
       performance.now()
     );
 
-    soundService.playSuccess();
+    soundService.playGoFanfare();
     setFeedbackMsg({
       text: `Individuele start geregistreerd voor Bib #${bib} (${p ? `${p.firstName} ${p.lastName}` : 'Onbekend'}) om ${formatLocalTime(nowIso, true)}`,
       type: 'success',

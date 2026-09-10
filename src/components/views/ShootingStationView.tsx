@@ -134,9 +134,9 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     next[index] = !next[index];
     setTargets(next);
     if (next[index]) {
-      soundService.playSuccess();
+      soundService.playHit();
     } else {
-      soundService.playWarning();
+      soundService.playMiss();
     }
   };
 
@@ -144,8 +144,8 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   const setPreset = (hitCount: number) => {
     const next = Array(targetCount).fill(false).map((_, i) => i < hitCount);
     setTargets(next);
-    if (hitCount === 5) soundService.playSuccess();
-    else soundService.playWarning();
+    if (hitCount === targetCount) soundService.playHit();
+    else soundService.playMiss();
   };
 
   const handleRecordShooting = async (e?: React.FormEvent, forceExtra = false) => {

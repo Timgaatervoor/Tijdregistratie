@@ -58,6 +58,7 @@ interface HealthData {
     isSupported: boolean;
     state: string;
     isMuted: boolean;
+    volumePercent: number;
   };
   sync: {
     pendingCount: number | null;
@@ -151,7 +152,7 @@ export const SystemHealthModal: React.FC<SystemHealthModalProps> = ({
       // Audio
       const isAudioSupported = soundService.isAudioSupported();
       const audioState = soundService.getAudioState();
-      const isMuted = !soundService.getSoundEnabled();
+      const isMuted = soundService.isMuted();
 
       // Sync
       let pendingCount: number | null = null;
@@ -193,6 +194,7 @@ export const SystemHealthModal: React.FC<SystemHealthModalProps> = ({
           isSupported: isAudioSupported,
           state: audioState,
           isMuted,
+          volumePercent: Math.round(soundService.getVolume() * 100),
         },
         sync: {
           pendingCount,
@@ -524,7 +526,7 @@ export const SystemHealthModal: React.FC<SystemHealthModalProps> = ({
                 <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between">
                   <span className="text-slate-400">Geluid</span>
                   <span className="font-bold text-slate-200">
-                    {health.audio.isMuted ? 'Uitgeschakeld' : 'Ingeschakeld'}
+                    {health.audio.isMuted ? 'Gedempt' : `${health.audio.volumePercent}%`}
                   </span>
                 </div>
               </div>

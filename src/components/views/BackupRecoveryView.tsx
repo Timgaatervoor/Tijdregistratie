@@ -23,6 +23,7 @@ import {
   type RecoveryValidation,
 } from '../../services/backupService';
 import { InstallDesktopModal } from '../InstallDesktopModal';
+import { SafeConfirmButton } from '../SafeConfirmButton';
 
 interface BackupRecoveryViewProps {
   event: RaceEvent | null;
@@ -73,12 +74,6 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
 
   const handleConfirmRestore = async () => {
     if (!validationResult || !validationResult.snapshot) return;
-
-    const confirmed = confirm(
-      `WEET U HET ZEKER?\n\nU staat op het punt om de huidige lokale database volledig te vervangen door back-up snapshot "${validationResult.snapshot.snapshotId}".\n\nEr worden ${validationResult.eventDetails?.participantsCount} deelnemers en ${validationResult.eventDetails?.timingRecordsCount} tijdrecords hersteld.`
-    );
-
-    if (!confirmed) return;
 
     setIsRestoring(true);
     try {
@@ -313,13 +308,18 @@ export const BackupRecoveryView: React.FC<BackupRecoveryViewProps> = ({
                   >
                     Annuleren
                   </button>
-                  <button
-                    onClick={handleConfirmRestore}
+                  <SafeConfirmButton
+                    mode="hold"
+                    requireTypeConfirm
+                    typeConfirmKeyword="HERSTEL"
+                    typeConfirmTitle="Lokale database vervangen?"
+                    typeConfirmDescription={`Snapshot ${validationResult.snapshot.snapshotId} herstelt ${validationResult.eventDetails?.participantsCount} deelnemers en ${validationResult.eventDetails?.timingRecordsCount} tijdrecords.`}
+                    onConfirm={handleConfirmRestore}
                     disabled={isRestoring}
                     className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold shadow-lg"
                   >
                     {isRestoring ? 'Herstellen...' : 'Ja, Database Nu Herstellen'}
-                  </button>
+                  </SafeConfirmButton>
                 </div>
               </div>
             ) : (

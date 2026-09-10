@@ -26,6 +26,7 @@ import { AgeCategoriesEditor } from './AgeCategoriesEditor';
 import { EventSetupAndReset } from './EventSetupAndReset';
 import { BackupRecoveryView } from './BackupRecoveryView';
 import { SimulatorView } from './SimulatorView';
+import { SafeConfirmDialog } from '../SafeConfirmDialog';
 
 interface SettingsViewProps {
   event: RaceEvent | null;
@@ -59,6 +60,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isPublicResultsLive, setIsPublicResultsLive] = useState(event?.isPublicResultsLive ?? true);
   const [isTestMode, setIsTestMode] = useState(event?.isTestMode ?? true);
   const [isLocked, setIsLocked] = useState(event?.officialResultsLocked ?? false);
+  const [showOfficialConfirm, setShowOfficialConfirm] = useState(false);
 
   // Device & Operator Settings
   const [deviceId, setDeviceId] = useState(deviceConfig?.id || 'FINISH-01');
@@ -157,12 +159,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const toggleOfficialLock = async () => {
     if (!event) return;
     const nextLocked = !isLocked;
-    const promptMsg = nextLocked
-      ? 'Wilt u de officiële resultaten vergrendelen en publiceren? Wijzigingen vereisen daarna beheerderstoestemming.'
-      : 'Wilt u de officiële resultaten ontgrendelen voor correcties?';
-
-    if (!confirm(promptMsg)) return;
-
     setIsLocked(nextLocked);
     await db.events.update(event.id, {
       officialResultsLocked: nextLocked,
@@ -181,6 +177,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div className="space-y-6">
+      <SafeConfirmDialog
+        isOpen={showOfficialConfirm}
+        title={isLocked ? 'Officiële resultaten ontgrendelen?' : 'Resultaten officieel vastleggen?'}
+        message={isLocked ? 'Correcties worden opnieuw mogelijk en de uitslag wordt weer voorlopig.' : 'De uitslagen worden als officieel gepubliceerd. Latere wijzigingen vereisen opnieuw ontgrendelen.'}
+        confirmLabel={isLocked ? 'Ontgrendelen' : 'Officieel vastleggen'}
+        variant={isLocked ? 'warning' : 'info'}
+        onCancel={() => setShowOfficialConfirm(false)}
+        onConfirm={toggleOfficialLock}
+      />
       {/* Top Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -579,7 +584,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <button
             type="button"
-            onClick={toggleOfficialLock}
+            onClick={() => setShowOfficialConfirm(true)}
             className={`px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition ${
               isLocked
                 ? 'bg-red-600 hover:bg-red-500 text-white'

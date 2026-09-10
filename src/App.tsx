@@ -24,8 +24,11 @@ import { ConflictResolverModal } from './components/ConflictResolverModal';
 import { ParticipantDetailModal } from './components/ParticipantDetailModal';
 
 import type { RaceConflict, Participant, RaceResult } from './types';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, KeyRound, Lock, Unlock } from 'lucide-react';
 import { db } from './db/dexieDb';
+import { soundService } from './services/soundService';
+import { SafeConfirmButton } from './components/SafeConfirmButton';
+import { createActionGate } from './services/safeConfirmLogic';
 
 const validTabs = new Set<ActiveTab>([
   'event', 'participants', 'waves', 'start', 'shooting', 'finish',
@@ -115,22 +118,44 @@ export default function App() {
     };
   }, []);
 
-  const handleUnlockDevice = async () => {
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockPinInput, setUnlockPinInput] = useState('');
+  const [unlockError, setUnlockError] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const unlockGate = React.useRef(createActionGate());
+
+  const handleOpenUnlockModal = () => {
     if (!deviceConfig?.isLocked) return;
-    if (deviceConfig.pin) {
-      const enteredPin = window.prompt('Voer de beheerderscode in om dit toestel te ontgrendelen:');
-      if (enteredPin === null) return;
-      if (enteredPin !== deviceConfig.pin) {
-        window.alert('Onjuiste beheerderscode. Het toestel blijft vergrendeld.');
-        return;
-      }
-    } else if (!window.confirm('Wilt u dit toestel ontgrendelen en alle menu’s opnieuw tonen?')) {
+    unlockGate.current.leave();
+    setUnlockPinInput(''); setUnlockError(''); setUnlocking(false); setShowUnlockModal(true);
+  };
+
+  const unlockDevice = async () => {
+    if (!deviceConfig?.isLocked || !unlockGate.current.enter()) return;
+    setUnlocking(true); setUnlockError('');
+    try {
+      await db.devices.update(deviceConfig.id, { isLocked: false });
+      await refresh();
+      soundService.playSuccess();
+      setShowUnlockModal(false);
+      setCurrentTab('event');
+    } catch (error) {
+      unlockGate.current.leave();
+      setUnlocking(false);
+      setUnlockError(error instanceof Error ? error.message : 'Ontgrendelen is mislukt.');
+      soundService.playError();
+    }
+  };
+
+  const handleConfirmUnlockWithPin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!deviceConfig?.isLocked) return;
+    if (deviceConfig.pin && unlockPinInput !== deviceConfig.pin) {
+      soundService.playError();
+      setUnlockError('Onjuiste beheerderscode. Het toestel blijft vergrendeld.');
       return;
     }
-
-    await db.devices.update(deviceConfig.id, { isLocked: false });
-    await refresh();
-    setCurrentTab('event');
+    await unlockDevice();
   };
 
   const handleSelectParticipantFromResult = (result: RaceResult) => {
@@ -193,7 +218,7 @@ export default function App() {
           onOpenPreRaceCheck={() => setShowPreRaceModal(true)}
           onOpenSystemHealth={() => setShowSystemHealthModal(true)}
           onOpenPrint={() => setShowPrintModal(true)}
-          onUnlockDevice={handleUnlockDevice}
+          onUnlockDevice={handleOpenUnlockModal}
           isTestMode={event?.isTestMode ?? false}
         />
         <Navigation
@@ -362,6 +387,19 @@ export default function App() {
         onClose={() => setSelectedParticipant(null)}
         onUpdated={refresh}
       />
+
+      {showUnlockModal && deviceConfig?.isLocked && (
+        <div role="dialog" aria-modal="true" aria-labelledby="unlock-device-title" className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full space-y-4 text-white shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3"><div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400"><Lock className="w-5 h-5" /></div><div><h3 id="unlock-device-title" className="font-bold">Toestel ontgrendelen</h3><p className="text-xs text-slate-400">Alle beheermenu’s worden weer zichtbaar.</p></div></div>
+            {unlockError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/60 p-3 text-xs text-red-300">{unlockError}</p>}
+            {deviceConfig.pin ? <form onSubmit={handleConfirmUnlockWithPin} className="space-y-4">
+              <label className="block text-xs text-slate-300"><span className="flex items-center gap-1.5"><KeyRound className="w-3.5 h-3.5 text-amber-400" />Beheerders-PIN</span><input type="password" inputMode="numeric" autoFocus disabled={unlocking} value={unlockPinInput} onChange={event => { setUnlockPinInput(event.target.value); setUnlockError(''); }} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-xl tracking-widest font-mono disabled:opacity-50" /></label>
+              <div className="flex gap-2"><button type="button" disabled={unlocking} onClick={() => setShowUnlockModal(false)} className="flex-1 rounded-xl bg-slate-800 py-2.5 text-xs font-bold disabled:opacity-50">Annuleren</button><button type="submit" disabled={unlocking} className="flex-1 rounded-xl bg-amber-500 py-2.5 text-xs font-black text-slate-950 flex items-center justify-center gap-1 disabled:opacity-50"><Unlock className="w-4 h-4" />{unlocking ? 'Bezig…' : 'Ontgrendelen'}</button></div>
+            </form> : <div className="space-y-4"><p className="text-xs text-slate-300">Er is geen PIN ingesteld. Houd de knop ingedrukt om het toestel te ontgrendelen.</p><div className="flex gap-2"><button type="button" onClick={() => setShowUnlockModal(false)} className="flex-1 rounded-xl bg-slate-800 py-2.5 text-xs font-bold">Annuleren</button><SafeConfirmButton mode="hold" holdDurationSeconds={2} variant="warning" onConfirm={unlockDevice} className="flex-1 py-2.5"><Unlock className="w-4 h-4" />Ontgrendelen</SafeConfirmButton></div></div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { EventWorkbookPanel } from '../EventWorkbookPanel';
+import { SafeConfirmButton } from '../SafeConfirmButton';
 import React, { useState, useRef, useEffect } from 'react';
 import { BibAssignmentModal } from '../BibAssignmentModal';
 import { updateBibs } from '../../services/bibAssignment';
@@ -164,7 +165,6 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   };
 
   const handleClearBibs = async () => {
-    if (!confirm('Alle borstnummers van alle deelnemers verwijderen? Dit geldt ook voor deelnemers buiten het huidige lijstfilter. De deelnemers blijven behouden.')) return;
     setClearingBibs(true);
     setBibMessage('');
     try {
@@ -559,7 +559,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
           >
             <ArrowUpDown className="w-4 h-4" /> Borstnummers per leeftijd
           </button>
-          <button disabled={clearingBibs || !participants.some(p => p.bibNumber !== undefined)} onClick={handleClearBibs} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-950 text-red-300 border border-red-800 text-xs font-semibold disabled:opacity-40"><Trash2 className="w-4 h-4" /> Alle borstnummers verwijderen</button>
+          <SafeConfirmButton mode="hold" holdDurationSeconds={2} disabled={clearingBibs || !participants.some(p => p.bibNumber !== undefined)} onConfirm={handleClearBibs} className="px-3 py-2"><Trash2 className="w-4 h-4" /> Alle borstnummers verwijderen</SafeConfirmButton>
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition"

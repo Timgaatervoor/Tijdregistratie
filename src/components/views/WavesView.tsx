@@ -18,6 +18,7 @@ import { generateUUID, operationService } from '../../services/operationService'
 import { WavePlanningPanel } from '../WavePlanningPanel';
 import { defaultWaveSettings, nextWaveTime, timeSeconds, waveAllows, type WaveSettings } from '../../services/wavePlanning';
 import { soundService } from '../../services/soundService';
+import { SafeConfirmButton } from '../SafeConfirmButton';
 
 interface WavesViewProps {
   waves: Wave[];
@@ -108,9 +109,6 @@ export const WavesView: React.FC<WavesViewProps> = ({
   };
 
   const handleDeleteWave = async (w: Wave) => {
-    if (!confirm(`Weet u zeker dat u "${w.name}" wilt verwijderen? Gekoppelde deelnemers blijven behouden maar worden ontkoppeld van deze wave.`)) {
-      return;
-    }
 
     await db.transaction('rw', db.waves, db.participants, async () => {
       await db.waves.delete(w.id);
@@ -266,13 +264,14 @@ export const WavesView: React.FC<WavesViewProps> = ({
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => handleDeleteWave(w)}
+                    <SafeConfirmButton
+                      mode="double-click"
+                      onConfirm={() => handleDeleteWave(w)}
                       className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-200 border border-red-800/40 transition"
                       title="Wave verwijderen"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </SafeConfirmButton>
                   </div>
                 </div>
 

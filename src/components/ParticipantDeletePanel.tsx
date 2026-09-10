@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { getActiveEventId } from '../db/dexieDb';
 import { deleteParticipantData, deleteTargetLabels, type ParticipantDeleteTarget } from '../services/participantDeletion';
+import { SafeConfirmButton } from './SafeConfirmButton';
 
 export function ParticipantDeletePanel({ participantId, name, onDeleted }: { participantId: string; name: string; onDeleted: () => void }) {
   const [open, setOpen] = useState(false);
@@ -34,7 +35,7 @@ export function ParticipantDeletePanel({ participantId, name, onDeleted }: { par
         <p className="text-red-200">{target === 'participant' ? 'De deelnemer, alle tijden en alle schietregistraties worden verwijderd.' : target === 'shooting' ? 'De gekozen schietronde(s), inclusief eerdere correcties, worden gewist.' : 'Alle registraties van deze tijdsoort worden gewist; de andere wedstrijdgegevens blijven behouden.'} Dit wordt ook op gekoppelde toestellen verwerkt.</p>
         {error && <p role="alert" className="text-red-300">{error}</p>}
         <div className="flex gap-2">
-          <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50">{busy ? 'Wissen…' : 'Bevestigen en wissen'}</button>
+          <SafeConfirmButton disabled={busy} mode="hold" holdDurationSeconds={2} requireTypeConfirm={target === 'participant'} typeConfirmKeyword="WIS" typeConfirmTitle={`${name} definitief verwijderen?`} typeConfirmDescription="De deelnemer en alle gekoppelde wedstrijdgegevens worden verwijderd." onConfirm={remove} className="rounded-lg px-4 py-2">{busy ? 'Wissen…' : target === 'participant' ? 'Houd vast en typ WIS' : 'Houd vast om te wissen'}</SafeConfirmButton>
           <button type="button" disabled={busy} onClick={() => { setOpen(false); setError(''); }} className="rounded-lg bg-slate-800 px-4 py-2">Annuleren</button>
         </div>
       </div>}

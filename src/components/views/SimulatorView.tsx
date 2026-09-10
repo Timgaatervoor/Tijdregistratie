@@ -13,6 +13,7 @@ import { runFailsafeTestSuite, type TestResult } from '../../services/failsafeTe
 import { simulateRace } from '../../services/simulatorService';
 import { initializeSampleData } from '../../services/sampleDataService';
 import { soundService } from '../../services/soundService';
+import { SafeConfirmButton } from '../SafeConfirmButton';
 
 interface SimulatorViewProps {
   onRefresh: () => void;
@@ -64,11 +65,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ onRefresh }) => {
   };
 
   const handleResetSampleData = async () => {
-    const confirmed = confirm(
-      'Weet u zeker dat u alle gegevens wilt resetten naar de standaard testset (200 Belgische atleten, 10 waves, 3 profielen)?'
-    );
-    if (!confirmed) return;
-
     setIsResetting(true);
     try {
       await initializeSampleData(true);
@@ -101,13 +97,18 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ onRefresh }) => {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleResetSampleData}
+          <SafeConfirmButton
+            mode="hold"
+            requireTypeConfirm
+            typeConfirmKeyword="RESET"
+            typeConfirmTitle="Testdata opnieuw opbouwen?"
+            typeConfirmDescription="Alle huidige gegevens worden vervangen door de standaard testset met 200 atleten."
+            onConfirm={handleResetSampleData}
             disabled={isResetting || isSimulating}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 text-xs font-semibold transition"
           >
             <RotateCcw className="w-4 h-4" /> Reset Testdata (200 Atleten)
-          </button>
+          </SafeConfirmButton>
         </div>
       </div>
 

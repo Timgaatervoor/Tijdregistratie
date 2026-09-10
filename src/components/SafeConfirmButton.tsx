@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ShieldAlert, AlertTriangle, Check, X } from 'lucide-react';
 import { soundService } from '../services/soundService';
+import { calculateHoldProgress, validateTypeConfirmation, isValidDoubleClick, createActionGate } from '../services/safeConfirmLogic';
 
 export interface SafeConfirmButtonProps {
   onConfirm: () => void | Promise<void>;
@@ -48,6 +49,8 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [typeInput, setTypeInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const actionGateRef = useRef(createActionGate());
+  const firstClickRef = useRef<number | null>(null);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -58,6 +61,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
   }, []);
 
   const triggerConfirm = async () => {
+    if (!actionGateRef.current.enter()) return;
     setIsProcessing(true);
     try {
       soundService.playSuccess();
@@ -66,6 +70,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
       soundService.playError();
     } finally {
       setIsProcessing(false);
+      actionGateRef.current.leave();
       resetHold();
       setPendingSecondClick(false);
       setShowTypeModal(false);
@@ -98,14 +103,10 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
     const updateProgress = () => {
       if (holdStartTimeRef.current === null) return;
       const elapsed = performance.now() - holdStartTimeRef.current;
-      const totalMs = holdDurationSeconds * 1000;
-      const currentProgress = Math.min(1, elapsed / totalMs);
-      setProgress(currentProgress);
-
-      const remaining = Math.max(1, Math.ceil((totalMs - elapsed) / 1000));
-      setRemainingSeconds(remaining);
-
-      if (currentProgress >= 1) {
+      const current = calculateHoldProgress(elapsed, holdDurationSeconds);
+      setProgress(current.progress);
+      setRemainingSeconds(current.remainingSeconds);
+      if (current.isCompleted) {
         onHoldCompleted();
       } else {
         animFrameRef.current = requestAnimationFrame(updateProgress);
@@ -140,11 +141,13 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
         // First click
         soundService.playWarning();
         setPendingSecondClick(true);
+        firstClickRef.current = performance.now();
         if (doubleClickTimeoutRef.current) window.clearTimeout(doubleClickTimeoutRef.current);
         doubleClickTimeoutRef.current = window.setTimeout(() => {
           setPendingSecondClick(false);
         }, 3500);
       } else {
+        if (firstClickRef.current === null || !isValidDoubleClick(firstClickRef.current, performance.now())) return;
         // Second click
         if (doubleClickTimeoutRef.current) window.clearTimeout(doubleClickTimeoutRef.current);
         setPendingSecondClick(false);
@@ -160,7 +163,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
 
   const handleTypeModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (typeInput.trim().toUpperCase() !== typeConfirmKeyword.trim().toUpperCase()) {
+    if (!validateTypeConfirmation(typeInput, typeConfirmKeyword)) {
       soundService.playError();
       return;
     }
@@ -288,7 +291,7 @@ export const SafeConfirmButton: React.FC<SafeConfirmButtonProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={typeInput.trim().toUpperCase() !== typeConfirmKeyword.trim().toUpperCase() || isProcessing}
+                  disabled={!validateTypeConfirmation(typeInput, typeConfirmKeyword) || isProcessing}
                   className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:hover:bg-red-600 text-white font-bold uppercase tracking-wider transition flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />

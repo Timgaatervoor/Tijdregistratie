@@ -9,6 +9,7 @@ import {
   initializeSampleData,
 } from '../../services/sampleDataService';
 import { soundService } from '../../services/soundService';
+import { SafeConfirmButton } from '../SafeConfirmButton';
 
 interface EventSetupAndResetProps {
   event: RaceEvent | null;
@@ -29,7 +30,6 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
   const [blankLocation, setBlankLocation] = useState('');
 
   const handleResetTimingOnly = async () => {
-    if (!confirm('Weet u zeker dat u ALLE start-, schiet- en finishtijden wilt resetten?\n\nDeelnemers en startgroepen blijven behouden.')) return;
     await resetTimingAndShooting();
     soundService.playSuccess();
     await onRefresh();
@@ -37,7 +37,6 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
   };
 
   const handleClearParticipants = async () => {
-    if (!confirm('OPGELET: alle deelnemers worden definitief gewist. Wilt u doorgaan?')) return;
     await clearAllParticipants();
     soundService.playWarning();
     await onRefresh();
@@ -45,15 +44,13 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
   };
 
   const handleClearWaves = async () => {
-    if (!confirm('OPGELET: alle startgroepen worden gewist en deelnemers worden ervan losgekoppeld. Wilt u doorgaan?')) return;
     await clearAllWaves();
     soundService.playWarning();
     await onRefresh();
     alert('Alle startgroepen zijn gewist.');
   };
 
-  const handleFactoryResetBlank = async (formEvent: React.FormEvent) => {
-    formEvent.preventDefault();
+  const handleFactoryResetBlank = async () => {
     await resetToBlankEvent(blankName.trim(), blankDate, blankLocation.trim());
     soundService.playWarning();
     setShowBlankEventModal(false);
@@ -62,7 +59,6 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
   };
 
   const handleRestoreSampleData = async () => {
-    if (!confirm('Wilt u de voorbeeldgegevens herstellen? De huidige gegevens worden volledig vervangen.')) return;
     await initializeSampleData(true);
     soundService.playSuccess();
     await onRefresh();
@@ -97,9 +93,9 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
                 Wist start-, schiet- en finishtijden. Deelnemers en startgroepen blijven behouden.
               </p>
             </div>
-            <button type="button" onClick={handleResetTimingOnly} className="w-full py-2 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition">
+            <SafeConfirmButton mode="hold" holdDurationSeconds={2} variant="warning" onConfirm={handleResetTimingOnly} className="w-full py-2 px-3 rounded-lg">
               Tijden resetten
-            </button>
+            </SafeConfirmButton>
           </div>
 
           <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-3">
@@ -111,9 +107,9 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
                 Maakt de deelnemerslijst volledig leeg. Gebruik het scherm Deelnemers om nieuwe gegevens te importeren.
               </p>
             </div>
-            <button type="button" onClick={handleClearParticipants} className="w-full py-2 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 text-xs font-bold transition">
+            <SafeConfirmButton mode="hold" requireTypeConfirm typeConfirmKeyword="WIS" typeConfirmTitle="Alle deelnemers wissen?" typeConfirmDescription="Alle deelnemers worden definitief gewist. Dit geldt ook buiten de huidige filters." onConfirm={handleClearParticipants} className="w-full py-2 px-3 rounded-lg">
               Wis {participants.length} deelnemers
-            </button>
+            </SafeConfirmButton>
           </div>
 
           <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-3">
@@ -125,9 +121,9 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
                 Wist alle startgroepen. Deelnemers blijven bewaard maar worden losgekoppeld.
               </p>
             </div>
-            <button type="button" onClick={handleClearWaves} className="w-full py-2 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 text-xs font-bold transition">
+            <SafeConfirmButton mode="hold" requireTypeConfirm typeConfirmKeyword="WIS" typeConfirmTitle="Alle startgroepen wissen?" typeConfirmDescription="Alle startgroepen worden gewist en deelnemers worden ervan losgekoppeld." onConfirm={handleClearWaves} className="w-full py-2 px-3 rounded-lg">
               Wis {waves.length} startgroepen
-            </button>
+            </SafeConfirmButton>
           </div>
 
           <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-3">
@@ -154,9 +150,9 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
                 <p className="text-[11px] text-slate-400">Vervang de huidige gegevens door de volledige demonstratieset.</p>
               </div>
             </div>
-            <button type="button" onClick={handleRestoreSampleData} className="px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold">
+            <SafeConfirmButton mode="hold" requireTypeConfirm typeConfirmKeyword="HERSTEL" typeConfirmTitle="Voorbeeldgegevens herstellen?" typeConfirmDescription="De huidige wedstrijdgegevens worden volledig vervangen door de demonstratieset." onConfirm={handleRestoreSampleData} className="px-4 py-2 rounded-lg">
               Voorbeeldgegevens herstellen
-            </button>
+            </SafeConfirmButton>
           </div>
         )}
       </div>
@@ -172,7 +168,7 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
             <p className="text-slate-300 leading-relaxed">
               Alle deelnemers, startgroepen, tijden en logs worden gewist. Het nieuwe evenement krijgt een eigen ID en online synchronisatie wordt uitgezet. Maak vooraf een back-up als u deze gegevens wilt bewaren.
             </p>
-            <form onSubmit={handleFactoryResetBlank} className="space-y-3">
+            <form onSubmit={event => event.preventDefault()} className="space-y-3">
               <div>
                 <label className="text-slate-300 font-semibold block mb-1">Wedstrijdnaam:</label>
                 <input type="text" required value={blankName} onChange={(event) => setBlankName(event.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm" />
@@ -189,7 +185,7 @@ export const EventSetupAndReset: React.FC<EventSetupAndResetProps> = ({
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
                 <button type="button" onClick={() => setShowBlankEventModal(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold">Annuleren</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold uppercase tracking-wider">Alles wissen en starten</button>
+                <SafeConfirmButton disabled={!blankName.trim() || !blankDate || !blankLocation.trim()} mode="hold" requireTypeConfirm typeConfirmKeyword="WIS" typeConfirmTitle="Alles wissen en nieuw evenement starten?" typeConfirmDescription="Alle wedstrijdgegevens en logs worden gewist. Maak vooraf een back-up als u ze wilt bewaren." onConfirm={handleFactoryResetBlank} className="px-5 py-2">Alles wissen en starten</SafeConfirmButton>
               </div>
             </form>
           </div>

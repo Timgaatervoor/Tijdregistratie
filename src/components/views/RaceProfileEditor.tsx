@@ -18,6 +18,7 @@ import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { applyClassification } from '../../services/applyClassification';
 import { soundService } from '../../services/soundService';
+import { SafeConfirmButton } from '../SafeConfirmButton';
 import {
   categoryUsesProfile,
   getCategoryProfileIds,
@@ -222,10 +223,6 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     const profToDelete = profiles.find((p) => p.id === selectedProfileId);
     if (!profToDelete) return;
 
-    if (!confirm(`Weet u zeker dat u het profiel "${profToDelete.name}" wilt verwijderen?`)) {
-      return;
-    }
-
     const currentCategories = await db.categories.toArray();
     await db.transaction('rw', db.raceProfiles, db.categories, db.participants, async () => {
       await db.raceProfiles.delete(profToDelete.id);
@@ -330,13 +327,13 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
               <Activity className="w-4 h-4 text-amber-400" /> Profielgegevens
             </span>
             {isExistingProfile && (
-              <button
-                type="button"
-                onClick={handleDeleteProfile}
+              <SafeConfirmButton
+                mode="double-click"
+                onConfirm={handleDeleteProfile}
                 className="text-red-400 hover:text-red-300 font-normal normal-case flex items-center gap-1 bg-red-950/30 px-2.5 py-1 rounded border border-red-800/40"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Dit profiel verwijderen
-              </button>
+              </SafeConfirmButton>
             )}
           </h4>
 

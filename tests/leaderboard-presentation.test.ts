@@ -23,6 +23,9 @@ test('existing kiosk preferences survive new defaults and malformed storage', ()
   }
   const saved = readTvKioskConfig({ ...config, pageSize: 0, theme: 'daylight', autoPaginate: false, kioskPin: '001234' });
   assert.deepEqual(readTvKioskConfig(JSON.parse(JSON.stringify(saved))), saved);
+  for (const pageSize of [5, 10, 15, 25, 30, 40, 50]) {
+    assert.equal(readTvKioskConfig({ pageSize }).pageSize, pageSize);
+  }
 });
 
 test('pagination shows every row once without mutating ranks or ordering', () => {

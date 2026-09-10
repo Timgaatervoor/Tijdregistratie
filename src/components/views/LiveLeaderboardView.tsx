@@ -27,7 +27,7 @@ import { formatDuration } from '../../services/timingEngine';
 import { downloadCsvFile } from '../../services/backupService';
 import { soundService } from '../../services/soundService';
 import { SafeConfirmButton } from '../SafeConfirmButton';
-import { readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, type TvKioskConfig } from '../../services/leaderboardPresentation';
+import { KIOSK_PAGE_SIZES, readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, type TvKioskConfig } from '../../services/leaderboardPresentation';
 
 interface LiveLeaderboardViewProps {
   results: RaceResult[];
@@ -557,10 +557,9 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                 onChange={(event) => setTvConfig({ ...tvConfig, pageSize: Number(event.target.value) })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
               >
-                <option value={8}>8 atleten per pagina</option>
-                <option value={12}>12 atleten per pagina</option>
-                <option value={16}>16 atleten per pagina</option>
-                <option value={20}>20 atleten per pagina</option>
+                {KIOSK_PAGE_SIZES.map(pageSize => (
+                  <option key={pageSize} value={pageSize}>{pageSize} atleten per pagina</option>
+                ))}
                 <option value={0}>Alle atleten ineens (geen paging)</option>
               </select>
             </div>

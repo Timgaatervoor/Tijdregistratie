@@ -66,6 +66,10 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showWorkbook, setShowWorkbook] = useState(false);
+
+  const participantsWithBib = participants.filter((participant) => participant.bibNumber !== undefined).length;
+  const participantsWithoutBib = participants.length - participantsWithBib;
 
   // New participant form state
   const [newFirstName, setNewFirstName] = useState('');
@@ -529,7 +533,6 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       {showStamhoofd && <StamhoofdIntegrationModal participants={participants} categories={categories} onRefresh={onRefresh} onClose={() => setShowStamhoofd(false)} />}
       {showBibAssignment && <BibAssignmentModal participants={participants} onClose={() => setShowBibAssignment(false)} onRefresh={onRefresh} />}
       {bibMessage && <p role="status" className="rounded-xl bg-slate-800 p-3 text-amber-300">{bibMessage}</p>}
-      <EventWorkbookPanel onRefresh={onRefresh} />
       {/* Top Banner & Action Buttons */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -537,76 +540,112 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             <Users className="w-4 h-4" /> Deelnemers Administratie
           </span>
           <h2 className="text-2xl font-black text-white tracking-tight mt-0.5">
-            Deelnemersbeheer & import
+            Deelnemersbeheer & Inschrijvingen
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Totaal: <strong className="text-white">{participants.length}</strong> deelnemers geregistreerd
-          </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400 mt-1">
+            <span>Totaal: <strong className="text-white">{participants.length}</strong></span>
+            <span aria-hidden="true">•</span>
+            <span><strong className="text-emerald-400">{participantsWithBib}</strong> met borstnummer</span>
+            <span aria-hidden="true">•</span>
+            <span><strong className={participantsWithoutBib > 0 ? 'text-amber-400' : 'text-emerald-400'}>{participantsWithoutBib}</strong> zonder borstnummer</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button onClick={() => setShowStamhoofd(true)} className="px-3.5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs">Stamhoofd API</button>
+          <button type="button" onClick={() => setShowAddModal(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition uppercase tracking-wider focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            <UserPlus className="w-4 h-4" /> Nieuwe deelnemer
+          </button>
+          <div className="h-6 w-px bg-slate-700 hidden sm:block" aria-hidden="true" />
+          <button type="button" onClick={() => setShowStamhoofd(true)} className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs shadow transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            <Sparkles className="w-4 h-4 text-blue-200" /> Stamhoofd
+          </button>
           <button
+            type="button"
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition"
+            className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
           >
-            <Upload className="w-4 h-4" /> Andere CSV/Excel import
+            <Upload className="w-4 h-4 text-slate-400" /> CSV/Excel-import
           </button>
           <button
-            onClick={() => setShowBibAssignment(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-semibold transition"
-            title="Wijs borstnummers toe per leeftijdsbereik"
+            type="button"
+            aria-expanded={showWorkbook}
+            aria-controls="event-workbook-panel"
+            onClick={() => setShowWorkbook((visible) => !visible)}
+            className={`flex items-center gap-1.5 h-10 px-3.5 rounded-xl border text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${showWorkbook ? 'bg-amber-500/15 border-amber-500/50 text-amber-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'}`}
           >
-            <ArrowUpDown className="w-4 h-4" /> Borstnummers per leeftijd
-          </button>
-          <SafeConfirmButton mode="hold" holdDurationSeconds={2} disabled={clearingBibs || !participants.some(p => p.bibNumber !== undefined)} onConfirm={handleClearBibs} className="px-3 py-2"><Trash2 className="w-4 h-4" /> Alle borstnummers verwijderen</SafeConfirmButton>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition"
-          >
-            <UserPlus className="w-4 h-4" /> Nieuwe Deelnemer
-          </button>
-          <button
-            onClick={handleExportCsv}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition"
-            title="Download Deelnemers CSV"
-          >
-            <Download className="w-4 h-4" />
+            <FileSpreadsheet className="w-4 h-4 text-amber-400" /> Excel-werkbestand
           </button>
         </div>
       </div>
 
+      {showWorkbook && <div id="event-workbook-panel"><EventWorkbookPanel onRefresh={onRefresh} /></div>}
+
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-wrap items-center justify-between gap-4 text-xs" aria-labelledby="bib-management-title">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0"><ArrowUpDown className="w-4 h-4" /></div>
+          <div>
+            <h3 id="bib-management-title" className="font-bold text-white text-sm">Borstnummers beheren</h3>
+            <p className="text-slate-400 mt-1">Automatisch toewijzen gebruikt de bestaande indelingsregels. Wissen geldt voor alle deelnemers, ook buiten het huidige filter; deelnemers zelf blijven behouden.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button type="button" onClick={() => setShowBibAssignment(true)} className="flex items-center gap-2 h-10 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            <ArrowUpDown className="w-4 h-4 text-amber-400" /> Borstnummers toewijzen
+          </button>
+          <SafeConfirmButton
+            mode="hold"
+            holdDurationSeconds={2}
+            requireTypeConfirm
+            typeConfirmKeyword="WIS"
+            typeConfirmTitle="Alle borstnummers wissen?"
+            typeConfirmDescription="Dit wist borstnummers van alle deelnemers, ook buiten het huidige filter. De deelnemers blijven behouden. Typ WIS om door te gaan."
+            disabled={clearingBibs || participantsWithBib === 0}
+            onConfirm={handleClearBibs}
+            className="h-10"
+          >
+            <Trash2 className="w-4 h-4" /> Borstnummers wissen
+          </SafeConfirmButton>
+        </div>
+      </section>
+
       {/* Filters Toolbar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow flex flex-wrap items-center gap-3 text-xs">
+        <div className="relative flex-1 min-w-0 w-full sm:w-auto sm:min-w-[240px]">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Zoek op naam, borstnummer, club of ticket secret..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+            placeholder="Zoek op naam, borstnummer, club, artikel of Stamhoofd-ID…"
+            className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-10 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
           />
+          {searchQuery && <button type="button" aria-label="Zoektekst wissen" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"><X className="w-3.5 h-3.5" /></button>}
         </div>
 
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-blue-500"
-        >
-          <option value="ALL">Alle Categorieën ({categories.length})</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+          <select
+            aria-label="Filter op categorie"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="h-10 min-w-0 flex-1 sm:flex-none bg-slate-800 border border-slate-700 rounded-xl px-3 text-xs text-white font-medium focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
+          >
+            <option value="ALL">Alle categorieën ({categories.length})</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={handleExportCsv} disabled={filtered.length === 0} className="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300">
+            <Download className="w-4 h-4 text-slate-400" /> Exporteer CSV ({filtered.length})
+          </button>
+        </div>
       </div>
 
       {/* Participants Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full min-w-[1050px] text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-850 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
                 <th className="py-3 px-4 w-16 text-center">Bib</th>
@@ -704,61 +743,63 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
 
       {/* Manual Add Participant Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="add-participant-title">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-5 sm:p-6 my-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <h3 id="add-participant-title" className="text-base font-bold text-white flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-amber-400" /> Deelnemer Toevoegen
               </h3>
               <button
+                type="button"
+                aria-label="Toevoegformulier sluiten"
                 onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="rounded-lg p-1 text-slate-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddParticipant} className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2">
+            <form onSubmit={handleAddParticipant} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">Voornaam *:</label>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Voornaam *</label>
                   <input
                     type="text"
                     required
                     value={newFirstName}
                     onChange={(e) => setNewFirstName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Achternaam *:</label>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Achternaam *</label>
                   <input
                     type="text"
                     required
                     value={newLastName}
                     onChange={(e) => setNewLastName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">Startnummer (optioneel):</label>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Borstnummer (optioneel)</label>
                   <input
                     type="number"
                     value={newBib}
                     onChange={(e) => setNewBib(e.target.value)}
                     placeholder="bv. 101"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white font-mono text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Geslacht:</label>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Geslacht</label>
                   <select
                     value={newGender}
                     onChange={(e) => setNewGender(e.target.value as any)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                   >
                     <option value="M">Man (M)</option>
                     <option value="F">Vrouw (V)</option>
@@ -768,7 +809,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Categorie:</label>
+                <label className="text-slate-300 font-semibold block mb-1.5">Categorie</label>
                 <select
                   value={newCatId}
                   onChange={(e) => {
@@ -777,7 +818,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                     const categoryProfileId = getDefaultCategoryProfileId(categoryMap.get(categoryId));
                     if (categoryProfileId) setNewProfileId(categoryProfileId);
                   }}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                 >
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -788,12 +829,12 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Wedstrijdprofiel *:</label>
+                <label className="text-slate-300 font-semibold block mb-1.5">Wedstrijdprofiel *</label>
                 <select
                   required
                   value={newProfileId}
                   onChange={(e) => setNewProfileId(e.target.value)}
-                  className="w-full bg-slate-800 border border-emerald-600/60 rounded-lg px-3 py-2 text-white"
+                  className="w-full h-10 bg-slate-800 border border-emerald-500/50 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition"
                 >
                   <option value="">Kies een wedstrijdprofiel...</option>
                   {newParticipantProfiles.map((profile) => (
@@ -801,7 +842,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   ))}
                 </select>
                 {profiles.find((profile) => profile.id === newProfileId) && (
-                  <span className="text-[10px] text-emerald-400 block mt-1">
+                  <span className="text-[11px] text-emerald-400 block mt-1.5 font-medium">
                     {profiles.find((profile) => profile.id === newProfileId)?.legs.filter((leg) => leg.type === 'RUN').map((leg) => `${leg.distanceMeters || 0}m`).join(' + ') || 'Geen looponderdeel'}{' '}
                     • {profiles.find((profile) => profile.id === newProfileId)?.legs.filter((leg) => leg.type === 'SHOOT').length || 0} schietproeven
                   </span>
@@ -809,11 +850,11 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Wave / Startgroep:</label>
+                <label className="text-slate-300 font-semibold block mb-1.5">Startgroep</label>
                 <select
                   value={newWaveId}
                   onChange={(e) => setNewWaveId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                 >
                   {waves.map((w) => (
                     <option key={w.id} value={w.id}>
@@ -824,27 +865,27 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Club / Woonplaats:</label>
+                <label className="text-slate-300 font-semibold block mb-1.5">Club / Woonplaats</label>
                 <input
                   type="text"
                   value={newClub}
                   onChange={(e) => setNewClub(e.target.value)}
-                  placeholder="Naam van de club"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  placeholder="Naam van de club of woonplaats"
+                  className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-3 border-t border-slate-800">
+              <div className="flex items-center gap-2.5 justify-end pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 font-medium"
+                  className="h-10 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
                 >
                   Annuleren
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-amber-500 text-slate-950 font-bold"
+                  className="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition uppercase tracking-wider focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
                 >
                   Toevoegen
                 </button>

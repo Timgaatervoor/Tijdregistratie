@@ -152,6 +152,12 @@ test('wave start writes an outgoing start operation for every participant and is
   await assert.rejects(operationService.recordShooting('event', p, 1, 'S', 5, 3, 2), /correctie/);
   await operationService.recordShooting('event', p, 1, 'S', 5, 4, 1, undefined, true, 'jury');
   assert.equal(effectiveShooting(await db.shootingResults.toArray()).effective[0].misses, 1);
+  const activeStart = await db.timingRecords.filter(record => record.type === 'START' && !record.isReversed).first();
+  await operationService.undoTimingRecord(activeStart!.id, 'Wave opnieuw starten');
+  assert.equal((await db.waves.get('wave'))?.status, 'SCHEDULED');
+  assert.equal((await db.waves.get('wave'))?.actualStartTime, undefined);
+  await operationService.recordMassWaveStart('event', 'wave', 1, [{ ...p, status: 'READY' }], '2026-09-07T10:02:00Z');
+  assert.equal((await db.waves.get('wave'))?.status, 'STARTED');
 });
 
 test('sync reads beyond 1000 operations and applies revocation before original record without losing it', async () => {

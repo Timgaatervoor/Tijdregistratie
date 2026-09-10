@@ -422,7 +422,9 @@ export class OperationService {
     });
 
     // Revert participant status if needed
+    let participantWaveId: string | undefined;
     if (record.participantId) {
+      participantWaveId = (await db.participants.get(record.participantId))?.waveId;
       if (record.type === 'FINISH') {
         await db.participants.update(record.participantId, {
           status: 'STARTED',
@@ -433,6 +435,19 @@ export class OperationService {
           status: 'READY',
           updatedAt: new Date().toISOString(),
         });
+      }
+    }
+
+    // Zodra de laatste actieve start uit een wave is teruggedraaid, mag die
+    // startgroep opnieuw gestart worden. Andere actieve starts houden de wave live.
+    if (record.type === 'START' && participantWaveId) {
+      const waveParticipants = await db.participants.filter(participant => participant.waveId === participantWaveId).toArray();
+      const waveBibs = new Set(waveParticipants.flatMap(participant => participant.bibNumber ? [participant.bibNumber] : []));
+      const stillStarted = await db.timingRecords.filter(timing =>
+        timing.eventId === record.eventId && timing.type === 'START' && !timing.isReversed && waveBibs.has(timing.bibNumber)
+      ).count();
+      if (stillStarted === 0) {
+        await db.waves.update(participantWaveId, { status: 'SCHEDULED', actualStartTime: undefined });
       }
     }
 

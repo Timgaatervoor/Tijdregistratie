@@ -79,6 +79,13 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   const [newProfileId, setNewProfileId] = useState(getDefaultCategoryProfileId(categories[0]) || profiles[0]?.id || '');
   const [newWaveId, setNewWaveId] = useState(waves[0]?.id || '');
   const [newClub, setNewClub] = useState('');
+  const [newTeam, setNewTeam] = useState('');
+  const [newBirthDate, setNewBirthDate] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newArticle, setNewArticle] = useState('');
+  const [newExternalId, setNewExternalId] = useState('');
+  const [newNotes, setNewNotes] = useState('');
   const [newGender, setNewGender] = useState<'M' | 'F' | 'X'>('M');
 
   // Import workflow state
@@ -99,6 +106,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   const categoryMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
   const waveMap = new Map<string, Wave>(waves.map((w) => [w.id, w]));
   const newParticipantProfiles = getProfilesForCategory(profiles, categoryMap.get(newCatId));
+  const newParticipantWaves = waves.filter(wave => !wave.categoryIds.length || wave.categoryIds.includes(newCatId));
 
   // Filtered participants
   const filtered = participants.filter((p) => {
@@ -122,8 +130,16 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
 
     const parsedBib = parseInt(newBib.trim(), 10);
     const bibNumber = !isNaN(parsedBib) && parsedBib > 0 ? parsedBib : undefined;
+    if (bibNumber && participants.some(participant => participant.bibNumber === bibNumber)) {
+      alert(`Borstnummer #${bibNumber} is al toegewezen.`);
+      return;
+    }
 
     const selectedCat = categoryMap.get(newCatId);
+    if (!selectedCat) {
+      alert('Kies eerst een geldige categorie voor deze deelnemer.');
+      return;
+    }
     const selectedProfileId = newProfileId || getDefaultCategoryProfileId(selectedCat);
     if (!selectedProfileId) {
       alert('Kies eerst een wedstrijdprofiel voor deze deelnemer.');
@@ -134,6 +150,15 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       alert('Dit wedstrijdprofiel is niet gekoppeld aan de gekozen leeftijdscategorie.');
       return;
     }
+    const selectedWave = newWaveId ? waveMap.get(newWaveId) : undefined;
+    if (newWaveId && !selectedWave) {
+      alert('De gekozen startgroep bestaat niet meer.');
+      return;
+    }
+    if (selectedWave?.categoryIds.length && !selectedWave.categoryIds.includes(newCatId)) {
+      alert('De gekozen startgroep is niet beschikbaar voor deze categorie.');
+      return;
+    }
     const now = new Date().toISOString();
 
     const newP: Participant = {
@@ -141,11 +166,20 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       firstName: newFirstName.trim(),
       lastName: newLastName.trim(),
       gender: newGender,
+      birthDate: newBirthDate || undefined,
+      email: newEmail.trim() || undefined,
+      phone: newPhone.trim() || undefined,
       bibNumber,
       categoryId: newCatId,
       raceProfileId: selectedProfileId,
+      categoryAssignment: 'manual',
+      profileAssignment: 'manual',
       waveId: newWaveId || undefined,
       club: newClub.trim() || undefined,
+      team: newTeam.trim() || undefined,
+      article: newArticle.trim() || undefined,
+      externalId: newExternalId.trim() || undefined,
+      notes: newNotes.trim() || undefined,
       status: 'READY',
       createdAt: now,
       updatedAt: now,
@@ -164,7 +198,15 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
     setNewLastName('');
     setNewBib('');
     setNewClub('');
-    setNewProfileId(profiles[0]?.id || '');
+    setNewTeam('');
+    setNewBirthDate('');
+    setNewEmail('');
+    setNewPhone('');
+    setNewArticle('');
+    setNewExternalId('');
+    setNewNotes('');
+    setNewWaveId('');
+    setNewProfileId(getDefaultCategoryProfileId(categoryMap.get(newCatId)) || profiles[0]?.id || '');
     onRefresh();
   };
 
@@ -744,7 +786,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       {/* Manual Add Participant Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="add-participant-title">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-5 sm:p-6 my-auto shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-5 sm:p-6 my-auto shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 id="add-participant-title" className="text-base font-bold text-white flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-amber-400" /> Deelnemer Toevoegen
@@ -808,6 +850,19 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Geboortedatum</label>
+                  <input type="date" value={newBirthDate} onChange={(e) => setNewBirthDate(e.target.value)}
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Artikel / afstand</label>
+                  <input type="text" value={newArticle} onChange={(e) => setNewArticle(e.target.value)} placeholder="Bijvoorbeeld Korte afstand"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+                </div>
+              </div>
+
               <div>
                 <label className="text-slate-300 font-semibold block mb-1.5">Categorie</label>
                 <select
@@ -817,6 +872,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                     setNewCatId(categoryId);
                     const categoryProfileId = getDefaultCategoryProfileId(categoryMap.get(categoryId));
                     if (categoryProfileId) setNewProfileId(categoryProfileId);
+                    if (newWaveId && !waves.some(wave => wave.id === newWaveId && (!wave.categoryIds.length || wave.categoryIds.includes(categoryId)))) setNewWaveId('');
                   }}
                   className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                 >
@@ -856,7 +912,8 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   onChange={(e) => setNewWaveId(e.target.value)}
                   className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
                 >
-                  {waves.map((w) => (
+                  <option value="">Geen startgroep</option>
+                  {newParticipantWaves.map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.name} ({w.scheduledStartTime})
                     </option>
@@ -864,15 +921,42 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                 </select>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Club / Woonplaats</label>
+                  <input type="text" value={newClub} onChange={(e) => setNewClub(e.target.value)} placeholder="Naam van de club of woonplaats"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Team</label>
+                  <input type="text" value={newTeam} onChange={(e) => setNewTeam(e.target.value)} placeholder="Ploeg of team"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1.5">E-mailadres</label>
+                  <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1.5">Telefoonnummer</label>
+                  <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} autoComplete="tel"
+                    className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+                </div>
+              </div>
+
               <div>
-                <label className="text-slate-300 font-semibold block mb-1.5">Club / Woonplaats</label>
-                <input
-                  type="text"
-                  value={newClub}
-                  onChange={(e) => setNewClub(e.target.value)}
-                  placeholder="Naam van de club of woonplaats"
-                  className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
-                />
+                <label className="text-slate-300 font-semibold block mb-1.5">Extern/Stamhoofd-ID</label>
+                <input type="text" value={newExternalId} onChange={(e) => setNewExternalId(e.target.value)}
+                  className="w-full h-10 bg-slate-800 border border-slate-700 rounded-xl px-3 text-white font-mono text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1.5">Opmerkingen</label>
+                <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} rows={3}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-xs resize-y focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
               </div>
 
               <div className="flex items-center gap-2.5 justify-end pt-4 border-t border-slate-800">

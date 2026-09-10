@@ -248,6 +248,7 @@ export async function resetTimingAndShooting(): Promise<void> {
       db.operations,
       db.conflicts,
       db.participants,
+      db.waves,
       db.auditLogs,
     ],
     async () => {
@@ -255,14 +256,18 @@ export async function resetTimingAndShooting(): Promise<void> {
       await db.shootingResults.clear();
       // Keep queued tombstones and the immutable operation history.
       await db.conflicts.clear();
-      await db.participants.toCollection().modify({ status: 'READY', statusReason: undefined });
+      await db.participants.toCollection().modify({ status: 'READY', statusReason: undefined, penaltyLapsCompleted: 0 });
+      await db.waves.toCollection().modify((wave) => {
+        wave.status = 'SCHEDULED';
+        delete wave.actualStartTime;
+      });
       await db.auditLogs.add({
         id: `audit-reset-results-${Date.now()}`,
         timestamp: new Date().toISOString(),
         deviceId: 'RACE-CONTROL',
         operator: 'System',
         action: 'TIMING_AND_SHOOTING_RESET',
-        details: 'Alle timing- en schietresultaten zijn gewist; deelnemers staan terug op READY.',
+        details: 'Alle timing- en schietresultaten zijn gewist; deelnemers staan terug op READY en startgroepen op SCHEDULED.',
       });
     }
   );

@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db, getActiveEventId } from '../src/db/dexieDb';
-import { resetToBlankEvent, initializeEmptyEvent } from '../src/services/sampleDataService';
+import { resetToBlankEvent, initializeEmptyEvent, resetTimingAndShooting } from '../src/services/sampleDataService';
 import { syncService, type SyncConfig } from '../src/services/syncService';
 
 after(async () => {
@@ -89,4 +89,25 @@ test('an in-flight Supabase response cannot restore old operations after a compl
     if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
     else Reflect.deleteProperty(globalThis, 'navigator');
   }
+});
+
+test('resetting race data makes started waves restartable and clears lap confirmations', async () => {
+  await db.events.clear(); await db.participants.clear(); await db.waves.clear();
+  await db.timingRecords.clear(); await db.shootingResults.clear(); await db.conflicts.clear();
+  await db.events.put({ id: 'reset-wave-event', officialResultsLocked: false } as any);
+  await db.waves.put({ id: 'wave-reset', eventId: 'reset-wave-event', name: 'Wave 1', status: 'STARTED', actualStartTime: '2026-09-19T10:00:00Z' } as any);
+  await db.participants.put({ id: 'runner', firstName: 'Test', lastName: 'Loper', bibNumber: 12, waveId: 'wave-reset', status: 'FINISHED', penaltyLapsCompleted: 2 } as any);
+  await db.timingRecords.bulkPut([{ id: 'start-reset', eventId: 'reset-wave-event', participantId: 'runner', bibNumber: 12, type: 'START' }, { id: 'finish-reset', eventId: 'reset-wave-event', participantId: 'runner', bibNumber: 12, type: 'FINISH' }] as any);
+  await db.shootingResults.put({ id: 'shot-reset', eventId: 'reset-wave-event', participantId: 'runner', bibNumber: 12 } as any);
+
+  await resetTimingAndShooting();
+
+  const wave = await db.waves.get('wave-reset');
+  const participant = await db.participants.get('runner');
+  assert.equal(wave?.status, 'SCHEDULED');
+  assert.equal(wave?.actualStartTime, undefined);
+  assert.equal(participant?.status, 'READY');
+  assert.equal(participant?.penaltyLapsCompleted, 0);
+  assert.equal(await db.timingRecords.count(), 0);
+  assert.equal(await db.shootingResults.count(), 0);
 });

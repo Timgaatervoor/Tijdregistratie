@@ -19,6 +19,7 @@ import {
   Pause,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
   AlertTriangle,
 } from 'lucide-react';
 import type { RaceResult, Category, Wave, RaceEvent, ParticipantStatus } from '../../types';
@@ -26,7 +27,7 @@ import { formatDuration } from '../../services/timingEngine';
 import { downloadCsvFile } from '../../services/backupService';
 import { soundService } from '../../services/soundService';
 import { SafeConfirmButton } from '../SafeConfirmButton';
-import { readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, leaderboardSummary, type TvKioskConfig } from '../../services/leaderboardPresentation';
+import { readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, type TvKioskConfig } from '../../services/leaderboardPresentation';
 
 interface LiveLeaderboardViewProps {
   results: RaceResult[];
@@ -49,8 +50,10 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 }) => {
   const kioskStorageKey = `biathlon_tv_kiosk_config:${event?.id || 'new'}`;
   const profileOptions = [...new Map(results.map(r => [r.raceProfileId ?? '', r.raceProfileName ?? 'Nog niet gekoppeld'])).entries()];
-  const [selectedProfile, setSelectedProfile] = useState('__default');
-  const activeProfile = profileOptions.some(([id]) => id === selectedProfile) ? selectedProfile : profileOptions.find(([id]) => !!id)?.[0] ?? '';
+  const [selectedProfile, setSelectedProfile] = useState('ALL');
+  const activeProfile = selectedProfile === 'ALL' || profileOptions.some(([id]) => id === selectedProfile)
+    ? selectedProfile
+    : 'ALL';
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedWave, setSelectedWave] = useState<string>('ALL');
   const [selectedGender, setSelectedGender] = useState<string>('ALL');
@@ -83,7 +86,12 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     setShowExitPinModal(true);
   };
 
-  const availableCategoryIds = categories.filter(c => results.some(r => (r.raceProfileId ?? '') === activeProfile && r.categoryId === c.id && (selectedWave === 'ALL' || r.waveId === selectedWave) && (selectedGender === 'ALL' || r.gender === selectedGender))).map(c => c.id);
+  const availableCategoryIds = categories.filter(c => results.some(r =>
+    (activeProfile === 'ALL' || (r.raceProfileId ?? '') === activeProfile) &&
+    r.categoryId === c.id &&
+    (selectedWave === 'ALL' || r.waveId === selectedWave) &&
+    (selectedGender === 'ALL' || r.gender === selectedGender)
+  )).map(c => c.id);
 
   useEffect(() => {
     try { localStorage.setItem(kioskStorageKey, JSON.stringify(tvConfig)); } catch { /* Kiosk remains usable if browser storage is unavailable. */ }
@@ -192,7 +200,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
   // Filter logic
   const matchingResults = results.filter((r) => {
-    if ((r.raceProfileId ?? '') !== activeProfile) return false;
+    if (activeProfile !== 'ALL' && (r.raceProfileId ?? '') !== activeProfile) return false;
     if (selectedWave !== 'ALL' && r.waveId !== selectedWave) return false;
     if (selectedGender !== 'ALL' && r.gender !== selectedGender) return false;
     if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
@@ -209,8 +217,6 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   const filteredResults = matchingResults.filter(r => selectedCategory === 'ALL' || r.categoryId === selectedCategory);
   const rotationCategoryIds = rotationCategories(availableCategoryIds, tvConfig.categoryIds, matchingResults);
   const rotationCategoryKey = JSON.stringify(rotationCategoryIds);
-  const { finished: finishedCount, onCourse: onCourseCount, shootingRecorded: onRangeCount, waiting: waitingCount } = leaderboardSummary(filteredResults);
-
   const { size: effectivePageSize, totalPages, page: safeCurrentPage, rows: displayedResults } =
     leaderboardPage(filteredResults, isKioskMode ? tvConfig.pageSize : 0, currentPage);
   const rotationEnabled = isKioskMode && ((tvConfig.rotateCategories && rotationCategoryIds.length > 0) ||
@@ -252,13 +258,23 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     tvConfig.autoPaginate, tvConfig.rotationSeconds]);
 
   // Search and status only hide rows; category, wave and gender define the ranking.
-  const ranked = results.filter(r => r.raceProfileId === activeProfile && r.rankOverall !== undefined &&
+  const ranked = results.filter(r => (activeProfile === 'ALL' || r.raceProfileId === activeProfile) && r.rankOverall !== undefined &&
     (selectedCategory === 'ALL' || r.categoryId === selectedCategory) &&
     (selectedWave === 'ALL' || r.waveId === selectedWave) &&
     (selectedGender === 'ALL' || r.gender === selectedGender)).sort((a, b) => a.rankOverall! - b.rankOverall!);
-  const ranks = new Map(ranked.map((r, index) => [r.participantId, index + 1]));
+  const rankCounters = new Map<string, number>();
+  const ranks = new Map(ranked.map((r) => {
+    const group = activeProfile === 'ALL' ? (r.raceProfileId ?? '') : activeProfile;
+    const rank = (rankCounters.get(group) ?? 0) + 1;
+    rankCounters.set(group, rank);
+    return [r.participantId, rank];
+  }));
   const displayRank = (r: RaceResult) => ranks.get(r.participantId);
-  const displayGap = (r: RaceResult) => displayRank(r) && ranked.length ? `+${formatDuration(r.officialTimeMs! - ranked[0].officialTimeMs!, true, false)}` : '';
+  const displayGap = (r: RaceResult) => {
+    if (!displayRank(r) || r.officialTimeMs === undefined) return '';
+    const leader = ranked.find(candidate => candidate.raceProfileId === r.raceProfileId && candidate.officialTimeMs !== undefined);
+    return leader ? `+${formatDuration(r.officialTimeMs - leader.officialTimeMs!, true, false)}` : '';
+  };
 
   // Top 3 Podium finishers for the current filter
   const finishedPodium = filteredResults
@@ -294,40 +310,6 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           : ''
       }`}
     >
-      {/* Kiosk Mode Status Summary Bar */}
-      {isKioskMode && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">🏁</div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Gefinisht</div>
-              <div className="text-base font-black text-white font-mono">{finishedCount}</div>
-            </div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-sm">🏃</div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Op Parcours</div>
-              <div className="text-base font-black text-white font-mono">{onCourseCount}</div>
-            </div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm">🎯</div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Onderweg met schietresultaat</div>
-              <div className="text-base font-black text-white font-mono">{onRangeCount}</div>
-            </div>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-sm">⏱️</div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Wacht op Start</div>
-              <div className="text-base font-black text-white font-mono">{waitingCount}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Top Banner & TV Kiosk Mode Toggle */}
       <div className={isKioskMode
         ? 'flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg'
@@ -348,7 +330,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               </span>
             )}
           </div>
-          <p className="text-amber-300 font-bold">{profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle leeftijdscategorieën' : categories.find(c => c.id === selectedCategory)?.name}</p>
+          <p className="text-amber-300 font-bold">{activeProfile === 'ALL' ? 'Alle wedstrijdprofielen' : profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle leeftijdscategorieën' : categories.find(c => c.id === selectedCategory)?.name}</p>
           <h2 className="text-2xl font-black text-white tracking-tight">
             {event?.name || 'Nieuw evenement'}
           </h2>
@@ -364,7 +346,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             <Trophy className="w-5 h-5 text-amber-400" />
             <div>
               <p className="text-sm font-bold text-amber-300">
-                {profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle categorieën' : categories.find(c => c.id === selectedCategory)?.name}
+                {activeProfile === 'ALL' ? 'Alle wedstrijdprofielen' : profileOptions.find(([id]) => id === activeProfile)?.[1]} · {selectedCategory === 'ALL' ? 'Alle categorieën' : categories.find(c => c.id === selectedCategory)?.name}
               </p>
               <h2 className="text-lg font-black text-white">{event?.name || 'Biathlon Klassement'}</h2>
             </div>
@@ -455,40 +437,22 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
         </div>
       </div>
 
-      {/* Rotation Progress & Controls in Kiosk Mode */}
+      {/* Compact rotation indicator and controls */}
       {rotationEnabled && (
-        <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 flex items-center gap-3">
+        <div className="flex items-center justify-end gap-2 text-[11px] text-slate-400" role="status" aria-label="Automatische rotatie">
           <button
             type="button"
             onClick={() => setIsRotationPaused(!isRotationPaused)}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 transition"
             title={isRotationPaused ? 'Hervat automatische rotatie' : 'Pauzeer automatische rotatie'}
           >
             {isRotationPaused ? <Play className="w-3.5 h-3.5 text-amber-400" /> : <Pause className="w-3.5 h-3.5 text-slate-400" />}
           </button>
-          <div className="flex-1 space-y-1">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span className="font-semibold text-slate-300">
-                Rotatie: {categories.find(c => c.id === selectedCategory)?.name || 'Alle Categorieën'}
-                {totalPages > 1 && ` (Pagina ${safeCurrentPage + 1}/${totalPages})`}
-              </span>
-              <span className="font-mono text-amber-400 font-bold">
-                {isRotationPaused || showKioskSettings || showExitPinModal ? 'Gepauzeerd' : `${rotationSecondsLeft}s`}
-              </span>
-            </div>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ease-linear ${
-                  isRotationPaused ? 'bg-slate-600' : 'bg-amber-400'
-                }`}
-                style={{
-                  width: isRotationPaused
-                    ? '100%'
-                    : `${((tvConfig.rotationSeconds - rotationSecondsLeft) / tvConfig.rotationSeconds) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
+          <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isRotationPaused || showKioskSettings || showExitPinModal ? '' : 'animate-spin'}`} />
+          <span className="font-mono font-bold text-amber-400">
+            {isRotationPaused || showKioskSettings || showExitPinModal ? 'Gepauzeerd' : `${rotationSecondsLeft}s`}
+          </span>
+          {totalPages > 1 && <span>pagina {safeCurrentPage + 1}/{totalPages}</span>}
         </div>
       )}
 
@@ -612,6 +576,57 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
             </div>
           </div>
 
+          <div role="region" aria-label="Kioskfilters" className="border-t border-slate-800 pt-4 space-y-3">
+            <h4 className="font-bold text-slate-200 flex items-center gap-2">
+              <Search className="w-4 h-4 text-amber-400" /> Klassement filteren
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <label className="space-y-1 text-slate-300">
+                <span className="block">Zoeken</span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Naam, startnummer of club"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder:text-slate-500"
+                />
+              </label>
+              <label className="space-y-1 text-slate-300">
+                <span className="block">Wedstrijdprofiel</span>
+                <select value={activeProfile} onChange={e => { setSelectedProfile(e.target.value); setSelectedCategory('ALL'); }} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                  <option value="ALL">Alle wedstrijdprofielen</option>
+                  {profileOptions.map(([id, name]) => <option key={`kiosk-profile-${id}`} value={id}>{name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-slate-300">
+                <span className="block">Categorie</span>
+                <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setTvConfig(current => ({ ...current, rotateCategories: false })); }} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                  <option value="ALL">Alle categorieën</option>
+                  {categories.map(category => <option key={`kiosk-filter-category-${category.id}`} value={category.id}>{category.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-slate-300">
+                <span className="block">Startgroep</span>
+                <select value={selectedWave} onChange={e => setSelectedWave(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                  <option value="ALL">Alle startgroepen</option>
+                  {waves.map(wave => <option key={`kiosk-filter-wave-${wave.id}`} value={wave.id}>{wave.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-slate-300">
+                <span className="block">Geslacht</span>
+                <select value={selectedGender} onChange={e => setSelectedGender(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                  <option value="ALL">Alle</option><option value="M">Heren</option><option value="F">Dames</option><option value="X">Open / onbekend</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-slate-300">
+                <span className="block">Status</span>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                  <option value="ALL">Alle statussen</option><option value="REGISTERED">Ingeschreven</option><option value="CHECKED_IN">Aangemeld</option><option value="READY">Klaar voor start</option><option value="STARTED">Op parcours</option><option value="FINISHED">Gefinisht</option><option value="DNS">DNS</option><option value="DNF">DNF</option><option value="DSQ">DSQ</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
           <fieldset className="border-t border-slate-800 pt-3">
             <div className="flex items-center justify-between gap-3 mb-2">
               <legend className="font-bold text-slate-200">Categorieën in de rotatie</legend>
@@ -641,7 +656,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
       )}
 
       {/* Filter Toolbar */}
-      <div role="region" aria-label="Scorebordfilters" className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex flex-wrap items-center gap-3">
+      <div role="region" aria-label="Scorebordfilters" className={`${isKioskMode ? 'hidden' : 'flex'} bg-slate-900 border border-slate-800 rounded-xl p-4 shadow flex-wrap items-center gap-3`}>
         {/* Search */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -657,6 +672,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
         <label className="text-xs">Wedstrijdprofiel
           <select aria-label="Wedstrijdprofiel" value={activeProfile} onChange={e => { setSelectedProfile(e.target.value); setSelectedCategory('ALL'); }} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white ml-2">
+            <option value="ALL">Alle wedstrijdprofielen</option>
             {profileOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
         </label>

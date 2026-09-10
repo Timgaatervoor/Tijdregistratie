@@ -7,7 +7,7 @@ import { db } from '../src/db/dexieDb';
 
 const data: WorkbookData = {
   event: { id: 'excel-event', name: 'Testwedstrijd', date: '2026-09-19', location: '', organizer: '', status: 'DRAFT' } as any,
-  profiles: [{ id: 'long', name: '9 km masters', description: '', articles: ['Lange afstand'], penaltySecondsPerMiss: 20, penaltyLapsPerMiss: 1, legs: [{ id: 'run', name: 'Lopen', type: 'RUN', distanceMeters: 9000 }, { id: 'shot', name: 'Schieten', type: 'SHOOT', shotCount: 7 }, { id: 'finish', name: 'Finish', type: 'FINISH' }] }, { id: 'short', name: '4 km jeugd', description: '', articles: ['Korte afstand'], penaltySecondsPerMiss: 10, penaltyLapsPerMiss: 1, legs: [{ id: 'run2', name: 'Lopen', type: 'RUN', distanceMeters: 4000 }, { id: 'finish2', name: 'Finish', type: 'FINISH' }] }],
+  profiles: [{ id: 'long', name: '9 km masters', description: '', articles: ['Lange afstand'], penaltySecondsPerMiss: 20, penaltyLapsPerMiss: 1, penaltyType: 'lap', penaltyLapDistanceMeters: 100, requirePenaltyLapConfirmation: false, legs: [{ id: 'run', name: 'Lopen', type: 'RUN', distanceMeters: 9000 }, { id: 'shot', name: 'Schieten', type: 'SHOOT', shotCount: 7, penaltyType: 'lap' }, { id: 'finish', name: 'Finish', type: 'FINISH' }] }, { id: 'short', name: '4 km jeugd', description: '', articles: ['Korte afstand'], penaltySecondsPerMiss: 10, penaltyLapsPerMiss: 1, legs: [{ id: 'run2', name: 'Lopen', type: 'RUN', distanceMeters: 4000 }, { id: 'finish2', name: 'Finish', type: 'FINISH' }] }],
   categories: [{ id: 'masters', code: 'masters', name: 'Masters', gender: 'ALL', minAge: 35, maxAge: 99, raceProfileIds: ['long'] }, { id: 'u12', code: 'u12', name: 'U12', gender: 'ALL', minAge: 10, maxAge: 11, raceProfileIds: ['short'] }],
   waves: [],
   participants: [
@@ -29,6 +29,8 @@ test('blank Excel is empty; filled workbook survives XLSX serialization and foll
   assert.deepEqual(plan.data.participants.map(p => [p.categoryId, p.raceProfileId]), [['masters', 'long'], ['u12', 'short']]);
   assert.equal(plan.data.participants[0].phone, '003201234567');
   assert.equal(plan.data.profiles[0].legs[1].shotCount, 7);
+  assert.equal(plan.data.profiles[0].penaltyLapDistanceMeters, 100);
+  assert.equal(plan.data.profiles[0].requirePenaltyLapConfirmation, false);
   assert.match(book.Sheets.Deelnemers.S2.f!, /Evenement/);
   assert.equal(book.Sheets.Deelnemers.S2.v, 37);
 });
@@ -44,6 +46,16 @@ test('Excel validates unknown references, duplicate bibs, malformed dates and he
   assert.match(plan.errors.join(' '), /onbekende profielcode/);
   book.Sheets.Deelnemers.A1 = { t: 's', v: 'Wrong' };
   assert.match(planEventWorkbook(book, data).errors.join(' '), /kolomnamen/);
+});
+
+test('older workbooks without the new penalty-lap columns remain valid', () => {
+  const book = buildEventWorkbook(data);
+  const legacyRows = XLSX.utils.sheet_to_json<any[]>(book.Sheets.Profielen, { header: 1 }).map(row => row.slice(0, 6));
+  book.Sheets.Profielen = XLSX.utils.aoa_to_sheet(legacyRows);
+  const plan = planEventWorkbook(book, data);
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.data.profiles.find(profile => profile.id === 'long')?.requirePenaltyLapConfirmation, false);
+  assert.equal(plan.data.profiles.find(profile => profile.id === 'long')?.penaltyLapDistanceMeters, 100);
 });
 
 test('Excel reimport updates by stable ID, preserves source and race safeguards, and retains a restore backup', async () => {

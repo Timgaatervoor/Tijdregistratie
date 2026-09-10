@@ -103,7 +103,10 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   const targetCount = Math.max(1, Number(selectedShootingLeg?.shotCount) || 5);
   const hits = targets.filter(Boolean).length;
   const misses = Math.max(0, targetCount - hits);
-  const totalPenaltySec = shootingPenalty(activeProfile, roundNumber, misses, penaltyPerMiss).seconds;
+  const activePenalty = shootingPenalty(activeProfile, roundNumber, misses, penaltyPerMiss);
+  const penaltySummary = activePenalty.laps > 0
+    ? `${activePenalty.laps} strafronde${activePenalty.laps === 1 ? '' : 's'}${activePenalty.lapDistanceMeters > 0 ? ` van ${activePenalty.lapDistanceMeters} m (${activePenalty.totalLapDistanceMeters} m totaal)` : ''}`
+    : activePenalty.seconds > 0 ? `+${activePenalty.seconds}s straf` : 'geen straf';
   const allShootingDone = matchedParticipant !== undefined
     && shootingRounds.length > 0
     && shootingRounds.every((_, index) => completedRoundMap.has(index + 1));
@@ -200,7 +203,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
 
       soundService.playSuccess();
       setFeedback({
-        text: `Schietronde ${roundNumber} opgeslagen voor Bib #${parsedBib}: ${hits}/${targetCount} treffers (+${totalPenaltySec}s straf)`,
+        text: `Schietronde ${roundNumber} opgeslagen voor Bib #${parsedBib}: ${hits}/${targetCount} treffers (${penaltySummary})`,
         type: 'success',
       });
 
@@ -575,7 +578,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                   Tik op doelschijf om te wisselen (Treffer / Misser)
                 </span>
                 <span className="text-xs font-mono font-bold text-amber-400">
-                  {hits}/{targetCount} Treffers • {misses} Misser{misses !== 1 ? 's' : ''} (+{totalPenaltySec}s)
+                  {hits}/{targetCount} Treffers • {misses} Misser{misses !== 1 ? 's' : ''} ({penaltySummary})
                 </span>
               </div>
 

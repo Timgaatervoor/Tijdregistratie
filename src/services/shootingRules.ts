@@ -20,8 +20,15 @@ export function effectiveShooting(records: ShootingResult[]) {
 }
 export function shootingPenalty(profile: RaceProfile | undefined, round: number, misses: number, fallback = 20) {
   const leg = profile?.legs.filter(l => l.type === 'SHOOT')[round - 1];
-  const type = leg?.penaltyType ?? 'time';
+  const type = leg?.penaltyType ?? profile?.penaltyType ?? 'time';
   const value = leg?.penaltyValueSeconds ?? profile?.penaltySecondsPerMiss ?? fallback;
-  return { seconds: type === 'time' ? misses * value : type === 'fixed' && misses > 0 ? value : 0,
-    laps: type === 'lap' ? misses * (leg?.penaltyLapsPerMiss ?? profile?.penaltyLapsPerMiss ?? 1) : 0 };
+  const laps = type === 'lap' ? misses * (leg?.penaltyLapsPerMiss ?? profile?.penaltyLapsPerMiss ?? 1) : 0;
+  const lapDistanceMeters = profile?.penaltyLapDistanceMeters ?? 0;
+  return {
+    type,
+    seconds: type === 'time' ? misses * value : type === 'fixed' && misses > 0 ? value : 0,
+    laps,
+    lapDistanceMeters,
+    totalLapDistanceMeters: laps * lapDistanceMeters,
+  };
 }

@@ -69,6 +69,12 @@ export interface RaceProfile extends SyncMetadata {
   legs: RaceLegConfig[];
   penaltySecondsPerMiss: number;
   penaltyLapsPerMiss: number;
+  /** Standaard strafsoort voor schietonderdelen zonder eigen instelling. */
+  penaltyType?: PenaltyType;
+  /** Lengte van één strafronde; de gemeten finishtijd bevat deze afstand al. */
+  penaltyLapDistanceMeters?: number;
+  /** Indien false wordt voltooiing volgens fair play aangenomen. */
+  requirePenaltyLapConfirmation?: boolean;
   isDefault?: boolean;
   articles?: string[];
 }
@@ -295,6 +301,11 @@ export interface DeviceConfig {
 export interface RaceResult {
   resultIssues?: string[];
   penaltyLaps?: number;
+  penaltyLapsCompleted?: number;
+  penaltyLapDistanceMeters?: number;
+  penaltyLapDistanceTotalMeters?: number;
+  penaltyLapConfirmationRequired?: boolean;
+  penaltyLapsConfirmed?: boolean;
   raceProfileId?: string;
   raceProfileName?: string;
   participantId: string;

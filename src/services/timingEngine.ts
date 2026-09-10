@@ -146,13 +146,19 @@ export function calculateRaceResults(
     const penalties = participantShooting.map(sr => shootingPenalty(profile, sr.round, sr.misses, penaltyPerMiss));
     const penaltySeconds = penalties.reduce((sum, p) => sum + p.seconds, 0);
     const penaltyLaps = penalties.reduce((sum, p) => sum + p.laps, 0);
+    const penaltyLapsCompleted = Math.max(0, p.penaltyLapsCompleted ?? 0);
+    const penaltyLapDistanceMeters = profile?.penaltyLapDistanceMeters ?? 0;
+    const penaltyLapDistanceTotalMeters = penalties.reduce((sum, item) => sum + item.totalLapDistanceMeters, 0);
+    // Oudere profielen behielden altijd de bestaande controlelogica.
+    const penaltyLapConfirmationRequired = profile?.requirePenaltyLapConfirmation ?? true;
+    const penaltyLapsConfirmed = !penaltyLapConfirmationRequired || penaltyLapsCompleted >= penaltyLaps;
     const expectedRounds = profile?.legs.filter(leg => leg.type === 'SHOOT') ?? [];
     const missingRounds = expectedRounds.some((leg, index) => !participantShooting.some(sr => sr.round === index + 1));
     const resultIssues: string[] = [];
     if (!profile) resultIssues.push('Wedstrijdprofiel ontbreekt');
     if (missingRounds) resultIssues.push('Schietbeurten ontbreken');
     if (shooting.issues.has(p.id)) resultIssues.push('Schietconflict oplossen');
-    if (penaltyLaps > (p.penaltyLapsCompleted ?? 0)) resultIssues.push('Strafrondes nog niet bevestigd');
+    if (!penaltyLapsConfirmed) resultIssues.push('Strafrondes nog niet bevestigd');
     if (participantShooting.some(sr => !expectedRounds[sr.round - 1] || sr.shots !== (expectedRounds[sr.round - 1].shotCount ?? 5) || sr.hits + sr.misses !== sr.shots)) resultIssues.push('Schietgegevens wijken af van profiel');
     const ownTiming = timingRecords.filter(tr => !tr.isReversed && tr.bibNumber === p.bibNumber);
     if (['START', 'FINISH'].some(type => ownTiming.filter(tr => tr.type === type).length > 1)) resultIssues.push('Tijdconflict oplossen');
@@ -203,8 +209,18 @@ export function calculateRaceResults(
       totalMisses,
       penaltySeconds,
       penaltyLaps,
+      penaltyLapsCompleted,
+      penaltyLapDistanceMeters,
+      penaltyLapDistanceTotalMeters,
+      penaltyLapConfirmationRequired,
+      penaltyLapsConfirmed,
       resultIssues,
-      penaltyFormatted: penaltySeconds > 0 ? `+${penaltySeconds}s` : '0s',
+      penaltyFormatted: [
+        penaltySeconds > 0 ? `+${penaltySeconds}s` : '',
+        penaltyLaps > 0
+          ? `${penaltyLapConfirmationRequired ? `${Math.min(penaltyLapsCompleted, penaltyLaps)}/` : ''}${penaltyLaps} strafronde${penaltyLaps === 1 ? '' : 's'}${penaltyLapDistanceMeters > 0 ? ` van ${penaltyLapDistanceMeters} m` : ''}`
+          : '',
+      ].filter(Boolean).join(' · ') || 'Geen straf',
       officialTimeMs,
       officialTimeFormatted: officialTimeMs !== undefined ? formatDuration(officialTimeMs, false, true) : '--:--',
       isPendingShooting: missingRounds,

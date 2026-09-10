@@ -102,8 +102,38 @@ test('corrections replace old shooting rounds and per-leg penalty rules are used
   assert.equal(incomplete.isPendingShooting, true);
   const concurrent = shot('other-correction', 1, 0, { isCorrection: true, supersedesIds: ['old'] });
   assert.equal(effectiveShooting([...records, concurrent]).issues.has('p'), true);
-  assert.deepEqual(shootingPenalty({ ...profile, legs: [{ ...profile.legs[0], penaltyType: 'lap', penaltyLapsPerMiss: 2 }] }, 1, 3), { seconds: 0, laps: 6 });
+  const lapPenalty = shootingPenalty({ ...profile, penaltyLapDistanceMeters: 100, legs: [{ ...profile.legs[0], penaltyType: 'lap', penaltyLapsPerMiss: 2 }] }, 1, 3);
+  assert.equal(lapPenalty.seconds, 0);
+  assert.equal(lapPenalty.laps, 6);
+  assert.equal(lapPenalty.totalLapDistanceMeters, 600);
   assert.equal(shootingPenalty({ ...profile, legs: [{ ...profile.legs[0], penaltyType: 'none' }] }, 1, 3).seconds, 0);
+});
+
+test('penalty laps remain measured race time and confirmation can be strict or fair play', () => {
+  const times = [{ id: 'start', bibNumber: 1, type: 'START', timestamp: '2026-09-07T10:00:00Z' }, { id: 'finish', bibNumber: 1, type: 'FINISH', timestamp: '2026-09-07T10:10:00Z' }] as any;
+  const lapProfile: RaceProfile = {
+    ...profile,
+    penaltyType: 'lap',
+    penaltyLapDistanceMeters: 100,
+    requirePenaltyLapConfirmation: true,
+    legs: [{ ...profile.legs[0], penaltyType: 'lap', penaltyLapsPerMiss: 1 }],
+  };
+  const records = [shot('lap-shot', 1, 3)];
+  const pending = calculateRaceResults([{ ...p, status: 'FINISHED' }], times, records, [], [], [lapProfile])[0];
+  assert.equal(pending.officialTimeMs, 600000);
+  assert.equal(pending.penaltyLaps, 3);
+  assert.equal(pending.penaltyLapDistanceTotalMeters, 300);
+  assert.equal(pending.penaltyLapsConfirmed, false);
+  assert.equal(pending.rankOverall, undefined);
+
+  const confirmed = calculateRaceResults([{ ...p, status: 'FINISHED', penaltyLapsCompleted: 3 }], times, records, [], [], [lapProfile])[0];
+  assert.equal(confirmed.penaltyLapsConfirmed, true);
+  assert.equal(confirmed.rankOverall, 1);
+
+  const fairPlay = calculateRaceResults([{ ...p, status: 'FINISHED' }], times, records, [], [], [{ ...lapProfile, requirePenaltyLapConfirmation: false }])[0];
+  assert.equal(fairPlay.penaltyLapsConfirmed, true);
+  assert.equal(fairPlay.rankOverall, 1);
+  assert.match(fairPlay.penaltyFormatted, /3 strafrondes/);
 });
 
 test('wave start writes an outgoing start operation for every participant and is atomic and locked', async () => {

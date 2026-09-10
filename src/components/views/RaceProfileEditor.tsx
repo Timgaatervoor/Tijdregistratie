@@ -13,7 +13,7 @@ import {
   AlertCircle,
   HelpCircle,
 } from 'lucide-react';
-import type { RaceProfile, RaceLegConfig, Category, LegType, ShootingStance } from '../../types';
+import type { RaceProfile, RaceLegConfig, Category, LegType, ShootingStance, PenaltyType } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { applyClassification } from '../../services/applyClassification';
@@ -47,6 +47,9 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
   const [description, setDescription] = useState<string>('');
   const [penaltySeconds, setPenaltySeconds] = useState<number>(20);
   const [penaltyLaps, setPenaltyLaps] = useState<number>(1);
+  const [penaltyType, setPenaltyType] = useState<PenaltyType>('lap');
+  const [penaltyLapDistance, setPenaltyLapDistance] = useState<number>(100);
+  const [requirePenaltyLapConfirmation, setRequirePenaltyLapConfirmation] = useState<boolean>(true);
   const [legs, setLegs] = useState<RaceLegConfig[]>([]);
   const [assignedCategoryIds, setAssignedCategoryIds] = useState<string[]>([]);
   const [articles, setArticles] = useState<string[]>([]);
@@ -63,6 +66,9 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
       setDescription(prof.description || '');
       setPenaltySeconds(prof.penaltySecondsPerMiss || 20);
       setPenaltyLaps(prof.penaltyLapsPerMiss || 1);
+      setPenaltyType(prof.penaltyType ?? prof.legs.find(leg => leg.type === 'SHOOT')?.penaltyType ?? 'time');
+      setPenaltyLapDistance(prof.penaltyLapDistanceMeters ?? 100);
+      setRequirePenaltyLapConfirmation(prof.requirePenaltyLapConfirmation ?? true);
       setLegs(prof.legs || []);
       const assigned = categories
         .filter((category) => categoryUsesProfile(category, prof.id))
@@ -80,11 +86,14 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
     setDescription('Aangepast parcours: Loop, schiet, loop, schiet, loop...');
     setPenaltySeconds(20);
     setPenaltyLaps(1);
+    setPenaltyType('lap');
+    setPenaltyLapDistance(100);
+    setRequirePenaltyLapConfirmation(true);
     setLegs([
       { id: `leg-${Date.now()}-1`, type: 'RUN', name: 'Loopronde 1', distanceMeters: 1000, laps: 1 },
-      { id: `leg-${Date.now()}-2`, type: 'SHOOT', name: 'Schietbeurt 1', shotCount: 5, stance: 'prone', maxHits: 5, penaltyType: 'time', penaltyValueSeconds: 20 },
+      { id: `leg-${Date.now()}-2`, type: 'SHOOT', name: 'Schietbeurt 1', shotCount: 5, stance: 'prone', maxHits: 5, penaltyType: 'lap', penaltyLapsPerMiss: 1 },
       { id: `leg-${Date.now()}-3`, type: 'RUN', name: 'Loopronde 2', distanceMeters: 1000, laps: 1 },
-      { id: `leg-${Date.now()}-4`, type: 'SHOOT', name: 'Schietbeurt 2', shotCount: 5, stance: 'standing', maxHits: 5, penaltyType: 'time', penaltyValueSeconds: 20 },
+      { id: `leg-${Date.now()}-4`, type: 'SHOOT', name: 'Schietbeurt 2', shotCount: 5, stance: 'standing', maxHits: 5, penaltyType: 'lap', penaltyLapsPerMiss: 1 },
       { id: `leg-${Date.now()}-5`, type: 'RUN', name: 'Loopronde 3', distanceMeters: 1000, laps: 1 },
       { id: `leg-${Date.now()}-6`, type: 'FINISH', name: 'Finish' },
     ]);
@@ -127,8 +136,9 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
         shotCount: 5,
         stance: shootCount % 2 === 1 ? 'prone' : 'standing',
         maxHits: 5,
-        penaltyType: 'time',
+        penaltyType,
         penaltyValueSeconds: penaltySeconds,
+        penaltyLapsPerMiss: penaltyLaps,
       };
     } else {
       newLeg = {
@@ -183,6 +193,9 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
       description: description.trim(),
       penaltySecondsPerMiss: penaltySeconds,
       penaltyLapsPerMiss: penaltyLaps,
+      penaltyType,
+      penaltyLapDistanceMeters: penaltyLapDistance,
+      requirePenaltyLapConfirmation,
       legs,
       articles,
       isDefault: profiles.length === 0 || profiles.find((p) => p.id === selectedProfileId)?.isDefault,
@@ -351,20 +364,61 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
             </div>
 
             <div>
-              <label className="text-slate-300 font-semibold block mb-1">
-                Standaard Straftijd per Misser:
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  value={penaltySeconds}
-                  onChange={(e) => setPenaltySeconds(parseInt(e.target.value, 10) || 0)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-sm"
-                />
-                <span className="text-slate-400 font-semibold">sec</span>
-              </div>
+              <label className="text-slate-300 font-semibold block mb-1">Standaard straf:</label>
+              <select
+                value={penaltyType}
+                onChange={(e) => {
+                  const next = e.target.value as PenaltyType;
+                  setPenaltyType(next);
+                  setLegs(current => current.map(leg => leg.type === 'SHOOT' ? { ...leg, penaltyType: next } : leg));
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm focus:outline-none focus:border-amber-400"
+              >
+                <option value="lap">Strafronde per misser</option>
+                <option value="time">Straftijd per misser</option>
+                <option value="fixed">Vaste straftijd bij missers</option>
+                <option value="none">Geen straf</option>
+              </select>
             </div>
+
+            {(penaltyType === 'time' || penaltyType === 'fixed') && (
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Straftijd:</label>
+                <div className="flex items-center gap-2">
+                  <input type="number" min="0" value={penaltySeconds}
+                    onChange={(e) => setPenaltySeconds(parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-sm focus:outline-none focus:border-amber-400" />
+                  <span className="text-slate-400 font-semibold">sec</span>
+                </div>
+              </div>
+            )}
+
+            {penaltyType === 'lap' && <>
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Ronden per misser:</label>
+                <input type="number" min="1" value={penaltyLaps}
+                  onChange={(e) => setPenaltyLaps(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-sm focus:outline-none focus:border-amber-400" />
+              </div>
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Lengte van één strafronde:</label>
+                <div className="flex items-center gap-2">
+                  <input type="number" min="1" step="10" value={penaltyLapDistance}
+                    onChange={(e) => setPenaltyLapDistance(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-sm focus:outline-none focus:border-amber-400" />
+                  <span className="text-slate-400 font-semibold">m</span>
+                </div>
+              </div>
+              <label className="md:col-span-2 flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 cursor-pointer">
+                <input type="checkbox" checked={requirePenaltyLapConfirmation}
+                  onChange={(e) => setRequirePenaltyLapConfirmation(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-amber-500" />
+                <span>
+                  <span className="block text-sm font-bold text-white">Strafrondes moeten gecontroleerd worden</span>
+                  <span className="block mt-1 text-xs text-slate-400">Uitgevinkt: de organisatie gaat uit van fair play en de deelnemer blijft zonder handmatige bevestiging in het klassement.</span>
+                </span>
+              </label>
+            </>}
 
             <div className="md:col-span-3">
               <label className="text-slate-300 font-semibold block mb-1">
@@ -540,18 +594,23 @@ export const RaceProfileEditor: React.FC<RaceProfileEditorProps> = ({
                       {/* Penalty */}
                       <div className="flex items-center gap-1">
                         <label className="text-slate-400 text-[11px]">Straf:</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={leg.penaltyValueSeconds ?? penaltySeconds}
-                          onChange={(e) =>
-                            handleUpdateLeg(idx, {
-                              penaltyValueSeconds: parseInt(e.target.value, 10) || 0,
-                            })
-                          }
-                          className="w-14 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center text-amber-400 font-mono font-bold"
-                        />
-                        <span className="text-slate-400 text-[11px]">s</span>
+                        <select value={leg.penaltyType ?? penaltyType}
+                          onChange={(e) => handleUpdateLeg(idx, { penaltyType: e.target.value as PenaltyType })}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white">
+                          <option value="lap">Strafronde</option><option value="time">Tijd/misser</option>
+                          <option value="fixed">Vaste tijd</option><option value="none">Geen</option>
+                        </select>
+                        {(leg.penaltyType ?? penaltyType) === 'lap' ? <>
+                          <input type="number" min="1" value={leg.penaltyLapsPerMiss ?? penaltyLaps}
+                            onChange={(e) => handleUpdateLeg(idx, { penaltyLapsPerMiss: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                            className="w-14 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center text-amber-400 font-mono font-bold" />
+                          <span className="text-slate-400 text-[11px]">ronde/misser</span>
+                        </> : (leg.penaltyType ?? penaltyType) !== 'none' ? <>
+                          <input type="number" min="0" value={leg.penaltyValueSeconds ?? penaltySeconds}
+                            onChange={(e) => handleUpdateLeg(idx, { penaltyValueSeconds: parseInt(e.target.value, 10) || 0 })}
+                            className="w-14 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center text-amber-400 font-mono font-bold" />
+                          <span className="text-slate-400 text-[11px]">s</span>
+                        </> : null}
                       </div>
                     </div>
                   )}

@@ -142,6 +142,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
   if (!activeResult) return null;
 
+  const penaltyProfile = profiles.find(profile => profile.id === (editProfileId || currentParticipant?.raceProfileId));
+  const checksPenaltyLaps = penaltyProfile?.requirePenaltyLapConfirmation ?? true;
+
   const relevantAudits = (auditLogs || []).filter(
     (a) => a.participantId === activeResult.participantId || (activeResult.bibNumber && a.bibNumber === activeResult.bibNumber)
   );
@@ -689,7 +692,17 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             </div>
 
             <div className="space-y-2 text-xs">
-              <label className="block">Gecontroleerde afgelegde strafrondes<input type="number" min="0" step="1" value={editPenaltyLaps} onChange={e => setEditPenaltyLaps(Number(e.target.value))} className="block w-full bg-slate-800 rounded p-2" /></label>
+              {(activeResult.penaltyLaps ?? 0) > 0 && (
+                checksPenaltyLaps ? (
+                  <label className="block rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+                    <span className="font-semibold text-amber-300">Gecontroleerde afgelegde strafrondes</span>
+                    <span className="block mt-1 text-slate-400">Vereist: {activeResult.penaltyLaps} ronde{activeResult.penaltyLaps === 1 ? '' : 's'}{activeResult.penaltyLapDistanceMeters ? ` van ${activeResult.penaltyLapDistanceMeters} m` : ''}.</span>
+                    <input type="number" min="0" step="1" value={editPenaltyLaps} onChange={e => setEditPenaltyLaps(Number(e.target.value))} className="mt-2 block w-full bg-slate-800 border border-slate-700 rounded-lg p-2 focus:outline-none focus:border-amber-400" />
+                  </label>
+                ) : (
+                  <p className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3 text-emerald-300">Fair play: {activeResult.penaltyLaps} strafronde{activeResult.penaltyLaps === 1 ? '' : 's'} worden als afgelegd beschouwd; handmatige controle is uitgeschakeld in het wedstrijdprofiel.</p>
+                )
+              )}
               <p>Artikel: {currentParticipant.article || String(currentParticipant.stamhoofdRegistration?.product ?? 'Geen')}</p>
               <label className="block">Geboortedatum (dd/mm/jjjj of jjjj-mm-dd)<input value={editBirthDate} onChange={e => setEditBirthDate(e.target.value)} className="block w-full bg-slate-800 rounded p-2" /></label>
               <label className="block"><input type="checkbox" checked={manualCategory} onChange={e => setManualCategory(e.target.checked)} /> Leeftijdscategorie handmatig vastzetten</label>

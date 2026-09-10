@@ -288,13 +288,13 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
 
   const handleExportCsv = () => {
     const headers =
-      'Plaats,Startnummer,Naam,Club,Geslacht,Wedstrijdprofiel,Categorie,Wave,Starttijd,Finishtijd,Looptijd (Raw),Missers,Straftijd,Officiële Tijd,Verschil,Status\n';
+      'Plaats,Startnummer,Naam,Club,Geslacht,Wedstrijdprofiel,Categorie,Wave,Starttijd,Finishtijd,Looptijd (Raw),Missers,Straf,Strafrondes vereist,Strafrondes bevestigd,Lengte strafronde,Totaal strafrondeafstand,Controle,Officiële Tijd,Verschil,Status\n';
     const rows = filteredResults.map((r) => {
       return `${displayRank(r) || ''},${r.bibNumber || ''},"${r.name}","${
         r.club || ''
       }",${r.gender || ''},"${r.raceProfileName || ''}","${r.categoryName || ''}","${waveLabel(r.waveId, r.waveName)}",${r.startTime || ''},${
         r.finishTime || ''
-      },${r.rawElapsedFormatted || ''},${r.totalMisses || 0},${r.penaltyFormatted || ''},${
+      },${r.rawElapsedFormatted || ''},${r.totalMisses || 0},"${r.penaltyFormatted || ''}",${r.penaltyLaps || 0},${r.penaltyLapsCompleted || 0},${r.penaltyLapDistanceMeters || ''},${r.penaltyLapDistanceTotalMeters || ''},${r.penaltyLapConfirmationRequired ? 'verplicht' : 'fair play'},${
         r.officialTimeFormatted || ''
       },${displayGap(r) || ''},${r.status}`;
     });
@@ -341,7 +341,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             {mode === 'results'
-              ? `Eindklassementen inclusief schietstraftijden (+${event?.penaltySecondsPerMiss || 20}s per misser) en categorie-podia`
+              ? 'Eindklassementen met de strafregels uit elk wedstrijdprofiel en categorie-podia'
               : `Realtime updates tijdens de race: actieve lopers op parcours, live schietbeurten en virtuele tussenstanden`}
           </p>
         </div>}

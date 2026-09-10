@@ -84,7 +84,7 @@ export const EventDashboardView: React.FC<EventDashboardViewProps> = ({
             {event?.name || 'Nieuw evenement'}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Locatie: {event?.location || 'Locatie nog niet ingesteld'} • Straf per misser: {event?.penaltySecondsPerMiss || 20} sec
+            Locatie: {event?.location || 'Locatie nog niet ingesteld'} • Strafregels worden per wedstrijdprofiel toegepast
           </p>
         </div>
 

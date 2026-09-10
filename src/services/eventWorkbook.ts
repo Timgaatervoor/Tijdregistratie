@@ -9,7 +9,7 @@ import { createFullSnapshot } from './backupService';
 export interface WorkbookData { event: RaceEvent; profiles: RaceProfile[]; categories: Category[]; waves: Wave[]; participants: Participant[] }
 const columns = {
   Evenement: ['Naam', 'Datum', 'Locatie', 'Organisatie'],
-  Profielen: ['Code', 'Naam', 'Beschrijving', 'Artikelen', 'Strafseconden per misser', 'Strafrondes per misser'],
+  Profielen: ['Code', 'Naam', 'Beschrijving', 'Artikelen', 'Strafseconden per misser', 'Strafrondes per misser', 'Standaard straftype', 'Lengte strafronde meters', 'Strafrondes controleren'],
   Parcours: ['Profielcode', 'Volgorde', 'Naam', 'Type', 'Afstand meters', 'Ronden', 'Schoten', 'Houding', 'Straftype', 'Strafseconden', 'Strafrondes'],
   Categorieen: ['Code', 'Naam', 'Geslacht', 'Minimumleeftijd', 'Maximumleeftijd', 'Profielcodes'],
   Startgroepen: ['Code', 'Naam', 'Nummer', 'Startuur', 'Maximum deelnemers', 'Categoriecodes'],
@@ -46,7 +46,8 @@ export function buildEventWorkbook(data: WorkbookData, blank = false) {
     ['Handmatige indeling', 'Vul manual in bij de betreffende indeling en kies een bestaande categoriecode/profielcode.'],
     ['Geslacht', 'Deelnemers: M, F of X. Categorieen: M, F of ALL.'],
     ['Parcours', 'Een rij per onderdeel. Type: RUN, SHOOT, PENALTY, TRANSITION of FINISH. Volgorde: 1, 2, 3... per profiel.'],
-    ['Schieten', 'Schoten: positief geheel getal. Houding: prone, standing of free. Straftype: time, lap, fixed of none.'],
+    ['Schieten', 'Schoten: positief geheel getal. Houding: prone, standing of free. Straftype: time, lap, fixed of none. Lengte strafronde staat bij Profielen.'],
+    ['Controle strafrondes', 'Vul ja in om afgelegde strafrondes te laten bevestigen. Vul nee in voor fair play; dan wordt voltooiing aangenomen.'],
     ['Startuur', 'Tekst in HH:mm:ss, bijvoorbeeld 10:00:00. Startgroepen zijn optioneel.'],
     ['Nieuwe deelnemer', 'Laat Deelnemer-ID leeg voor nieuwe personen. Een ingevuld bestaand ID werkt die deelnemer bij. Lege borstnummers blijven leeg.'],
     ['Herimport', 'Rijen worden toegevoegd of bijgewerkt; een rij verwijderen in Excel verwijdert niets uit de app. Fouten blokkeren de hele import.'],
@@ -57,7 +58,7 @@ export function buildEventWorkbook(data: WorkbookData, blank = false) {
   book.Sheets['Lees mij']['!cols'] = [{ wch: 25 }, { wch: 120 }];
   const { event, profiles, categories, waves, participants } = data;
   sheet('Evenement', columns.Evenement, [[blank ? '' : event.name, blank ? '' : event.date, blank ? '' : event.location, blank ? '' : event.organizer]]);
-  sheet('Profielen', columns.Profielen, blank ? [] : profiles.map(p => [p.id, p.name, p.description, p.articles?.join('|'), p.penaltySecondsPerMiss, p.penaltyLapsPerMiss]));
+  sheet('Profielen', columns.Profielen, blank ? [] : profiles.map(p => [p.id, p.name, p.description, p.articles?.join('|'), p.penaltySecondsPerMiss, p.penaltyLapsPerMiss, p.penaltyType ?? p.legs.find(l => l.type === 'SHOOT')?.penaltyType ?? 'time', p.penaltyLapDistanceMeters ?? 100, (p.requirePenaltyLapConfirmation ?? true) ? 'ja' : 'nee']));
   sheet('Parcours', columns.Parcours, blank ? [] : profiles.flatMap(p => p.legs.map((l, i) => [p.id, i + 1, l.name, l.type, l.distanceMeters, l.laps, l.shotCount, l.stance, l.penaltyType, l.penaltyValueSeconds, l.penaltyLapsPerMiss])));
   sheet('Categorieen', columns.Categorieen, blank ? [] : categories.map(c => [c.id, c.name, c.gender, c.minAge, c.maxAge, (c.raceProfileIds ?? [c.raceProfileId]).filter(Boolean).join('|')]));
   sheet('Startgroepen', columns.Startgroepen, blank ? [] : waves.map(w => [w.id, w.name, w.waveNumber, w.scheduledStartTime, w.maxParticipants, w.categoryIds.join('|')]));
@@ -85,7 +86,8 @@ export function planEventWorkbook(book: XLSX.WorkBook, current: WorkbookData) {
     const ws = book.Sheets[name];
     if (!ws) { errors.push(`Tabblad ${name} ontbreekt.`); return []; }
     const header = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1 })[0] ?? [];
-    if (!columns[name].every(h => header.includes(h))) errors.push(`${name}: kolomnamen gewijzigd of ontbrekend. Gebruik het originele sjabloon.`);
+    const requiredHeaders = name === 'Profielen' ? columns.Profielen.slice(0, 6) : columns[name];
+    if (!requiredHeaders.every(h => header.includes(h))) errors.push(`${name}: kolomnamen gewijzigd of ontbrekend. Gebruik het originele sjabloon.`);
     return XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' }).filter(r => Object.values(r).some(v => text(v)));
   };
   const number = (v: unknown, label: string, fallback?: number) => {
@@ -98,6 +100,14 @@ export function planEventWorkbook(book: XLSX.WorkBook, current: WorkbookData) {
     const t = text(v) || fallback;
     if (!values.includes(t)) errors.push(`${label}: gebruik ${values.join(', ')}.`);
     return t;
+  };
+  const yesNo = (v: unknown, label: string, fallback: boolean) => {
+    if (text(v) === '') return fallback;
+    const normalized = text(v).toLowerCase();
+    if (['ja', 'yes', 'true', '1'].includes(normalized)) return true;
+    if (['nee', 'no', 'false', '0'].includes(normalized)) return false;
+    errors.push(`${label}: gebruik ja of nee.`);
+    return fallback;
   };
   const merge = <T extends { id: string }>(old: T[], incoming: T[]) => {
     const ids = new Set<string>();
@@ -116,12 +126,14 @@ export function planEventWorkbook(book: XLSX.WorkBook, current: WorkbookData) {
     const orders = ordered.map(l => number(l.Volgorde, `${code}: volgorde`));
     if (!ordered.length || orders.some(n => !n) || new Set(orders).size !== orders.length) errors.push(`${code}: parcours ontbreekt of volgorde is ongeldig/dubbel.`);
     if (!text(r.Naam)) errors.push(`${code}: profielnaam ontbreekt.`);
-    return { ...current.profiles.find(p => p.id === code), id: code, name: text(r.Naam), description: text(r.Beschrijving), articles: list(r.Artikelen), penaltySecondsPerMiss: number(r['Strafseconden per misser'], code, 20)!, penaltyLapsPerMiss: number(r['Strafrondes per misser'], code, 1)!, legs: ordered.map((l, index) => {
+    const existingProfile = current.profiles.find(p => p.id === code);
+    const defaultPenaltyType = choice(r['Standaard straftype'], ['time', 'lap', 'fixed', 'none'], code, existingProfile?.penaltyType ?? existingProfile?.legs.find(l => l.type === 'SHOOT')?.penaltyType ?? 'time') as RaceProfile['penaltyType'];
+    return { ...existingProfile, id: code, name: text(r.Naam), description: text(r.Beschrijving), articles: list(r.Artikelen), penaltySecondsPerMiss: number(r['Strafseconden per misser'], code, 20)!, penaltyLapsPerMiss: number(r['Strafrondes per misser'], code, 1)!, penaltyType: defaultPenaltyType, penaltyLapDistanceMeters: number(r['Lengte strafronde meters'], code, existingProfile?.penaltyLapDistanceMeters ?? 100), requirePenaltyLapConfirmation: yesNo(r['Strafrondes controleren'], code, existingProfile?.requirePenaltyLapConfirmation ?? true), legs: ordered.map((l, index) => {
       const type = choice(l.Type, ['RUN', 'SHOOT', 'PENALTY', 'TRANSITION', 'FINISH'], code, 'RUN') as RaceLegConfig['type'];
       const shotCount = type === 'SHOOT' ? number(l.Schoten, code, 5) : undefined;
       if (type === 'SHOOT' && !shotCount) errors.push(`${code}: een schietproef moet minstens een schot hebben.`);
-      const priorLeg = current.profiles.find(p => p.id === code)?.legs[index];
-      return { ...priorLeg, id: priorLeg?.id ?? `${code}-${l.Volgorde}`, type, name: text(l.Naam) || type, distanceMeters: number(l['Afstand meters'], code), laps: number(l.Ronden, code), shotCount, stance: choice(l.Houding, ['prone', 'standing', 'free'], code, 'free') as RaceLegConfig['stance'], penaltyType: choice(l.Straftype, ['time', 'lap', 'fixed', 'none'], code, 'time') as RaceLegConfig['penaltyType'], penaltyValueSeconds: number(l.Strafseconden, code), penaltyLapsPerMiss: number(l.Strafrondes, code) };
+      const priorLeg = existingProfile?.legs[index];
+      return { ...priorLeg, id: priorLeg?.id ?? `${code}-${l.Volgorde}`, type, name: text(l.Naam) || type, distanceMeters: number(l['Afstand meters'], code), laps: number(l.Ronden, code), shotCount, stance: choice(l.Houding, ['prone', 'standing', 'free'], code, 'free') as RaceLegConfig['stance'], penaltyType: choice(l.Straftype, ['time', 'lap', 'fixed', 'none'], code, priorLeg?.penaltyType ?? defaultPenaltyType ?? 'time') as RaceLegConfig['penaltyType'], penaltyValueSeconds: number(l.Strafseconden, code), penaltyLapsPerMiss: number(l.Strafrondes, code) };
     }) };
   });
   const profiles = merge(current.profiles, incomingProfiles);

@@ -15,6 +15,12 @@
 .mobile-station-compact-inner { max-width: 42rem; margin: auto; display: grid; gap: 8px; }
 .shooting-mobile-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .shooting-mobile-selectors select { display: block; width: 100%; min-height: 44px; border: 1px solid #475569; border-radius: 12px; background: #1e293b; padding: 0 8px; font-size: 16px; }
+.shooting-mobile-rounds { display: flex; flex-wrap: wrap; gap: 4px; }
+.shooting-mobile-rounds button { min-height: 38px; flex: 1 1 72px; border: 1px solid #475569; border-radius: 10px; background: #1e293b; color: #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; }
+.shooting-mobile-rounds button > span { width: 22px; height: 22px; border-radius: 999px; border: 2px solid #64748b; display: grid; place-items: center; font-weight: 900; }
+.shooting-mobile-rounds button.is-done { border-color: #10b981; background: rgba(6, 78, 59, .7); color: #a7f3d0; }
+.shooting-mobile-rounds button.is-done > span { border-color: #34d399; background: #10b981; color: #052e16; }
+.shooting-mobile-rounds button.is-current { outline: 2px solid #60a5fa; outline-offset: -2px; }
 .shooting-mobile-workspace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: start; }
 .mobile-station-compact .bib-keypad { display: grid; gap: 4px; }
 .mobile-station-compact .bib-keypad > * { margin: 0; }
@@ -24,7 +30,14 @@
 .mobile-station-compact .bib-keypad button { min-height: 44px; }
 .shooting-mobile-score { display: grid; gap: 6px; min-width: 0; }
 .shooting-mobile-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.shooting-mobile-targets button { min-height: 44px; }
+.shooting-mobile-target { min-height: 44px; aspect-ratio: 1; border-radius: 999px; border: 4px solid #94a3b8; background: #e2e8f0; padding: 12%; display: grid; place-items: center; box-shadow: inset 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,.45); transition: transform .1s, border-color .1s; }
+.shooting-mobile-target:active { transform: scale(.92); }
+.shooting-mobile-target:disabled { opacity: .4; }
+.shooting-mobile-target-center { width: 100%; height: 100%; min-width: 20px; min-height: 20px; border-radius: 999px; display: grid; place-items: center; font-size: clamp(14px, 4vw, 24px); line-height: 1; font-weight: 1000; }
+.shooting-mobile-target.is-hit { border-color: #34d399; }
+.shooting-mobile-target.is-hit .shooting-mobile-target-center { background: #fff; border: 2px solid #10b981; color: #047857; }
+.shooting-mobile-target.is-miss { border-color: #f87171; }
+.shooting-mobile-target.is-miss .shooting-mobile-target-center { background: #0f172a; border: 2px solid #020617; color: #f87171; }
 .shooting-mobile-save { min-height: 52px; padding: 4px; }
 .shooting-mobile-feedback { min-height: 36px; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
 @media (min-height: 900px) and (max-width: 599px) {
@@ -41,6 +54,13 @@
   .shooting-mobile-targets { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .shooting-mobile-feedback { min-height: 16px; }
 }
+.finish-direction-notice { margin-bottom: 16px; border: 4px solid #f8fafc; border-radius: 18px; background: #34d399; color: #052e16; padding: 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 0 0 4px #10b981, 0 14px 35px rgba(16,185,129,.35); animation: finish-notice-pulse 1.2s ease-in-out infinite alternate; }
+.finish-direction-notice-compact { margin: 0; border-width: 3px; padding: 8px 10px; gap: 7px; }
+.finish-direction-notice-compact strong { font-size: 15px; }
+.finish-direction-notice-compact span { margin: 2px 0 0; font-size: 11px; line-height: 14px; }
+.finish-direction-notice-compact > svg { width: 24px; height: 24px; }
+@keyframes finish-notice-pulse { from { filter: brightness(.92); } to { filter: brightness(1.12); } }
+@media (max-width: 520px) { .finish-direction-notice { flex-wrap: wrap; } .finish-direction-notice > strong:last-child { width: 100%; text-align: center; } }
 
 @media print {
   body:has(.race-print-dialog) > :not(.race-print-dialog) { display: none !important; }

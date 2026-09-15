@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MobileModeProvider, useMobileMode } from '../src/hooks/useMobileMode';
 import { StartStationView } from '../src/components/views/StartStationView';
 import { FinishStationView } from '../src/components/views/FinishStationView';
-import { ShootingStationView } from '../src/components/views/ShootingStationView';
+import { ShootingFinishNotice, ShootingRoundProgress, ShootingStationView } from '../src/components/views/ShootingStationView';
 
 function withStorage(values: Record<string, string>, action: () => void, unavailable = false) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
@@ -59,4 +59,26 @@ test('all three stations render the saved phone view and keep an exit available 
       }
     }
   });
+});
+
+test('shooting phone view uses round targets, shows completed rounds without historic scores, and has a prominent finish direction', () => {
+  withStorage({ station_mobile_modes: '{"start":false,"shooting":true,"finish":false}' }, () => {
+    const profile = { id: 'profile', name: 'Kort', penaltySecondsPerMiss: 20, penaltyLapsPerMiss: 1, legs: [
+      { id: 'shoot-1', type: 'SHOOT', name: 'Liggend', shotCount: 5 },
+      { id: 'shoot-2', type: 'SHOOT', name: 'Staand', shotCount: 5 },
+    ] } as any;
+    const html = renderToStaticMarkup(React.createElement(MobileModeProvider, null,
+      React.createElement(ShootingStationView, { categories: [], event: null, participants: [], shootingResults: [], raceProfiles: [profile], onRefresh() {} })));
+    assert.match(html, /shooting-mobile-target/);
+  });
+  const progress = renderToStaticMarkup(React.createElement(ShootingRoundProgress, {
+    rounds: [{ id: 'one' }, { id: 'two' }], completed: new Set([1]), selected: 2, onSelect() {},
+  }));
+  assert.match(progress, /Proef 1 gedaan/);
+  assert.match(progress, /Proef 2 nog te doen/);
+  assert.doesNotMatch(progress, /raak|miss/);
+  const notice = renderToStaticMarkup(React.createElement(ShootingFinishNotice, { text: 'Deelnemer #12 moet naar de FINISH!' }));
+  assert.match(notice, /role="alert"/);
+  assert.match(notice, /ALLE SCHIETPROEVEN KLAAR/);
+  assert.match(notice, /NAAR FINISH/);
 });

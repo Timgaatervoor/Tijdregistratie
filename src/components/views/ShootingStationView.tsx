@@ -1,6 +1,6 @@
 import { effectiveShooting, normalizeShootingRound, shootingHitPresets, shootingPenalty } from '../../services/shootingRules';
 import React, { useEffect, useState } from 'react';
-import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert } from 'lucide-react';
+import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert, Flag, ArrowRight } from 'lucide-react';
 import type { Category, Participant, ShootingResult, RaceEvent, RaceProfile } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
@@ -17,6 +17,38 @@ interface ShootingStationViewProps {
   shootingResults: ShootingResult[];
   raceProfiles: RaceProfile[];
   onRefresh: () => void;
+}
+
+export function ShootingFinishNotice({ text, compact = false }: { text: string; compact?: boolean }) {
+  return <div role="alert" aria-live="assertive" className={`finish-direction-notice ${compact ? 'finish-direction-notice-compact' : ''}`}>
+    <Flag aria-hidden="true" className="w-8 h-8 shrink-0" />
+    <div className="min-w-0 flex-1">
+      <strong className="block text-xl sm:text-2xl leading-none">ALLE SCHIETPROEVEN KLAAR</strong>
+      <span className="block mt-1 text-sm sm:text-base break-words">{text}</span>
+    </div>
+    <ArrowRight aria-hidden="true" className="w-9 h-9 shrink-0" />
+    <strong className="text-xl sm:text-2xl whitespace-nowrap">NAAR FINISH</strong>
+  </div>;
+}
+
+export function ShootingRoundProgress({ rounds, completed, selected, disabled = false, onSelect }: {
+  rounds: Array<{ id: string }>;
+  completed: Set<number>;
+  selected: number;
+  disabled?: boolean;
+  onSelect: (round: number) => void;
+}) {
+  return <div className="shooting-mobile-rounds" aria-label="Status schietproeven">
+    {rounds.map((roundConfig, index) => {
+      const round = index + 1;
+      const done = completed.has(round);
+      return <button key={roundConfig.id} type="button" onClick={() => onSelect(round)} disabled={disabled}
+        aria-label={`Proef ${round} ${done ? 'gedaan' : 'nog te doen'}`} aria-current={selected === round ? 'step' : undefined}
+        className={`${done ? 'is-done' : ''} ${selected === round ? 'is-current' : ''}`}>
+        <span aria-hidden="true">{done ? '✓' : round}</span><strong>Proef {round}</strong>
+      </button>;
+    })}
+  </div>;
 }
 
 export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
@@ -342,11 +374,13 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               <select aria-label="Schietproef in gsm-modus" value={selectedRoundNumber} disabled={isSubmitting} onChange={e => selectRound(Number(e.target.value))}>
                 {shootingRounds.map((leg, index) => {
                   const result = completedRoundMap.get(index + 1);
-                  return <option key={leg.id} value={index + 1}>Proef {index + 1}: {leg.name}{result ? ` (${result.hits}/${result.shots} raak)` : ''}</option>;
+                  return <option key={leg.id} value={index + 1}>Proef {index + 1}: {leg.name}{result ? ' - gedaan' : ''}</option>;
                 })}
               </select>
             </label>
           </div>
+          <ShootingRoundProgress rounds={shootingRounds} completed={new Set(completedRoundMap.keys())} selected={selectedRoundNumber} disabled={isSubmitting} onSelect={selectRound} />
+          {finishNotice && <ShootingFinishNotice text={finishNotice} compact />}
           <div className="shooting-mobile-workspace">
             <BibKeypad
               value={bibInput}
@@ -360,13 +394,13 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               <div className="shooting-mobile-targets">
                 {targets.map((isHit, index) => <button key={index} type="button" disabled={isSubmitting || !!duplicateConflict} onClick={() => toggleTarget(index)}
                   aria-label={`Doel ${index + 1}: ${isHit ? 'raak' : 'gemist'}`} aria-pressed={isHit}
-                  className={`rounded-xl font-black border-2 active:scale-95 disabled:opacity-40 ${isHit ? 'bg-emerald-500 text-slate-950 border-emerald-300' : 'bg-red-600 text-white border-red-300'}`}>
-                  <span className="block text-base leading-tight">{index + 1}</span>
-                  <span className="block text-[10px] leading-tight">{isHit ? 'Raak' : 'Mis'}</span>
+                  className={`shooting-mobile-target ${isHit ? 'is-hit' : 'is-miss'}`}>
+                  <span className="shooting-mobile-target-center" aria-hidden="true">{isHit ? '✓' : '×'}</span>
+                  <span className="sr-only">Doel {index + 1}</span>
                 </button>)}
               </div>
               <p className="text-center text-sm font-bold text-slate-200">{hits}/{targetCount} raak, {misses} mis</p>
-              <p className="text-center text-xs text-emerald-300">{matchedParticipant ? allShootingDone ? 'Alles klaar: naar FINISH' : `${completedRoundMap.size}/${shootingRounds.length} proeven klaar` : 'Tik op gemiste doelen'}</p>
+              <p className="text-center text-xs text-emerald-300">{matchedParticipant ? `${completedRoundMap.size}/${shootingRounds.length} proeven gedaan` : 'Tik op de gemiste doelen'}</p>
               <button type="button" onClick={() => handleRecordShooting()} disabled={isSubmitting || !bibInput.trim() || !!duplicateConflict}
                 className="shooting-mobile-save w-full rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-base active:scale-95 disabled:opacity-40">
                 {isSubmitting ? 'Opslaan...' : 'Schietproef vastleggen'}
@@ -374,10 +408,12 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             </div>
           </div>
           <div className="shooting-mobile-feedback" role="status" aria-live="polite">
-            {finishNotice ? <p className="text-emerald-300 font-bold">{finishNotice}</p> : feedback ? <p className={feedback.type === 'success' ? 'text-emerald-300' : 'text-amber-300'}>{feedback.text}</p> : <p className="text-slate-400">Kies het nummer, tik op gemiste doelen en bevestig.</p>}
+            {feedback ? <p className={feedback.type === 'success' ? 'text-emerald-300' : 'text-amber-300'}>{feedback.type === 'success' ? 'Schietproef opgeslagen.' : feedback.text}</p> : <p className="text-slate-400">Kies het nummer, tik op gemiste doelen en bevestig.</p>}
           </div>
         </MobileStationShell>
       )}
+
+      {!simpleMode && finishNotice && <ShootingFinishNotice text={finishNotice} />}
 
       {/* Main Touch Input Form */}
       <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${simpleMode ? 'hidden' : ''}`}>
@@ -437,11 +473,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                           {previousResult ? '✓ ' : ''}Proef {round}{stance ? ` — ${stance}` : ''}
                         </span>
                         <span className="block mt-1 text-[10px] font-normal truncate">{leg.name}</span>
-                        {previousResult && (
-                          <span className="block mt-1 text-[10px] font-bold">
-                            Vorig resultaat: {previousResult.hits}/{previousResult.shots} raak, {previousResult.misses} mis
-                          </span>
-                        )}
+                        {previousResult && <span className="block mt-1 text-[10px] font-bold">Gedaan</span>}
                       </button>
                     );
                   })}
@@ -528,11 +560,6 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{feedback.text}</span>
-            </div>
-          )}
-          {finishNotice && (
-            <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-base font-black text-slate-950">
-              {finishNotice}
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { db, getActiveEventId } from '../src/db/dexieDb';
 import { resetToBlankEvent, initializeEmptyEvent, resetTimingAndShooting } from '../src/services/sampleDataService';
 import { syncService, type SyncConfig } from '../src/services/syncService';
+import { updateBibs } from '../src/services/bibAssignment';
 
 after(async () => {
   assert.equal(db.name, 'BiathlonDeHaanDB-node-test');
@@ -91,10 +92,10 @@ test('an in-flight Supabase response cannot restore old operations after a compl
   }
 });
 
-test('resetting race data makes started waves restartable and clears lap confirmations', async () => {
+test('resetting race data restores preparation state and permits bulk bib changes', async () => {
   await db.events.clear(); await db.participants.clear(); await db.waves.clear();
   await db.timingRecords.clear(); await db.shootingResults.clear(); await db.conflicts.clear();
-  await db.events.put({ id: 'reset-wave-event', officialResultsLocked: false } as any);
+  await db.events.put({ id: 'reset-wave-event', date: '2026-09-19', status: 'FINISHED', officialResultsLocked: true, officialResultsVersion: 'Definitief' } as any);
   await db.waves.put({ id: 'wave-reset', eventId: 'reset-wave-event', name: 'Wave 1', status: 'STARTED', actualStartTime: '2026-09-19T10:00:00Z' } as any);
   await db.participants.put({ id: 'runner', firstName: 'Test', lastName: 'Loper', bibNumber: 12, waveId: 'wave-reset', status: 'FINISHED', penaltyLapsCompleted: 2 } as any);
   await db.timingRecords.bulkPut([{ id: 'start-reset', eventId: 'reset-wave-event', participantId: 'runner', bibNumber: 12, type: 'START' }, { id: 'finish-reset', eventId: 'reset-wave-event', participantId: 'runner', bibNumber: 12, type: 'FINISH' }] as any);
@@ -104,10 +105,16 @@ test('resetting race data makes started waves restartable and clears lap confirm
 
   const wave = await db.waves.get('wave-reset');
   const participant = await db.participants.get('runner');
+  const event = await db.events.get('reset-wave-event');
   assert.equal(wave?.status, 'SCHEDULED');
   assert.equal(wave?.actualStartTime, undefined);
   assert.equal(participant?.status, 'READY');
   assert.equal(participant?.penaltyLapsCompleted, 0);
+  assert.equal(event?.status, 'READY');
+  assert.equal(event?.officialResultsLocked, false);
+  assert.equal(event?.officialResultsVersion, 'Draft');
   assert.equal(await db.timingRecords.count(), 0);
   assert.equal(await db.shootingResults.count(), 0);
+  assert.equal(await updateBibs({ clear: true }), 1);
+  assert.equal((await db.participants.get('runner'))?.bibNumber, undefined);
 });

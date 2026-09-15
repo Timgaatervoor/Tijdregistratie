@@ -249,6 +249,7 @@ export async function resetTimingAndShooting(): Promise<void> {
       db.conflicts,
       db.participants,
       db.waves,
+      db.events,
       db.auditLogs,
     ],
     async () => {
@@ -261,13 +262,20 @@ export async function resetTimingAndShooting(): Promise<void> {
         wave.status = 'SCHEDULED';
         delete wave.actualStartTime;
       });
+      const resetAt = new Date().toISOString();
+      await db.events.toCollection().modify((event) => {
+        event.status = 'READY';
+        event.officialResultsLocked = false;
+        event.officialResultsVersion = 'Draft';
+        event.updatedAt = resetAt;
+      });
       await db.auditLogs.add({
         id: `audit-reset-results-${Date.now()}`,
         timestamp: new Date().toISOString(),
         deviceId: 'RACE-CONTROL',
         operator: 'System',
         action: 'TIMING_AND_SHOOTING_RESET',
-        details: 'Alle timing- en schietresultaten zijn gewist; deelnemers staan terug op READY en startgroepen op SCHEDULED.',
+        details: 'Alle timing- en schietresultaten zijn gewist; het evenement en de deelnemers staan terug op READY, de resultaten zijn ontgrendeld en startgroepen staan op SCHEDULED.',
       });
     }
   );

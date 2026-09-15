@@ -8,6 +8,40 @@
 .mobile-station-navigation button { min-height: 44px; flex: 1; }
 .mobile-station button, .mobile-station select { touch-action: manipulation; }
 
+/* Keep the shooting keypad and save action together, including on short phones. */
+.mobile-station-compact {
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+.mobile-station-compact-inner { max-width: 42rem; margin: auto; display: grid; gap: 8px; }
+.shooting-mobile-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.shooting-mobile-selectors select { display: block; width: 100%; min-height: 44px; border: 1px solid #475569; border-radius: 12px; background: #1e293b; padding: 0 8px; font-size: 16px; }
+.shooting-mobile-workspace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: start; }
+.mobile-station-compact .bib-keypad { display: grid; gap: 4px; }
+.mobile-station-compact .bib-keypad > * { margin: 0; }
+.mobile-station-compact .bib-keypad output { padding: 4px; font-size: 32px; line-height: 40px; }
+.mobile-station-compact .bib-keypad p { height: 40px; font-size: 12px; line-height: 20px; overflow: hidden; }
+.mobile-station-compact .bib-keypad > div { gap: 4px; }
+.mobile-station-compact .bib-keypad button { min-height: 44px; }
+.shooting-mobile-score { display: grid; gap: 6px; min-width: 0; }
+.shooting-mobile-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.shooting-mobile-targets button { min-height: 44px; }
+.shooting-mobile-save { min-height: 52px; padding: 4px; }
+.shooting-mobile-feedback { min-height: 36px; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+@media (min-height: 900px) and (max-width: 599px) {
+  .shooting-mobile-workspace { grid-template-columns: minmax(0, 1fr); }
+  .shooting-mobile-targets { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 600px) and (max-height: 500px) {
+  .mobile-station-compact-inner { max-width: 60rem; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+  .shooting-mobile-selectors label { font-size: 0; }
+  .shooting-mobile-workspace, .shooting-mobile-feedback { grid-column: 1 / -1; }
+  .mobile-station-compact .bib-keypad legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .mobile-station-compact .bib-keypad output { padding: 0; }
+  .mobile-station-compact .bib-keypad p { height: 20px; white-space: nowrap; text-overflow: ellipsis; }
+  .shooting-mobile-targets { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .shooting-mobile-feedback { min-height: 16px; }
+}
+
 @media print {
   body:has(.race-print-dialog) > :not(.race-print-dialog) { display: none !important; }
   .race-print-dialog, .race-print-dialog > div { display: block !important; position: static !important; max-height: none !important; overflow: visible !important; }

@@ -331,85 +331,51 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       </div>
 
       {simpleMode && (
-        <MobileStationShell title="Schieten" onClose={toggleSimpleMode} navigation={mobileNavigation} busy={isSubmitting}>
-          <label className="flex items-center justify-between gap-2 text-sm text-slate-300">Schietstand<select aria-label="Schietstand in gsm-modus" value={stationName} onChange={e => setStationName(e.target.value)} className="min-h-11 rounded-xl bg-slate-800 px-3">{Array.from({ length: 12 }, (_, i) => <option key={i} value={`Stand ${i + 1}`}>Stand {i + 1}</option>)}</select></label>
-          <BibKeypad
-            value={bibInput}
-            onChange={setBibInput}
-            participantName={matchedParticipant ? `${matchedParticipant.firstName} ${matchedParticipant.lastName}` : undefined}
-            disabled={isSubmitting || !!duplicateConflict}
-            maxLength={4}
-          />
-
-          <div className="space-y-2">
-            <div className="text-xs text-slate-300 font-bold flex flex-wrap items-center justify-between gap-2">
-              <span>Profiel: <span className="text-emerald-400">{activeProfile?.name || 'Standaard schietproeven'}</span></span>
-              <span>{targetCount} doelen in proef {selectedRoundNumber}</span>
-            </div>
-            <div className="h-36 overflow-y-auto pr-1 text-xs text-slate-300 font-bold">
-              Alle schietproeven ({shootingRounds.length})
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+        <MobileStationShell compact title="Schieten" onClose={toggleSimpleMode} navigation={mobileNavigation} busy={isSubmitting}>
+          <div className="shooting-mobile-selectors">
+            <label className="text-xs text-slate-300">Schietstand
+              <select aria-label="Schietstand in gsm-modus" value={stationName} disabled={isSubmitting} onChange={e => setStationName(e.target.value)}>
+                {Array.from({ length: 12 }, (_, i) => <option key={i} value={`Stand ${i + 1}`}>Stand {i + 1}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-slate-300">Schietproef
+              <select aria-label="Schietproef in gsm-modus" value={selectedRoundNumber} disabled={isSubmitting} onChange={e => selectRound(Number(e.target.value))}>
                 {shootingRounds.map((leg, index) => {
-                  const round = index + 1;
-                  const previousResult = completedRoundMap.get(round);
-                  return (
-                    <button key={leg.id} type="button" onClick={() => selectRound(round)} className={`min-h-16 py-2 rounded-xl font-bold border text-left px-2 ${selectedRoundNumber === round ? 'bg-blue-600 text-white border-blue-400' : previousResult ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
-                      <span className="block">{previousResult ? '✓ ' : ''}Proef {round}</span>
-                      <span className="block text-[10px] font-normal truncate">{leg.name}</span>
-                      {previousResult && (
-                        <span className="block text-[10px] mt-1">{previousResult.hits}/{previousResult.shots} raak • {previousResult.misses} mis</span>
-                      )}
-                    </button>
-                  );
+                  const result = completedRoundMap.get(index + 1);
+                  return <option key={leg.id} value={index + 1}>Proef {index + 1}: {leg.name}{result ? ` (${result.hits}/${result.shots} raak)` : ''}</option>;
                 })}
+              </select>
+            </label>
+          </div>
+          <div className="shooting-mobile-workspace">
+            <BibKeypad
+              value={bibInput}
+              onChange={setBibInput}
+              participantName={matchedParticipant ? `${matchedParticipant.firstName} ${matchedParticipant.lastName}` : undefined}
+              disabled={isSubmitting || !!duplicateConflict}
+              maxLength={4}
+            />
+            <div className="shooting-mobile-score">
+              <p className="text-xs text-slate-300 truncate" title={activeProfile?.name}>{activeProfile?.name || 'Standaard schietproeven'}</p>
+              <div className="shooting-mobile-targets">
+                {targets.map((isHit, index) => <button key={index} type="button" disabled={isSubmitting || !!duplicateConflict} onClick={() => toggleTarget(index)}
+                  aria-label={`Doel ${index + 1}: ${isHit ? 'raak' : 'gemist'}`} aria-pressed={isHit}
+                  className={`rounded-xl font-black border-2 active:scale-95 disabled:opacity-40 ${isHit ? 'bg-emerald-500 text-slate-950 border-emerald-300' : 'bg-red-600 text-white border-red-300'}`}>
+                  <span className="block text-base leading-tight">{index + 1}</span>
+                  <span className="block text-[10px] leading-tight">{isHit ? 'Raak' : 'Mis'}</span>
+                </button>)}
               </div>
-            </div>
-          </div>
-
-          {matchedParticipant && (
-            <div className={`rounded-xl border p-3 text-center text-sm font-black ${allShootingDone ? 'bg-emerald-950/70 border-emerald-400 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
-              {allShootingDone ? 'Alle schietproeven gedaan — deze deelnemer moet naar de FINISH!' : `${completedRoundMap.size}/${shootingRounds.length} schietproeven afgewerkt`}
-            </div>
-          )}
-
-          <div className="grid grid-cols-5 content-start gap-2 sm:gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-2">
-            {targets.map((isHit, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => toggleTarget(index)}
-                aria-label={`Doel ${index + 1}: ${isHit ? 'raak' : 'gemist'}`}
-                className={`aspect-square rounded-full text-xs sm:text-sm font-black border-4 active:scale-95 transition ${isHit ? 'bg-emerald-500 text-slate-950 border-emerald-300' : 'bg-red-600 text-white border-red-300'}`}
-              >
-                <span className="block text-lg">{index + 1}</span>
-                <span className="block text-[9px] uppercase">{isHit ? 'Raak' : 'Gemist'}</span>
+              <p className="text-center text-sm font-bold text-slate-200">{hits}/{targetCount} raak, {misses} mis</p>
+              <p className="text-center text-xs text-emerald-300">{matchedParticipant ? allShootingDone ? 'Alles klaar: naar FINISH' : `${completedRoundMap.size}/${shootingRounds.length} proeven klaar` : 'Tik op gemiste doelen'}</p>
+              <button type="button" onClick={() => handleRecordShooting()} disabled={isSubmitting || !bibInput.trim() || !!duplicateConflict}
+                className="shooting-mobile-save w-full rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-base active:scale-95 disabled:opacity-40">
+                {isSubmitting ? 'Opslaan...' : 'Schietproef vastleggen'}
               </button>
-            ))}
+            </div>
           </div>
-
-          <p className="text-center text-sm font-bold text-slate-300">
-            {hits}/{targetCount} raak, {misses} gemist
-          </p>
-
-          <button
-            type="button"
-            onClick={() => handleRecordShooting()}
-            disabled={isSubmitting || !bibInput.trim()}
-            className="w-full min-h-16 rounded-2xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-xl active:scale-95 transition disabled:opacity-40"
-          >
-            {isSubmitting ? 'Opslaan…' : 'Schietproef vastleggen'}
-          </button>
-
-          {feedback && (
-            <div className={`p-3 rounded-xl text-sm font-bold text-center ${feedback.type === 'success' ? 'bg-emerald-950/60 text-emerald-300' : 'bg-amber-950/60 text-amber-300'}`}>
-              {feedback.text}
-            </div>
-          )}
-          {finishNotice && (
-            <div className="rounded-xl border-2 border-emerald-400 bg-emerald-500 p-4 text-center text-lg font-black text-slate-950">
-              {finishNotice}
-            </div>
-          )}
+          <div className="shooting-mobile-feedback" role="status" aria-live="polite">
+            {finishNotice ? <p className="text-emerald-300 font-bold">{finishNotice}</p> : feedback ? <p className={feedback.type === 'success' ? 'text-emerald-300' : 'text-amber-300'}>{feedback.text}</p> : <p className="text-slate-400">Kies het nummer, tik op gemiste doelen en bevestig.</p>}
+          </div>
         </MobileStationShell>
       )}
 

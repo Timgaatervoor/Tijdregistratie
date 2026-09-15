@@ -20,8 +20,8 @@ export function MobileModeButton({ onClick, enabled = false, disabled = false }:
   </button>;
 }
 
-export function MobileStationShell({ title, onClose, navigation, busy = false, children }: {
-  title: string; onClose: () => void; navigation?: React.ReactNode; busy?: boolean; children: React.ReactNode;
+export function MobileStationShell({ title, onClose, navigation, busy = false, compact = false, children }: {
+  title: string; onClose: () => void; navigation?: React.ReactNode; busy?: boolean; compact?: boolean; children: React.ReactNode;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState('');
@@ -41,19 +41,33 @@ export function MobileStationShell({ title, onClose, navigation, busy = false, c
       setFullscreenError('Volledig scherm openen of sluiten lukt niet. Probeer opnieuw.');
     }
   };
-  return <section aria-label={`Gsm-modus ${title}`} className="mobile-station fixed inset-0 z-[45] h-[100dvh] overflow-y-auto overscroll-contain bg-slate-950 text-white">
-    <div className="mx-auto w-full max-w-md space-y-3">
+  const fullscreenButton = <button type="button" onClick={toggleFullscreen} aria-pressed={fullscreen}
+    aria-label={fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'} title={fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'}
+    className={`${compact ? 'w-11 shrink-0' : 'w-full'} min-h-11 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-700`}>
+    {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+    <span className={compact ? 'sr-only' : ''}>{fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'}</span>
+  </button>;
+  return <section aria-label={`Gsm-modus ${title}`} className={`mobile-station ${compact ? 'mobile-station-compact' : ''} fixed inset-0 z-[45] h-[100dvh] overflow-y-auto overscroll-contain bg-slate-950 text-white`}>
+    <div className={compact ? 'mobile-station-compact-inner' : 'mx-auto w-full max-w-md space-y-3'}>
+      {compact ? <header className="flex items-center gap-2 relative">
+        <h2 className="text-lg font-black flex-1">{title}</h2>
+        {fullscreenButton}
+        <details className="relative">
+          <summary className="min-h-11 px-3 rounded-xl border border-slate-700 bg-slate-800 flex items-center cursor-pointer font-bold text-sm">Menu</summary>
+          <div className="absolute right-0 top-full mt-1 z-10 w-72 max-w-[calc(100vw-16px)] rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-xl space-y-3">
+            <fieldset disabled={busy} className="mobile-station-navigation min-w-0">{navigation}</fieldset>
+            <MobileModeButton enabled onClick={onClose} disabled={busy} />
+          </div>
+        </details>
+      </header> : <>
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-black">{title}</h2>
         <MobileModeButton enabled onClick={onClose} disabled={busy} />
       </header>
-      <button type="button" onClick={toggleFullscreen} aria-pressed={fullscreen}
-        className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-800 text-slate-200 text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-700">
-        {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-        {fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'}
-      </button>
+      {fullscreenButton}
+      </>}
       {fullscreenError && <p role="status" className="text-sm text-amber-300">{fullscreenError}</p>}
-      <fieldset disabled={busy} className="mobile-station-navigation min-w-0">{navigation}</fieldset>
+      {!compact && <fieldset disabled={busy} className="mobile-station-navigation min-w-0">{navigation}</fieldset>}
       {children}
     </div>
   </section>;
@@ -62,7 +76,7 @@ export function MobileStationShell({ title, onClose, navigation, busy = false, c
 export function BibKeypad({ value, onChange, participantName, disabled = false, maxLength = 9 }: {
   value: string; onChange: React.Dispatch<React.SetStateAction<string>>; participantName?: string; disabled?: boolean; maxLength?: number;
 }) {
-  return <fieldset disabled={disabled} className="min-w-0 space-y-2">
+  return <fieldset disabled={disabled} className="bib-keypad min-w-0 space-y-2">
     <legend className="text-xs font-bold text-slate-400">Startnummer</legend>
     <output aria-label="Ingevoerd startnummer" className="block rounded-2xl border-2 border-emerald-500/60 bg-slate-900 py-3 text-center text-4xl font-mono font-black text-white break-all">{value || '—'}</output>
     <p aria-live="polite" className={`min-h-5 text-center text-sm font-bold ${participantName ? 'text-emerald-400' : 'text-slate-400'}`}>

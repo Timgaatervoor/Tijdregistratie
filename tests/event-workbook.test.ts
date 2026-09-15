@@ -75,3 +75,21 @@ test('Excel reimport updates by stable ID, preserves source and race safeguards,
   await assert.rejects(applyEventWorkbook(book, JSON.stringify(await currentWorkbookData())), /voor de wedstrijd/);
   assert.equal(await db.timingRecords.count(), 1);
 });
+
+
+test('Excel retains school, team, notes, article, external ID and wave, including older templates without Team', () => {
+  const enriched: WorkbookData = { ...data, waves: [{ id: 'wave-school', eventId: data.event.id, name: 'Schoolgroep', waveNumber: 1, scheduledStartTime: '10:00:00', maxParticipants: 25, categoryIds: [], status: 'SCHEDULED' }], participants: data.participants.map(p => ({ ...p, club: 'School De Zee', team: 'Ploeg A', notes: 'Afspraak bij de start', externalId: '00123-' + p.id, waveId: 'wave-school' })) };
+  const book = serialized(buildEventWorkbook(enriched));
+  const plan = planEventWorkbook(book, enriched);
+  assert.deepEqual(plan.errors, []);
+  for (const participant of plan.data.participants) {
+    const original = enriched.participants.find(p => p.id === participant.id)!;
+    for (const field of ['club', 'team', 'notes', 'article', 'externalId', 'waveId'] as const) assert.equal(participant[field], original[field], field);
+  }
+  const rows = XLSX.utils.sheet_to_json<any[]>(book.Sheets.Deelnemers, { header: 1 });
+  const teamIndex = rows[0].indexOf('Team / Ploeg');
+  book.Sheets.Deelnemers = XLSX.utils.aoa_to_sheet(rows.map(row => Array.from(row).filter((_, index) => index !== teamIndex)));
+  const legacy = planEventWorkbook(book, enriched);
+  assert.deepEqual(legacy.errors, []);
+  assert.equal(legacy.data.participants[0].team, 'Ploeg A');
+});

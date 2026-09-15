@@ -13,7 +13,7 @@ const columns = {
   Parcours: ['Profielcode', 'Volgorde', 'Naam', 'Type', 'Afstand meters', 'Ronden', 'Schoten', 'Houding', 'Straftype', 'Strafseconden', 'Strafrondes'],
   Categorieen: ['Code', 'Naam', 'Geslacht', 'Minimumleeftijd', 'Maximumleeftijd', 'Profielcodes'],
   Startgroepen: ['Code', 'Naam', 'Nummer', 'Startuur', 'Maximum deelnemers', 'Categoriecodes'],
-  Deelnemers: ['Deelnemer-ID', 'Voornaam', 'Achternaam', 'Geboortedatum', 'Geslacht', 'Artikel', 'Borstnummer', 'Club', 'E-mail', 'Telefoon', 'Opmerkingen', 'Categoriecode', 'Profielcode', 'Startgroepcode', 'Categorie indeling', 'Profiel indeling', 'Ingeschreven op', 'Extern ID', 'Leeftijd op 31 december'],
+  Deelnemers: ['Deelnemer-ID', 'Voornaam', 'Achternaam', 'Geboortedatum', 'Geslacht', 'Artikel', 'Borstnummer', 'Club', 'E-mail', 'Telefoon', 'Opmerkingen', 'Categoriecode', 'Profielcode', 'Startgroepcode', 'Categorie indeling', 'Profiel indeling', 'Ingeschreven op', 'Extern ID', 'Leeftijd op 31 december', 'Team / Ploeg'],
 };
 const list = (value: unknown) => String(value ?? '').split('|').map(s => s.trim()).filter(Boolean);
 const text = (value: unknown) => String(value ?? '').trim();
@@ -48,6 +48,7 @@ export function buildEventWorkbook(data: WorkbookData, blank = false) {
     ['Parcours', 'Een rij per onderdeel. Type: RUN, SHOOT, PENALTY, TRANSITION of FINISH. Volgorde: 1, 2, 3... per profiel.'],
     ['Schieten', 'Schoten: positief geheel getal. Houding: prone, standing of free. Straftype: time, lap, fixed of none. Lengte strafronde staat bij Profielen.'],
     ['Controle strafrondes', 'Vul ja in om afgelegde strafrondes te laten bevestigen. Vul nee in voor fair play; dan wordt voltooiing aangenomen.'],
+    ['Deelnemersgegevens', 'Club bevat de club of school. Team / Ploeg en Opmerkingen zijn vrije tekst. Startgroepcode verwijst naar Code op Startgroepen. Extern ID bevat het Stamhoofd ID uit CSV/Excel.'],
     ['Startuur', 'Tekst in HH:mm:ss, bijvoorbeeld 10:00:00. Startgroepen zijn optioneel.'],
     ['Nieuwe deelnemer', 'Laat Deelnemer-ID leeg voor nieuwe personen. Een ingevuld bestaand ID werkt die deelnemer bij. Lege borstnummers blijven leeg.'],
     ['Herimport', 'Rijen worden toegevoegd of bijgewerkt; een rij verwijderen in Excel verwijdert niets uit de app. Fouten blokkeren de hele import.'],
@@ -62,7 +63,7 @@ export function buildEventWorkbook(data: WorkbookData, blank = false) {
   sheet('Parcours', columns.Parcours, blank ? [] : profiles.flatMap(p => p.legs.map((l, i) => [p.id, i + 1, l.name, l.type, l.distanceMeters, l.laps, l.shotCount, l.stance, l.penaltyType, l.penaltyValueSeconds, l.penaltyLapsPerMiss])));
   sheet('Categorieen', columns.Categorieen, blank ? [] : categories.map(c => [c.id, c.name, c.gender, c.minAge, c.maxAge, (c.raceProfileIds ?? [c.raceProfileId]).filter(Boolean).join('|')]));
   sheet('Startgroepen', columns.Startgroepen, blank ? [] : waves.map(w => [w.id, w.name, w.waveNumber, w.scheduledStartTime, w.maxParticipants, w.categoryIds.join('|')]));
-  sheet('Deelnemers', columns.Deelnemers, blank ? [] : participants.map(p => [p.id, p.firstName, p.lastName, p.birthDate, p.gender, p.article ?? p.stamhoofdRegistration?.product, p.bibNumber, p.club, p.email, p.phone, p.notes, p.categoryId, p.raceProfileId, p.waveId, p.categoryAssignment ?? 'manual', p.profileAssignment ?? 'manual', p.createdAt, p.externalId, competitionAge(p.birthDate, event.date)]));
+  sheet('Deelnemers', columns.Deelnemers, blank ? [] : participants.map(p => [p.id, p.firstName, p.lastName, p.birthDate, p.gender, p.article ?? p.stamhoofdRegistration?.product, p.bibNumber, p.club, p.email, p.phone, p.notes, p.categoryId, p.raceProfileId, p.waveId, p.categoryAssignment ?? 'manual', p.profileAssignment ?? 'manual', p.createdAt, p.externalId, competitionAge(p.birthDate, event.date), p.team]));
   // Editable dates remain text, and the age is recalculated by Excel from the event date.
   if (!blank) participants.forEach((p, i) => {
     const birth = p.birthDate;
@@ -86,7 +87,7 @@ export function planEventWorkbook(book: XLSX.WorkBook, current: WorkbookData) {
     const ws = book.Sheets[name];
     if (!ws) { errors.push(`Tabblad ${name} ontbreekt.`); return []; }
     const header = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1 })[0] ?? [];
-    const requiredHeaders = name === 'Profielen' ? columns.Profielen.slice(0, 6) : columns[name];
+    const requiredHeaders = name === 'Profielen' ? columns.Profielen.slice(0, 6) : name === 'Deelnemers' ? columns.Deelnemers.filter(h => h !== 'Team / Ploeg') : columns[name];
     if (!requiredHeaders.every(h => header.includes(h))) errors.push(`${name}: kolomnamen gewijzigd of ontbrekend. Gebruik het originele sjabloon.`);
     return XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' }).filter(r => Object.values(r).some(v => text(v)));
   };
@@ -157,7 +158,7 @@ export function planEventWorkbook(book: XLSX.WorkBook, current: WorkbookData) {
     const categoryAssignment = choice(r['Categorie indeling'], ['automatic', 'manual'], label, 'automatic') as Participant['categoryAssignment'];
     const profileAssignment = choice(r['Profiel indeling'], ['automatic', 'manual'], label, 'automatic') as Participant['profileAssignment'];
     const inscription = r['Ingeschreven op'] instanceof Date ? r['Ingeschreven op'].toISOString() : text(r['Ingeschreven op']);
-    const p: Participant = { ...existing, id, firstName: text(r.Voornaam), lastName: text(r.Achternaam), birthDate: dateText(r.Geboortedatum), gender: choice(r.Geslacht, ['M', 'F', 'X'], label, 'X') as Participant['gender'], article: text(r.Artikel), bibNumber: number(r.Borstnummer, label), club: text(r.Club), email: text(r['E-mail']), phone: text(r.Telefoon), notes: text(r.Opmerkingen), categoryId: text(r.Categoriecode), raceProfileId: text(r.Profielcode), waveId: text(r.Startgroepcode) || undefined, categoryAssignment, profileAssignment, externalId: text(r['Extern ID']) || undefined, createdAt: inscription || existing?.createdAt || now, updatedAt: now, status: existing?.status ?? 'READY' };
+    const p: Participant = { ...existing, id, firstName: text(r.Voornaam), lastName: text(r.Achternaam), birthDate: dateText(r.Geboortedatum), gender: choice(r.Geslacht, ['M', 'F', 'X'], label, 'X') as Participant['gender'], article: text(r.Artikel), bibNumber: number(r.Borstnummer, label), club: text(r.Club), team: Object.hasOwn(r, 'Team / Ploeg') ? text(r['Team / Ploeg']) : existing?.team, email: text(r['E-mail']), phone: text(r.Telefoon), notes: text(r.Opmerkingen), categoryId: text(r.Categoriecode), raceProfileId: text(r.Profielcode), waveId: text(r.Startgroepcode) || undefined, categoryAssignment, profileAssignment, externalId: text(r['Extern ID']) || undefined, createdAt: inscription || existing?.createdAt || now, updatedAt: now, status: existing?.status ?? 'READY' };
     if (!p.firstName || !p.lastName) errors.push(`${label}: voornaam en achternaam zijn verplicht.`);
     if (p.birthDate && competitionAge(p.birthDate, event.date) === undefined) errors.push(`${label}: ongeldige geboortedatum.`);
     if (p.bibNumber === 0) errors.push(`${label}: borstnummer moet positief zijn of leeg blijven.`);

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { ImportColumnMapping, Participant } from '../types';
+import type { ImportColumnMapping, Participant, Wave } from '../types';
 
 export interface RawParsedRow {
   rowIndex: number;
@@ -25,6 +25,10 @@ export interface ParseResult {
 }
 
 export interface ParticipantImportCandidate {
+  article?: string;
+  team?: string;
+  waveName?: string;
+  waveId?: string;
   rowIndex: number;
   sheetName?: string;
   firstName: string;
@@ -47,6 +51,8 @@ export interface ParticipantImportCandidate {
 }
 
 const SYNONYMS: Record<keyof ImportColumnMapping, string[]> = {
+  article: ['artikel', 'article', 'product'],
+  wave: ['startgroep', 'startgroepen', 'startgroepcode', 'wave', 'waves', 'wave id', 'wave nummer'],
   firstName: ['voornaam', 'first name', 'firstname', 'prenom', 'first'],
   lastName: ['achternaam', 'last name', 'lastname', 'familienaam', 'nom', 'familiynaam'],
   fullName: ['volledige naam', 'full name', 'naam atleet', 'deelnemer'],
@@ -56,10 +62,10 @@ const SYNONYMS: Record<keyof ImportColumnMapping, string[]> = {
   gender: ['geslacht', 'gender', 'sexe', 'm/v'],
   email: ['e-mail', 'email', 'mail', 'e-mailadres', 'email address'],
   phone: ['telefoon', 'phone', 'gsm', 'telefoonnummer', 'mobiel', 'contact'],
-  club: ['club', 'vereniging', 'ploeg', 'team', 'sportclub'],
-  team: ['team', 'groep', 'ploeg'],
+  club: ['club', 'school', 'club/school', 'club / school', 'vereniging', 'sportclub'],
+  team: ['team', 'ploeg', 'team / ploeg'],
   externalId: ['stamhoofd id', 'stamhoofd', 'id', 'inschrijvingsnummer', 'bestelnummer', 'order id', 'ticket id'],
-  notes: ['opmerkingen', 'notes', 'opmerking', 'bijzonderheden', 'comment'],
+  notes: ['notities', 'notitie', 'opmerkingen', 'notes', 'opmerking', 'bijzonderheden', 'comment'],
 };
 
 export function extractBaseHeader(col?: string): string {
@@ -125,6 +131,8 @@ export function autoDetectMapping(headers: string[]): ImportColumnMapping {
       matched = headers.find((_, i) => {
         const base = baseLowerHeaders[i];
         if (!base) return false;
+        if (field === 'category' && /startgroep|wave/.test(base)) return false;
+        if (Object.values(SYNONYMS).some(values => values.includes(base))) return false;
         return syns.some((s) => base === s || base.includes(s) || (s.length > 3 && s.includes(base)));
       });
     }
@@ -133,6 +141,8 @@ export function autoDetectMapping(headers: string[]): ImportColumnMapping {
     if (!matched) {
       matched = headers.find((_, i) => {
         const full = lowerHeaders[i];
+        if (field === 'category' && /startgroep|wave/.test(baseLowerHeaders[i])) return false;
+        if (Object.values(SYNONYMS).some(values => values.includes(baseLowerHeaders[i]))) return false;
         return syns.some((s) => full.includes(s));
       });
     }
@@ -456,8 +466,24 @@ export function parseCSVText(rawText: string, fileName = 'import.csv'): ParseRes
   if (semiCount > commaCount && semiCount > tabCount) delimiter = ';';
   if (tabCount > commaCount && tabCount > semiCount) delimiter = '\t';
 
-  // Use simple robust CSV parser with quote escaping
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  // Split records only outside quoted fields: notes may contain line breaks.
+  const lines: string[] = [];
+  let record = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') { record += '""'; i++; continue; }
+      quoted = !quoted;
+    }
+    if ((char === '\n' || char === '\r') && !quoted) {
+      if (record.trim()) lines.push(record);
+      record = '';
+      if (char === '\r' && text[i + 1] === '\n') i++;
+    } else record += char;
+  }
+  if (quoted) throw new Error('CSV bevat een tekstveld zonder afsluitend aanhalingsteken.');
+  if (record.trim()) lines.push(record);
   if (lines.length === 0) {
     return { headers: [], rows: [], detectedDelimiter: delimiter, fileName };
   }
@@ -516,7 +542,8 @@ export function validateAndMapRows(
   rows: RawParsedRow[],
   mapping: ImportColumnMapping,
   existingParticipants: Participant[],
-  useSheetAsCategoryFallback = true
+  useSheetAsCategoryFallback = true,
+  waves: Wave[] = []
 ): ParticipantImportCandidate[] {
   // Build lookup maps for duplicate detection
   const externalIdMap = new Map<string, Participant>();
@@ -590,6 +617,11 @@ export function validateAndMapRows(
 
     const clubRaw = mapping.club ? getMappedValue(row, mapping.club) : undefined;
     const club = clubRaw ? clubRaw.trim() : undefined;
+    const team = getMappedValue(row, mapping.team).trim() || undefined;
+    const article = getMappedValue(row, mapping.article).trim() || undefined;
+    const waveName = getMappedValue(row, mapping.wave).trim() || undefined;
+    const waveMatches = waveName ? waves.filter(w => w.id === waveName || w.name.trim().toLowerCase() === waveName.toLowerCase() || String(w.waveNumber) === waveName) : [];
+    const waveId = waveMatches.length === 1 ? waveMatches[0].id : undefined;
 
     const extRaw = mapping.externalId ? getMappedValue(row, mapping.externalId) : undefined;
     const externalId = extRaw ? extRaw.trim() : undefined;
@@ -609,6 +641,9 @@ export function validateAndMapRows(
     }
 
     const validationErrors: string[] = [];
+    if (waveName && !waveMatches.length) validationErrors.push(`Onbekende startgroep: ${waveName}`);
+    if (waveMatches.length > 1) validationErrors.push(`Meerdere startgroepen gevonden voor ${waveName}; gebruik het unieke ID`);
+    if (waveMatches.length === 1 && waveMatches[0].status !== 'SCHEDULED') validationErrors.push(`Startgroep ${waveName} is al gestart`);
     if (!firstName && !lastName) {
       validationErrors.push('Naam ontbreekt');
     }
@@ -653,6 +688,10 @@ export function validateAndMapRows(
       categoryName: categoryName?.trim(),
       categorySource,
       club: club?.trim(),
+      team,
+      article,
+      waveName,
+      waveId,
       bibNumber,
       externalId: externalId?.trim(),
       notes,

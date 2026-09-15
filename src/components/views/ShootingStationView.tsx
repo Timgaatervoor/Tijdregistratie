@@ -7,7 +7,7 @@ import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
 import { useStationMobileMode } from '../../hooks/useMobileMode';
-import { MobileModeButton } from '../MobileStation';
+import { BibKeypad, MobileModeButton, MobileStationShell } from '../MobileStation';
 
 interface ShootingStationViewProps {
   mobileNavigation?: React.ReactNode;
@@ -331,43 +331,15 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
       </div>
 
       {simpleMode && (
-        <div aria-label="Gsm-modus Schieten" className="mobile-station fixed inset-0 z-[45] w-full h-[100dvh] overflow-y-auto overscroll-contain bg-slate-950">
-          <div className="mx-auto w-full max-w-xl space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Jury-invoer</span>
-            <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Snelle schietproef</h3>
-            <p className="text-xs text-slate-400 mt-1">Kies het nummer, het resultaat en bevestig.</p>
-            </div>
-            <MobileModeButton enabled onClick={toggleSimpleMode} />
-          </div>
-
-          <div className="mobile-station-navigation">{mobileNavigation}</div>
+        <MobileStationShell title="Schieten" onClose={toggleSimpleMode} navigation={mobileNavigation} busy={isSubmitting}>
           <label className="flex items-center justify-between gap-2 text-sm text-slate-300">Schietstand<select aria-label="Schietstand in gsm-modus" value={stationName} onChange={e => setStationName(e.target.value)} className="min-h-11 rounded-xl bg-slate-800 px-3">{Array.from({ length: 12 }, (_, i) => <option key={i} value={`Stand ${i + 1}`}>Stand {i + 1}</option>)}</select></label>
-          <div className="space-y-3">
-            <div className="w-full min-h-20 rounded-2xl bg-slate-900 border-2 border-emerald-500/60 flex items-center justify-center text-5xl font-mono font-black text-white tracking-widest">
-              {bibInput || '—'}
-            </div>
-            <p className={`min-h-5 text-center text-sm font-bold ${matchedParticipant ? 'text-emerald-400' : 'text-slate-500'}`}>
-              {matchedParticipant ? `${matchedParticipant.firstName} ${matchedParticipant.lastName}` : bibInput ? 'Onbekend startnummer' : 'Voer een startnummer in'}
-            </p>
-
-            <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => (
-                <button
-                  key={number}
-                  type="button"
-                  onClick={() => setBibInput((current) => `${current}${number}`.slice(0, 4))}
-                  className="min-h-11 sm:min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700"
-                >
-                  {number}
-                </button>
-              ))}
-              <button type="button" onClick={() => setBibInput('')} className="min-h-11 sm:min-h-14 rounded-xl bg-red-950/60 border border-red-800 text-red-300 font-bold active:scale-95">Wis</button>
-              <button type="button" onClick={() => setBibInput((current) => `${current}0`.slice(0, 4))} className="min-h-11 sm:min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-2xl font-black text-white active:scale-95 hover:bg-slate-700">0</button>
-              <button type="button" onClick={() => setBibInput((current) => current.slice(0, -1))} className="min-h-11 sm:min-h-14 rounded-xl bg-slate-800 border border-slate-700 text-xl font-black text-amber-300 active:scale-95">⌫</button>
-            </div>
-          </div>
+          <BibKeypad
+            value={bibInput}
+            onChange={setBibInput}
+            participantName={matchedParticipant ? `${matchedParticipant.firstName} ${matchedParticipant.lastName}` : undefined}
+            disabled={isSubmitting || !!duplicateConflict}
+            maxLength={4}
+          />
 
           <div className="space-y-2">
             <div className="text-xs text-slate-300 font-bold flex flex-wrap items-center justify-between gap-2">
@@ -423,9 +395,9 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
             type="button"
             onClick={() => handleRecordShooting()}
             disabled={isSubmitting || !bibInput.trim()}
-            className="w-full min-h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg active:scale-95 transition disabled:opacity-40"
+            className="w-full min-h-16 rounded-2xl bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-xl active:scale-95 transition disabled:opacity-40"
           >
-            BEVESTIG EN SLA OP
+            {isSubmitting ? 'Opslaan…' : 'Schietproef vastleggen'}
           </button>
 
           {feedback && (
@@ -438,8 +410,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               {finishNotice}
             </div>
           )}
-          </div>
-        </div>
+        </MobileStationShell>
       )}
 
       {/* Main Touch Input Form */}

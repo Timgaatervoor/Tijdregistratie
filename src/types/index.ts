@@ -347,6 +347,8 @@ export interface RaceResult {
 }
 
 export interface ImportColumnMapping {
+  article?: string;
+  wave?: string;
   externalId?: string;
   firstName?: string;
   lastName?: string;

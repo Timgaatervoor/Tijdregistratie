@@ -59,6 +59,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [editWaveId, setEditWaveId] = useState('');
   const [editClub, setEditClub] = useState('');
   const [editTeam, setEditTeam] = useState('');
+  const [editArticle, setEditArticle] = useState('');
+  const [editExternalId, setEditExternalId] = useState('');
   const [editStatus, setEditStatus] = useState<ParticipantStatus>('READY');
   const [editNotes, setEditNotes] = useState('');
   const [editReason, setEditReason] = useState('');
@@ -112,6 +114,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setEditWaveId(p.waveId || '');
     setEditClub(p.club || '');
     setEditTeam(p.team || '');
+    setEditArticle(p.article ?? String(p.stamhoofdRegistration?.product ?? ''));
+    setEditExternalId(p.externalId || '');
     setEditStatus(p.status || 'READY');
     setEditNotes(p.notes || '');
     setEditReason('');
@@ -275,6 +279,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         waveId: editWaveId || undefined,
         club: editClub.trim() || undefined,
         team: editTeam.trim() || undefined,
+        article: editArticle.trim(),
+        externalId: editExternalId.trim() || undefined,
         status: editStatus,
         statusReason: editReason,
         notes: editNotes.trim() || undefined,
@@ -390,6 +396,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         {/* Tab 1: Overview & Times */}
         {activeTab === 'overview' && (
           <div className="p-6 overflow-y-auto space-y-6 text-sm">
+            {currentParticipant && <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-2 break-words">
+              <p>Artikel: {currentParticipant.article ?? String(currentParticipant.stamhoofdRegistration?.product ?? 'Niet ingevuld')}</p>
+              <p>Stamhoofd ID: <span className="font-mono">{currentParticipant.stamhoofdItemId || currentParticipant.externalId || 'Niet ingevuld'}</span></p>
+            </div>}
             {/* Timing & Penalty Breakdown */}
             {currentParticipant?.stamhoofdItemId && <div className="p-4 rounded-lg bg-slate-800 border border-slate-700 space-y-2">
               <h3 className="font-bold">Stamhoofd</h3>
@@ -703,7 +713,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   <p className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3 text-emerald-300">Fair play: {activeResult.penaltyLaps} strafronde{activeResult.penaltyLaps === 1 ? '' : 's'} worden als afgelegd beschouwd; handmatige controle is uitgeschakeld in het wedstrijdprofiel.</p>
                 )
               )}
-              <p>Artikel: {currentParticipant.article || String(currentParticipant.stamhoofdRegistration?.product ?? 'Geen')}</p>
+              <label className="block">Artikel (uit Stamhoofd)<input value={editArticle} onChange={e => setEditArticle(e.target.value)} className="block w-full bg-slate-800 rounded p-2" /></label>
+              <label className="block">Stamhoofd ID (CSV / Excel)<input value={editExternalId} onChange={e => setEditExternalId(e.target.value)} className="block w-full bg-slate-800 rounded p-2 font-mono" /></label>
+              {currentParticipant.stamhoofdItemId && <div className="space-y-1 break-all text-slate-300"><p>Stamhoofd ID (API): <span className="font-mono">{currentParticipant.stamhoofdItemId}</span></p><p>Order-ID: <span className="font-mono">{currentParticipant.stamhoofdOrderId || 'Niet beschikbaar'}</span></p></div>}
               <label className="block">Geboortedatum (dd/mm/jjjj of jjjj-mm-dd)<input value={editBirthDate} onChange={e => setEditBirthDate(e.target.value)} className="block w-full bg-slate-800 rounded p-2" /></label>
               <label className="block"><input type="checkbox" checked={manualCategory} onChange={e => setManualCategory(e.target.checked)} /> Leeftijdscategorie handmatig vastzetten</label>
               <label className="block"><input type="checkbox" checked={manualProfile} onChange={e => setManualProfile(e.target.checked)} /> Wedstrijdprofiel handmatig vastzetten</label>

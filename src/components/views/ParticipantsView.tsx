@@ -376,7 +376,8 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       parsedData.rows,
       columnMapping,
       participants,
-      useSheetAsCategory
+      useSheetAsCategory,
+      waves
     );
     setCandidates(validated);
     setPreviewSheetFilter('ALL');
@@ -397,176 +398,192 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   // Execute import
   const handleConfirmImport = async () => {
     setIsImporting(true);
-    const now = new Date().toISOString();
-    const newParticipants: Participant[] = [];
-    const updatedParticipants: Participant[] = [];
-
-    // Ensure a default race profile exists
-    const existingProfiles = await db.raceProfiles.toArray();
-    let defaultProfile = existingProfiles.find((p) => p.isDefault) || existingProfiles[0];
-    if (!defaultProfile) {
-      defaultProfile = {
-        id: 'profile-adult',
-        name: 'Standaard Biathlon',
-        description: '1,5 km Run + Schieten (5) + 1,5 km Run + Schieten (5) + 1,5 km Finish',
-        penaltySecondsPerMiss: 20,
-        penaltyLapsPerMiss: 1,
-        isDefault: true,
-        legs: [
-          { id: 'a1', type: 'RUN', name: 'Ronde 1', distanceMeters: 1500, laps: 1 },
-          { id: 'a2', type: 'SHOOT', name: 'Schietproef 1', shotCount: 5, stance: 'prone', maxHits: 5, penaltyType: 'time', penaltyValueSeconds: 20 },
-          { id: 'a3', type: 'RUN', name: 'Ronde 2', distanceMeters: 1500, laps: 1 },
-          { id: 'a4', type: 'SHOOT', name: 'Schietproef 2', shotCount: 5, stance: 'standing', maxHits: 5, penaltyType: 'time', penaltyValueSeconds: 20 },
-          { id: 'a5', type: 'RUN', name: 'Ronde 3', distanceMeters: 1500, laps: 1 },
-          { id: 'a6', type: 'FINISH', name: 'Finish' },
-        ],
-      };
-      await db.raceProfiles.put(defaultProfile);
-    }
-    const defaultProfileId = defaultProfile.id;
-
-    // Ensure at least one category exists in db
-    let currentCategories = await db.categories.toArray();
-    if (currentCategories.length === 0 && categories.length > 0) {
-      currentCategories = [...categories];
-    }
-    if (currentCategories.length === 0) {
-      const defaultCat: Category = {
-        id: 'cat-general',
-        name: 'Algemeen',
-        code: 'ALG',
-        gender: 'ALL',
-        raceProfileIds: [defaultProfileId],
-        raceProfileId: defaultProfileId,
-        bibRangeStart: 1,
-        bibRangeEnd: 999,
-      };
-      await db.categories.put(defaultCat);
-      currentCategories.push(defaultCat);
-    }
-
-    // Find highest bib
-    let nextBib = Math.max(0, ...participants.map((p) => p.bibNumber || 0)) + 1;
-
-    for (const c of candidates) {
-      if (!c.isValid) continue;
-
-      // Duplicate handling
-      if (c.isDuplicate) {
-        if (duplicateAction === 'skip') continue;
-        if (duplicateAction === 'update' && c.existingParticipantId) {
-          const existing = await db.participants.get(c.existingParticipantId);
-          if (existing) {
-            updatedParticipants.push({
-              ...existing,
-              firstName: c.firstName || existing.firstName,
-              lastName: c.lastName || existing.lastName,
-              email: c.email || existing.email,
-              phone: c.phone || existing.phone,
-              club: c.club || existing.club,
-              externalId: c.externalId || existing.externalId,
-              updatedAt: now,
-            });
-          }
-          continue;
+    try {
+      const currentWaves = await db.waves.toArray();
+      for (const candidate of candidates.filter(c => c.isValid && c.waveId && !(c.isDuplicate && duplicateAction === 'skip'))) {
+        const wave = currentWaves.find(w => w.id === candidate.waveId);
+        if (!wave || wave.status !== 'SCHEDULED') throw new Error('Een gekoppelde startgroep is gewijzigd of al gestart. Maak de importpreview opnieuw.');
+        if (candidate.existingParticipantId && duplicateAction === 'update') {
+          const existing = await db.participants.get(candidate.existingParticipantId);
+          if (existing && existing.waveId !== candidate.waveId && ['STARTED', 'FINISHED', 'DNF', 'DSQ'].includes(existing.status)) throw new Error(`Startgroep van ${existing.firstName} ${existing.lastName} kan tijdens de wedstrijd niet via import worden gewijzigd.`);
         }
       }
+      const now = new Date().toISOString();
+      const newParticipants: Participant[] = [];
+      const updatedParticipants: Participant[] = [];
 
-      // Find matching category (supports exact name, code, case-insensitive, or substring matching)
-      const targetCatName = (c.categoryName || '').toLowerCase().trim();
-      let matchedCategory = currentCategories.find(
-        (cat) =>
-          cat.name.toLowerCase() === targetCatName ||
-          cat.code.toLowerCase() === targetCatName ||
-          (targetCatName && cat.name.toLowerCase().includes(targetCatName)) ||
-          (targetCatName && targetCatName.includes(cat.name.toLowerCase()))
-      );
+      // Ensure a default race profile exists
+      const existingProfiles = await db.raceProfiles.toArray();
+      let defaultProfile = existingProfiles.find((p) => p.isDefault) || existingProfiles[0];
+      if (!defaultProfile) {
+        defaultProfile = {
+          id: 'profile-adult',
+          name: 'Standaard Biathlon',
+          description: '1,5 km Run + Schieten (5) + 1,5 km Run + Schieten (5) + 1,5 km Finish',
+          penaltySecondsPerMiss: 20,
+          penaltyLapsPerMiss: 1,
+          isDefault: true,
+          legs: [
+            { id: 'a1', type: 'RUN', name: 'Ronde 1', distanceMeters: 1500, laps: 1 },
+            { id: 'a2', type: 'SHOOT', name: 'Schietproef 1', shotCount: 5, stance: 'prone', maxHits: 5, penaltyType: 'time', penaltyValueSeconds: 20 },
+            { id: 'a3', type: 'RUN', name: 'Ronde 2', distanceMeters: 1500, laps: 1 },
+            { id: 'a4', type: 'SHOOT', name: 'Schietproef 2', shotCount: 5, stance: 'standing', maxHits: 5, penaltyType: 'time', penaltyValueSeconds: 20 },
+            { id: 'a5', type: 'RUN', name: 'Ronde 3', distanceMeters: 1500, laps: 1 },
+            { id: 'a6', type: 'FINISH', name: 'Finish' },
+          ],
+        };
+        await db.raceProfiles.put(defaultProfile);
+      }
+      const defaultProfileId = defaultProfile.id;
 
-      // If category doesn't exist yet but candidate specifies a category name, create it dynamically
-      if (!matchedCategory && c.categoryName && c.categoryName.trim()) {
-        const cleanCatName = c.categoryName.trim();
-        const cleanCode =
-          cleanCatName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'CAT';
-        const newCat: Category = {
-          id: `cat-${generateUUID().slice(0, 8)}`,
-          name: cleanCatName,
-          code: cleanCode,
-          gender: c.gender === 'F' ? 'F' : c.gender === 'M' ? 'M' : 'ALL',
+      // Ensure at least one category exists in db
+      let currentCategories = await db.categories.toArray();
+      if (currentCategories.length === 0 && categories.length > 0) {
+        currentCategories = [...categories];
+      }
+      if (currentCategories.length === 0) {
+        const defaultCat: Category = {
+          id: 'cat-general',
+          name: 'Algemeen',
+          code: 'ALG',
+          gender: 'ALL',
           raceProfileIds: [defaultProfileId],
           raceProfileId: defaultProfileId,
+          bibRangeStart: 1,
+          bibRangeEnd: 999,
         };
-        await db.categories.put(newCat);
-        currentCategories.push(newCat);
-        matchedCategory = newCat;
+        await db.categories.put(defaultCat);
+        currentCategories.push(defaultCat);
       }
 
-      if (!matchedCategory) {
-        matchedCategory = currentCategories[0];
+      // Find highest bib
+      let nextBib = Math.max(0, ...participants.map((p) => p.bibNumber || 0)) + 1;
+
+      for (const c of candidates) {
+        if (!c.isValid) continue;
+
+        // Duplicate handling
+        if (c.isDuplicate) {
+          if (duplicateAction === 'skip') continue;
+          if (duplicateAction === 'update' && c.existingParticipantId) {
+            const existing = await db.participants.get(c.existingParticipantId);
+            if (existing) {
+              updatedParticipants.push({
+                ...existing,
+                firstName: c.firstName || existing.firstName,
+                lastName: c.lastName || existing.lastName,
+                email: c.email || existing.email,
+                phone: c.phone || existing.phone,
+                club: c.club || existing.club,
+                team: c.team || existing.team,
+                notes: c.notes || existing.notes,
+                article: c.article || existing.article,
+                waveId: c.waveId || existing.waveId,
+                externalId: c.externalId || existing.externalId,
+                updatedAt: now,
+              });
+            }
+            continue;
+          }
+        }
+
+        // Find matching category (supports exact name, code, case-insensitive, or substring matching)
+        const targetCatName = (c.categoryName || '').toLowerCase().trim();
+        let matchedCategory = currentCategories.find(
+          (cat) =>
+            cat.name.toLowerCase() === targetCatName ||
+            cat.code.toLowerCase() === targetCatName ||
+            (targetCatName && cat.name.toLowerCase().includes(targetCatName)) ||
+            (targetCatName && targetCatName.includes(cat.name.toLowerCase()))
+        );
+
+        // If category doesn't exist yet but candidate specifies a category name, create it dynamically
+        if (!matchedCategory && c.categoryName && c.categoryName.trim()) {
+          const cleanCatName = c.categoryName.trim();
+          const cleanCode =
+            cleanCatName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'CAT';
+          const newCat: Category = {
+            id: `cat-${generateUUID().slice(0, 8)}`,
+            name: cleanCatName,
+            code: cleanCode,
+            gender: c.gender === 'F' ? 'F' : c.gender === 'M' ? 'M' : 'ALL',
+            raceProfileIds: [defaultProfileId],
+            raceProfileId: defaultProfileId,
+          };
+          await db.categories.put(newCat);
+          currentCategories.push(newCat);
+          matchedCategory = newCat;
+        }
+
+        if (!matchedCategory) {
+          matchedCategory = currentCategories[0];
+        }
+
+        const assignedBib = c.bibNumber || nextBib++;
+        const categoryId = matchedCategory?.id || currentCategories[0]?.id || 'cat-general';
+        const raceProfileId =
+          getDefaultCategoryProfileId(matchedCategory) ||
+          getDefaultCategoryProfileId(currentCategories[0]) ||
+          defaultProfileId;
+
+        newParticipants.push({
+          id: generateUUID(),
+          externalId: c.externalId,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          gender: c.gender || 'M',
+          birthDate: c.birthDate,
+          email: c.email,
+          phone: c.phone,
+          club: c.club,
+          team: c.team,
+          notes: c.notes,
+          article: c.article,
+          waveId: c.waveId,
+          categoryId,
+          raceProfileId,
+          bibNumber: assignedBib,
+          status: 'READY',
+          createdAt: now,
+          updatedAt: now,
+        });
       }
 
-      const assignedBib = c.bibNumber || nextBib++;
-      const categoryId = matchedCategory?.id || currentCategories[0]?.id || 'cat-general';
-      const raceProfileId =
-        getDefaultCategoryProfileId(matchedCategory) ||
-        getDefaultCategoryProfileId(currentCategories[0]) ||
-        defaultProfileId;
+      if (newParticipants.length > 0) {
+        await db.participants.bulkPut(newParticipants);
+      }
+      if (updatedParticipants.length > 0) {
+        await db.participants.bulkPut(updatedParticipants);
+      }
 
-      newParticipants.push({
-        id: generateUUID(),
-        externalId: c.externalId,
-        firstName: c.firstName,
-        lastName: c.lastName,
-        gender: c.gender || 'M',
-        birthDate: c.birthDate,
-        email: c.email,
-        phone: c.phone,
-        club: c.club,
-        categoryId,
-        raceProfileId,
-        bibNumber: assignedBib,
-        status: 'READY',
-        createdAt: now,
-        updatedAt: now,
-      });
+      const sheetInfoText =
+        selectedSheetNames.length > 0
+          ? ` (${selectedSheetNames.length} tabbladen: ${selectedSheetNames.join(', ')})`
+          : '';
+
+      await operationService.logAudit(
+        'STAMHOOFD_IMPORT_COMPLETED',
+        `Stamhoofd import voltooid: ${newParticipants.length} nieuw toegevoegd, ${updatedParticipants.length} bijgewerkt${sheetInfoText}`
+      );
+
+      setIsImporting(false);
+      setShowImportModal(false);
+      setImportStep('upload');
+      setParsedData(null);
+      setSelectedSheetNames([]);
+      setCandidates([]);
+      onRefresh();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Importeren mislukt.');
+    } finally {
+      setIsImporting(false);
     }
-
-    if (newParticipants.length > 0) {
-      await db.participants.bulkPut(newParticipants);
-    }
-    if (updatedParticipants.length > 0) {
-      await db.participants.bulkPut(updatedParticipants);
-    }
-
-    const sheetInfoText =
-      selectedSheetNames.length > 0
-        ? ` (${selectedSheetNames.length} tabbladen: ${selectedSheetNames.join(', ')})`
-        : '';
-
-    await operationService.logAudit(
-      'STAMHOOFD_IMPORT_COMPLETED',
-      `Stamhoofd import voltooid: ${newParticipants.length} nieuw toegevoegd, ${updatedParticipants.length} bijgewerkt${sheetInfoText}`
-    );
-
-    setIsImporting(false);
-    setShowImportModal(false);
-    setImportStep('upload');
-    setParsedData(null);
-    setSelectedSheetNames([]);
-    setCandidates([]);
-    onRefresh();
   };
 
   const handleExportCsv = () => {
-    const headers =
-      'Startnummer,Voornaam,Achternaam,Geslacht,Categorie,Wave,Club,E-mail,Telefoon,Stamhoofd ID,Status\n';
-    const rows = filtered.map((p) => {
-      const cat = categoryMap.get(p.categoryId)?.name || '';
-      const wave = p.waveId ? waveMap.get(p.waveId)?.name || '' : '';
-      return `${p.bibNumber || ''},"${p.firstName}","${p.lastName}",${p.gender || ''},"${cat}","${wave}","${
-        p.club || ''
-      }","${p.email || ''}","${p.phone || ''}","${p.externalId || ''}",${p.status}`;
-    });
-    const csv = headers + rows.join('\n');
+    const headers = ['Startnummer', 'Voornaam', 'Achternaam', 'Geslacht', 'Categorie', 'Wave', 'Club / School', 'E-mail', 'Telefoon', 'Stamhoofd ID', 'Status', 'Artikel', 'Team / Ploeg', 'Notities / Opmerkingen'];
+    const rows = filtered.map(p => [p.bibNumber ?? '', p.firstName, p.lastName, p.gender ?? '', categoryMap.get(p.categoryId)?.name ?? '', p.waveId ? waveMap.get(p.waveId)?.name ?? '' : '', p.club ?? '', p.email ?? '', p.phone ?? '', p.externalId ?? '', p.status, p.article ?? p.stamhoofdRegistration?.product ?? '', p.team ?? '', p.notes ?? '']);
+    const csv = [headers, ...rows].map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
     downloadCsvFile(csv, `deelnemers_${Date.now()}.csv`);
   };
 
@@ -725,7 +742,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                       <td className="py-3 px-4">
                         <span className="font-bold text-white block">
                           {p.firstName} {p.lastName}
-                          {(p.article || p.stamhoofdRegistration?.product) && <span className="block text-xs text-slate-400">Artikel: {p.article || String(p.stamhoofdRegistration?.product)}</span>}
+                          {(p.article ?? p.stamhoofdRegistration?.product) && <span className="block text-xs text-slate-400">Artikel: {p.article ?? String(p.stamhoofdRegistration?.product)}</span>}
                           <span className="block text-xs text-slate-400">Profiel: {profiles.find(profile => profile.id === p.raceProfileId)?.name || 'Nog niet gekoppeld'}</span>
                           {(!p.categoryId || !p.raceProfileId) && <span className="block text-xs text-amber-300">Indeling controleren</span>}
                           {p.stamhoofdInactive && <span className="block text-xs text-amber-300">Stamhoofd: geannuleerd/inactief</span>}
@@ -1288,7 +1305,11 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                     { key: 'category', label: 'Categorie / Reeks *' },
                     { key: 'bibNumber', label: 'Startnummer (Bib)' },
                     { key: 'externalId', label: 'Stamhoofd ID' },
-                    { key: 'club', label: 'Club / Team' },
+                    { key: 'article', label: 'Artikel (uit Stamhoofd)' },
+                    { key: 'wave', label: 'Startgroep / Wave (naam, nummer of ID)' },
+                    { key: 'notes', label: 'Notities / Opmerkingen' },
+                    { key: 'club', label: 'Club / School' },
+                    { key: 'team', label: 'Team / Ploeg' },
                     { key: 'gender', label: 'Geslacht' },
                     { key: 'birthDate', label: 'Geboortedatum' },
                     { key: 'email', label: 'E-mailadres' },
@@ -1427,7 +1448,7 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                             : 'bg-red-950/40 border-red-500/40 text-red-200'
                         }`}
                       >
-                        <div className="flex items-center gap-2 truncate">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0 break-words">
                           {c.sheetName && selectedSheetNames.length > 1 && (
                             <span className="bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded shrink-0 border border-slate-600">
                               Tab: {c.sheetName}
@@ -1444,6 +1465,11 @@ export const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                             )}
                           </span>
                           {c.bibNumber && <span>• Bib #{c.bibNumber}</span>}
+                          {c.waveName && <span>Startgroep: {c.waveName}</span>}
+                          {c.article && <span>Artikel: {c.article}</span>}
+                          {c.club && <span>Club/school: {c.club}</span>}
+                          {c.team && <span>Team/ploeg: {c.team}</span>}
+                          {c.notes && <span className="whitespace-pre-wrap">Opmerkingen: {c.notes}</span>}
                         </div>
                         <span className="text-[10px] shrink-0 ml-2">
                           {c.isDuplicate

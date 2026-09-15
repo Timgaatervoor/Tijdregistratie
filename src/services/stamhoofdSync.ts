@@ -132,7 +132,12 @@ export function mergeRegistration(existing: Participant | undefined, row: SyncRo
     }
     baseline[key] = value;
   }
-  return { ...next, article: String(row.registration.product ?? existing?.article ?? ''), stamhoofdEventId: config.id, stamhoofdOrganizationId: config.shop.organizationId, stamhoofdWebshopId: config.shop.id,
+  // Treat a locally edited article like the other manually corrected registration fields.
+  const previousArticle = existing?.stamhoofdBaseline?.article ?? String(existing?.stamhoofdRegistration?.product ?? '');
+  const incomingArticle = String(row.registration.product ?? previousArticle);
+  if (!row.inactive && (!existing || (existing.article ?? previousArticle) === previousArticle)) next.article = incomingArticle;
+  if (!row.inactive) baseline.article = incomingArticle;
+  return { ...next, stamhoofdEventId: config.id, stamhoofdOrganizationId: config.shop.organizationId, stamhoofdWebshopId: config.shop.id,
     stamhoofdItemId: row.itemId, stamhoofdOrderId: row.orderId,
     stamhoofdTicketId: row.registration.ticketId as string | undefined,
     stamhoofdTicketSecret: row.registration.ticketSecret as string | undefined,

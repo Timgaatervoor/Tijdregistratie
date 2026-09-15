@@ -166,3 +166,20 @@ test('CSV import and existing failsafe suite', async () => {
   const results = await runFailsafeTestSuite();
   assert.deepEqual(results.filter(r => !r.passed).map(r => `${r.name}: ${r.message}`), []);
 });
+
+
+test('manually edited articles survive repeated Stamhoofd sync while untouched articles follow the source', () => {
+  const row = normalize(fixture(), config).rows[0];
+  const initial = mergeRegistration(undefined, row, config, 'first');
+  const legacy = { ...initial, stamhoofdBaseline: { ...initial.stamhoofdBaseline } };
+  delete legacy.stamhoofdBaseline.article;
+  row.registration = { ...row.registration, product: 'Lange afstand' };
+  assert.equal(mergeRegistration(legacy, row, config, 'second').article, 'Lange afstand');
+  for (const article of ['Aangepast artikel', '']) {
+    const updated = mergeRegistration({ ...legacy, article }, row, config, 'second');
+    assert.equal(updated.article, article);
+    row.registration = { ...row.registration, product: 'Nog een artikel' };
+    assert.equal(mergeRegistration(updated, row, config, 'third').article, article);
+    assert.equal(updated.stamhoofdItemId, initial.stamhoofdItemId);
+  }
+});

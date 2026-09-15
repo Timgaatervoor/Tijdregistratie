@@ -252,6 +252,7 @@ export default function App() {
 
         {displayedTab === 'start' && (
           <StartStationView
+            mobileNavigation={<Navigation variant="stations" activeTab={displayedTab} onSelectTab={setCurrentTab} conflictCount={unresolvedConflictsCount} attentionCount={attentionCount} deviceConfig={deviceConfig} />}
             event={event}
             categories={categories}
             waves={waves}
@@ -263,6 +264,7 @@ export default function App() {
 
         {displayedTab === 'shooting' && (
           <ShootingStationView
+            mobileNavigation={<Navigation variant="stations" activeTab={displayedTab} onSelectTab={setCurrentTab} conflictCount={unresolvedConflictsCount} attentionCount={attentionCount} deviceConfig={deviceConfig} />}
             categories={categories}
             event={event}
             participants={participants}
@@ -274,6 +276,7 @@ export default function App() {
 
         {displayedTab === 'finish' && (
           <FinishStationView
+            mobileNavigation={<Navigation variant="stations" activeTab={displayedTab} onSelectTab={setCurrentTab} conflictCount={unresolvedConflictsCount} attentionCount={attentionCount} deviceConfig={deviceConfig} />}
             categories={categories}
             waves={waves}
             event={event}

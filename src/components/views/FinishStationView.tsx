@@ -15,8 +15,11 @@ import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
+import { useStationMobileMode } from '../../hooks/useMobileMode';
+import { BibKeypad, MobileModeButton, MobileStationShell } from '../MobileStation';
 
 interface FinishStationViewProps {
+  mobileNavigation?: React.ReactNode;
   categories: Category[];
   waves: Wave[];
   event: RaceEvent | null;
@@ -26,6 +29,7 @@ interface FinishStationViewProps {
 }
 
 export const FinishStationView: React.FC<FinishStationViewProps> = ({
+  mobileNavigation,
   categories,
   waves,
   event,
@@ -33,6 +37,8 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
   timingRecords,
   onRefresh,
 }) => {
+  const [simpleMode, toggleSimpleMode] = useStationMobileMode('finish');
+  const finishGate = useRef(false);
   const [bibString, setBibString] = useState('');
   const [quickFinish, setQuickFinish] = useState(() => !(event?.requireFinishConfirmation ?? true));
   const [confirmModalBib, setConfirmModalBib] = useState<number | null>(null);
@@ -49,6 +55,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
   // Auto-focus hidden/direct input so keyboard works everywhere
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (finishGate.current) return;
       if (confirmModalBib !== null) {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -107,6 +114,8 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
     isUnknown = false,
     explicitTime?: { iso: string; monotonic: number }
   ) => {
+    if (finishGate.current) return;
+    finishGate.current = true;
     setIsSubmitting(true);
     const nowIso = explicitTime?.iso || raceClock.nowISO();
     const monotonicNow = explicitTime?.monotonic !== undefined ? explicitTime.monotonic : performance.now();
@@ -145,11 +154,13 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
       soundService.playError();
       setFeedback({ text: `Fout: ${err?.message}`, type: 'warn' });
     } finally {
+      finishGate.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleFinishTrigger = () => {
+    if (finishGate.current || confirmModalBib !== null) return;
     if (isNaN(parsedBib) || parsedBib <= 0) {
       soundService.playWarning();
       setFeedback({ text: 'Voer eerst een startnummer in', type: 'warn' });
@@ -170,35 +181,44 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
 
   // Emergency Unknown Bib Finish (Req 43)
   const handleEmergencyUnknownFinish = async () => {
-    // Generate emergency temporary bib (e.g. 9000+)
-    const highestBib = Math.max(
-      9000,
-      ...timingRecords.map((r) => r.bibNumber || 0)
-    );
-    const emergencyBib = highestBib + 1;
-
+    if (finishGate.current) return;
+    finishGate.current = true;
     setIsSubmitting(true);
-    const nowIso = raceClock.nowISO();
+    try {
+      // Generate emergency temporary bib (e.g. 9000+)
+      const highestBib = Math.max(
+        9000,
+        ...timingRecords.map((r) => r.bibNumber || 0)
+      );
+      const emergencyBib = highestBib + 1;
 
-    const { record } = await operationService.recordFinish(
-      event?.id || 'event-de-haan-2026',
-      emergencyBib,
-      undefined,
-      nowIso,
-      performance.now()
-    );
+      const nowIso = raceClock.nowISO();
 
-    soundService.playFinishChord();
-    setFeedback({
-      text: `NOODTIJD geregistreerd voor Onbekende Loper (Tijdelijke Bib #${emergencyBib}) om ${formatLocalTime(
-        record.timestamp,
-        true
-      )}. Kan later gekoppeld worden!`,
-      type: 'warn',
-    });
-    onRefresh();
-    setTimeout(() => setFeedback(null), 6000);
-    setIsSubmitting(false);
+      const { record } = await operationService.recordFinish(
+        event?.id || 'event-de-haan-2026',
+        emergencyBib,
+        undefined,
+        nowIso,
+        performance.now()
+      );
+
+      soundService.playFinishChord();
+      setFeedback({
+        text: `NOODTIJD geregistreerd voor Onbekende Loper (Tijdelijke Bib #${emergencyBib}) om ${formatLocalTime(
+          record.timestamp,
+          true
+        )}. Kan later gekoppeld worden!`,
+        type: 'warn',
+      });
+      onRefresh();
+      setTimeout(() => setFeedback(null), 6000);
+    } catch (error) {
+      soundService.playError();
+      setFeedback({ text: error instanceof Error ? error.message : 'Noodtijd opslaan mislukt.', type: 'warn' });
+    } finally {
+      finishGate.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   // Undo finish with mandatory reason (Req 44)
@@ -229,6 +249,22 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {simpleMode && <MobileStationShell title="Finish" onClose={toggleSimpleMode} navigation={mobileNavigation} busy={isSubmitting}>
+        <BibKeypad value={bibString} onChange={setBibString} disabled={isSubmitting || confirmModalBib !== null} participantName={matchedParticipant ? `${matchedParticipant.firstName} ${matchedParticipant.lastName}` : undefined} />
+        {alreadyFinished && <p role="status" className="rounded-xl border border-amber-700 p-2 text-sm text-amber-300">Let op: deze deelnemer heeft al een finishregistratie.</p>}
+        <button type="button" onClick={handleFinishTrigger} disabled={isSubmitting || confirmModalBib !== null || !(parsedBib > 0)} className="w-full min-h-16 rounded-2xl bg-amber-400 text-slate-950 text-xl font-black disabled:opacity-40">{isSubmitting ? 'Opslaan…' : 'Finish nu vastleggen'}</button>
+        {feedback && <p role="status" className={`rounded-xl border p-3 text-sm ${feedback.type === 'success' ? 'border-emerald-700 text-emerald-300' : 'border-amber-700 text-amber-300'}`}>{feedback.text}</p>}
+        <label className="flex items-center gap-3 min-h-11 text-sm text-slate-300">
+          <input type="checkbox" checked={quickFinish} disabled={isSubmitting} onChange={e => setQuickFinish(e.target.checked)} className="w-5 h-5" />Snelle finish: zonder bevestiging
+        </label>
+        <button type="button" onClick={handleEmergencyUnknownFinish} disabled={isSubmitting || confirmModalBib !== null} className="w-full min-h-12 rounded-xl border border-red-700 bg-red-950/50 text-red-300 font-bold disabled:opacity-40">Noodtijd: onbekende loper</button>
+        <div className="rounded-xl bg-slate-900 p-3 text-sm space-y-2">
+          <h3 className="font-bold">Laatste finishes</h3>
+          {!recentFinishes.length && <p className="text-slate-400">Nog geen finishes geregistreerd.</p>}
+          {recentFinishes.slice(0, 3).map(record => <p key={record.id} className="flex justify-between gap-2"><strong>#{record.bibNumber}</strong><span className="font-mono text-amber-300">{formatLocalTime(record.timestamp, true)}</span></p>)}
+        </div>
+      </MobileStationShell>}
+      <div hidden={simpleMode} className="space-y-6">
       {/* Top Banner with Quick-Finish Toggle */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -240,7 +276,8 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <MobileModeButton onClick={toggleSimpleMode} />
           <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-300 font-semibold bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
             <input
               type="checkbox"
@@ -426,9 +463,10 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
         </div>
       </div>
 
+      </div>
       {/* Confirmation Modal if quickFinish is off (Requirement 17) */}
       {confirmModalBib !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div role="dialog" aria-modal="true" aria-label="Bevestig Finishtijd" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-white">Bevestig Finishtijd</h3>
             <div className="text-4xl font-mono font-black text-amber-400">
@@ -458,6 +496,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
 
             <div className="flex gap-3 pt-2">
               <button
+                disabled={isSubmitting}
                 onClick={() => {
                   setConfirmModalBib(null);
                   setCapturedTime(null);
@@ -467,6 +506,7 @@ export const FinishStationView: React.FC<FinishStationViewProps> = ({
                 Annuleren (ESC)
               </button>
               <button
+                disabled={isSubmitting}
                 onClick={() => executeFinish(confirmModalBib, false, capturedTime || undefined)}
                 className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow transition"
               >

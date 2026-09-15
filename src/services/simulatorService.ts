@@ -23,8 +23,8 @@ export async function simulateRace(
   progressCallback?.('Startwaves simuleren...', 15);
 
   // 1. Starts per wave
-  const startRecords: TimingRecord[] = [];
-  const startOps = [];
+  // Participants without a bib are skipped, so array positions cannot identify their starts.
+  const startRecords = new Map<string, TimingRecord>();
 
   for (let i = 0; i < participants.length; i++) {
     const p = participants[i];
@@ -49,10 +49,10 @@ export async function simulateRace(
       isConfirmed: true,
       syncStatus: 'LOCAL_ONLY',
     };
-    startRecords.push(startRec);
+    startRecords.set(p.id, startRec);
   }
 
-  await db.timingRecords.bulkPut(startRecords);
+  await db.timingRecords.bulkPut([...startRecords.values()]);
 
   progressCallback?.('Schietbeurten simuleren...', 45);
 
@@ -61,7 +61,7 @@ export async function simulateRace(
   for (let i = 0; i < participants.length; i++) {
     const p = participants[i];
     if (!p.bibNumber) continue;
-    const startRec = startRecords[i];
+    const startRec = startRecords.get(p.id)!;
     const startMs = new Date(startRec.timestamp).getTime();
 
     // Shooting 1: ~7 to 15 mins after start
@@ -137,7 +137,7 @@ export async function simulateRace(
       continue;
     }
 
-    const startRec = startRecords[i];
+    const startRec = startRecords.get(p.id)!;
     const startMs = new Date(startRec.timestamp).getTime();
     // Finish time spread based on category and random fitness
     const runDurationMs = (24 * 60 + ((i * 19) % (25 * 60))) * 1000 + (i * 1234) % 1000;

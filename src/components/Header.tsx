@@ -1,4 +1,5 @@
 import { ClockStatus } from './ClockStatus';
+import { GlobalMobileModeButton } from './MobileStation';
 import React, { useState } from 'react';
 import {
   Wifi,
@@ -199,6 +200,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <ClockStatus compact />
+          <GlobalMobileModeButton />
 
           {/* Sync Button */}
           <button

@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+.mobile-station {
+  margin: 0;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.mobile-station-navigation nav { flex-wrap: wrap; }
+.mobile-station-navigation button { min-height: 44px; flex: 1; }
+.mobile-station button, .mobile-station select { touch-action: manipulation; }
+
 @media print {
   body:has(.race-print-dialog) > :not(.race-print-dialog) { display: none !important; }
   .race-print-dialog, .race-print-dialog > div { display: block !important; position: static !important; max-height: none !important; overflow: visible !important; }

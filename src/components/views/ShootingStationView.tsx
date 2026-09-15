@@ -1,13 +1,16 @@
 import { effectiveShooting, normalizeShootingRound, shootingHitPresets, shootingPenalty } from '../../services/shootingRules';
 import React, { useEffect, useState } from 'react';
-import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
+import { Crosshair, CheckCircle2, AlertCircle, RotateCcw, Edit2, ShieldAlert } from 'lucide-react';
 import type { Category, Participant, ShootingResult, RaceEvent, RaceProfile } from '../../types';
 import { db } from '../../db/dexieDb';
 import { operationService } from '../../services/operationService';
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
+import { useStationMobileMode } from '../../hooks/useMobileMode';
+import { MobileModeButton } from '../MobileStation';
 
 interface ShootingStationViewProps {
+  mobileNavigation?: React.ReactNode;
   categories: Category[];
   event: RaceEvent | null;
   participants: Participant[];
@@ -17,6 +20,7 @@ interface ShootingStationViewProps {
 }
 
 export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
+  mobileNavigation,
   categories,
   event,
   participants,
@@ -25,7 +29,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
   onRefresh,
 }) => {
   const [stationName, setStationName] = useState('Stand 1');
-  const [simpleMode, setSimpleMode] = useState(() => localStorage.getItem('shooting_simple_mode') === 'true');
+  const [simpleMode, toggleSimpleMode] = useStationMobileMode('shooting');
   const [bibInput, setBibInput] = useState('');
   const [roundNumber, setRoundNumber] = useState<number>(1);
   const [targets, setTargets] = useState<boolean[]>(() => Array(5).fill(true)); // true = hit, false = miss
@@ -42,28 +46,6 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
     };
     loadDeviceIdentity();
   }, []);
-
-  useEffect(() => {
-    if (!simpleMode) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [simpleMode]);
-
-  const toggleSimpleMode = () => {
-    setSimpleMode((current) => {
-      const next = !current;
-      localStorage.setItem('shooting_simple_mode', String(next));
-      if (next) {
-        document.documentElement.requestFullscreen?.().catch(() => {});
-      } else if (document.fullscreenElement) {
-        document.exitFullscreen?.().catch(() => {});
-      }
-      return next;
-    });
-  };
 
   // Correction state
   const [editingResult, setEditingResult] = useState<ShootingResult | null>(null);
@@ -331,7 +313,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="text-xs text-slate-400 font-semibold">Schietstand Nummer:</label>
           <select
             value={stationName}
@@ -344,38 +326,24 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={toggleSimpleMode}
-            title={simpleMode ? 'Terug naar gewone schietstand' : 'Open volledige juryweergave'}
-            aria-label={simpleMode ? 'Terug naar gewone modus' : 'Open volledige modus'}
-            className="w-11 h-11 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center transition"
-          >
-            {simpleMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-          </button>
+          <MobileModeButton onClick={toggleSimpleMode} />
         </div>
       </div>
 
       {simpleMode && (
-        <div className="fixed inset-0 z-50 w-screen h-[100dvh] overflow-hidden bg-slate-950 p-3 sm:p-5">
-          <div className="mx-auto flex h-full w-full max-w-xl flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
-          <div className="flex items-center justify-between">
+        <div aria-label="Gsm-modus Schieten" className="mobile-station fixed inset-0 z-[45] w-full h-[100dvh] overflow-y-auto overscroll-contain bg-slate-950">
+          <div className="mx-auto w-full max-w-xl space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Jury-invoer</span>
             <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Snelle schietproef</h3>
             <p className="text-xs text-slate-400 mt-1">Kies het nummer, het resultaat en bevestig.</p>
             </div>
-            <button
-              type="button"
-              onClick={toggleSimpleMode}
-              title="Terug naar gewone modus"
-              aria-label="Terug naar gewone modus"
-              className="w-11 h-11 shrink-0 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center"
-            >
-              <Minimize2 className="w-5 h-5" />
-            </button>
+            <MobileModeButton enabled onClick={toggleSimpleMode} />
           </div>
 
+          <div className="mobile-station-navigation">{mobileNavigation}</div>
+          <label className="flex items-center justify-between gap-2 text-sm text-slate-300">Schietstand<select aria-label="Schietstand in gsm-modus" value={stationName} onChange={e => setStationName(e.target.value)} className="min-h-11 rounded-xl bg-slate-800 px-3">{Array.from({ length: 12 }, (_, i) => <option key={i} value={`Stand ${i + 1}`}>Stand {i + 1}</option>)}</select></label>
           <div className="space-y-3">
             <div className="w-full min-h-20 rounded-2xl bg-slate-900 border-2 border-emerald-500/60 flex items-center justify-center text-5xl font-mono font-black text-white tracking-widest">
               {bibInput || '—'}
@@ -490,7 +458,7 @@ export const ShootingStationView: React.FC<ShootingStationViewProps> = ({
                   value={bibInput}
                   onChange={(e) => setBibInput(e.target.value)}
                   placeholder="Voer startnummer in..."
-                  autoFocus
+                  autoFocus={!simpleMode}
                   className="w-full bg-slate-850 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-mono font-bold text-white focus:outline-none focus:border-blue-500"
                 />
                 {matchedParticipant ? (

@@ -17,8 +17,11 @@ import { operationService, generateUUID } from '../../services/operationService'
 import { soundService } from '../../services/soundService';
 import { formatLocalTime } from '../../services/timingEngine';
 import { SafeConfirmDialog } from '../SafeConfirmDialog';
+import { useStationMobileMode } from '../../hooks/useMobileMode';
+import { BibKeypad, MobileModeButton, MobileStationShell } from '../MobileStation';
 
 interface StartStationViewProps {
+  mobileNavigation?: React.ReactNode;
   waves: Wave[];
   participants: Participant[];
   categories: Category[];
@@ -28,6 +31,7 @@ interface StartStationViewProps {
 }
 
 export const StartStationView: React.FC<StartStationViewProps> = ({
+  mobileNavigation,
   waves,
   participants,
   categories,
@@ -35,6 +39,9 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
   event,
   onRefresh,
 }) => {
+  const [simpleMode, toggleSimpleMode] = useStationMobileMode('start');
+  const [isSavingSingle, setIsSavingSingle] = useState(false);
+  const singleStartGate = useRef(false);
   const [activeTab, setActiveTab] = useState<'mass' | 'individual' | 'manual'>('mass');
   const [selectedWaveId, setSelectedWaveId] = useState<string>(waves[0]?.id || '');
   const [isStarting, setIsStarting] = useState(false);
@@ -81,67 +88,78 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
 
   // Global hotkey for quick start when in individual mode
   useEffect(() => {
-    if (activeTab === 'individual' && singleInputRef.current) {
+    if (!simpleMode && activeTab === 'individual' && singleInputRef.current) {
       singleInputRef.current.focus();
     }
-  }, [activeTab]);
+  }, [activeTab, simpleMode]);
+
+  const waveStartGate = useRef(false);
+  const waveStartTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(waveStartTimer.current), []);
 
   const handleStartWave = async () => {
-    if (!selectedWave) return;
-
+    if (!selectedWave || waveStartGate.current) return;
+    waveStartGate.current = true;
     setIsStarting(true);
-    soundService.playCountdownPip();
-
-    // 3 second visual & acoustic countdown
-    setCountdown(3);
-    setTimeout(() => {
-      soundService.playCountdownPip();
-      setCountdown(2);
-      setTimeout(() => {
+    try {
+      for (const seconds of [3, 2, 1]) {
+        setCountdown(seconds);
         soundService.playCountdownPip();
-        setCountdown(1);
-        setTimeout(async () => {
-          setCountdown(null);
-          soundService.playGoFanfare();
-
-          const nowIso = raceClock.nowISO();
-          const monotonicNow = performance.now();
-
-          await operationService.recordMassWaveStart(selectedWave.eventId, selectedWave.id, selectedWave.waveNumber, waveParticipants, nowIso);
-          setFeedbackMsg({
-            text: `Wave "${selectedWave.name}" succesvol gestart! ${waveParticipants.filter(p => p.bibNumber).length} deelnemers onderweg.`,
-            type: 'success',
-          });
-          setIsStarting(false);
-          onRefresh();
-          setTimeout(() => setFeedbackMsg(null), 4000);
-        }, 1000);
-      }, 1000);
-    }, 1000);
+        await new Promise<void>(resolve => {
+          waveStartTimer.current = window.setTimeout(resolve, 1000);
+        });
+      }
+      setCountdown(null);
+      const nowIso = raceClock.nowISO();
+      soundService.playGoFanfare();
+      await operationService.recordMassWaveStart(selectedWave.eventId, selectedWave.id, selectedWave.waveNumber, waveParticipants, nowIso);
+      setFeedbackMsg({ text: `Startgroep "${selectedWave.name}" succesvol gestart!`, type: 'success' });
+      onRefresh();
+      setTimeout(() => setFeedbackMsg(null), 4000);
+    } catch (error) {
+      soundService.playError();
+      setFeedbackMsg({ text: error instanceof Error ? error.message : 'Groepsstart opslaan mislukt.', type: 'warn' });
+    } finally {
+      setCountdown(null);
+      setIsStarting(false);
+      waveStartGate.current = false;
+    }
   };
 
   const executeSingleStart = async ({ bib, participant: p, iso, monotonic }: { bib: number; participant?: Participant; iso: string; monotonic: number }) => {
-    await operationService.recordStart(
-      await getActiveEventId(),
-      bib,
-      p,
-      iso,
-      monotonic
-    );
+    if (singleStartGate.current) return;
+    singleStartGate.current = true;
+    setIsSavingSingle(true);
+    try {
+      await operationService.recordStart(
+        await getActiveEventId(),
+        bib,
+        p,
+        iso,
+        monotonic
+      );
 
-    soundService.playGoFanfare();
-    setFeedbackMsg({
-      text: `Individuele start geregistreerd voor Bib #${bib} (${p ? `${p.firstName} ${p.lastName}` : 'Onbekend'}) om ${formatLocalTime(iso, true)}`,
-      type: 'success',
-    });
-    setSingleBibInput('');
-    singleInputRef.current?.focus();
-    onRefresh();
-    setTimeout(() => setFeedbackMsg(null), 3500);
+      soundService.playGoFanfare();
+      setFeedbackMsg({
+        text: `Individuele start geregistreerd voor Bib #${bib} (${p ? `${p.firstName} ${p.lastName}` : 'Onbekend'}) om ${formatLocalTime(iso, true)}`,
+        type: 'success',
+      });
+      setSingleBibInput('');
+      if (!simpleMode) singleInputRef.current?.focus();
+      onRefresh();
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    } catch (error) {
+      setFeedbackMsg({ text: error instanceof Error ? error.message : 'Start opslaan mislukt.', type: 'warn' });
+      throw error;
+    } finally {
+      singleStartGate.current = false;
+      setIsSavingSingle(false);
+    }
   };
 
   const handleSingleStart = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (singleStartGate.current || pendingSingleStart) return;
     const bib = parseInt(singleBibInput.trim(), 10);
     if (isNaN(bib) || bib <= 0) return;
     const request = {
@@ -151,7 +169,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
       monotonic: performance.now(),
     };
     if (event?.requireStartConfirmation) setPendingSingleStart(request);
-    else await executeSingleStart(request);
+    else try { await executeSingleStart(request); } catch { soundService.playError(); }
   };
 
   // Manual Scheduled Start Handler (Requirement 15: MANUAL SCHEDULED START)
@@ -286,12 +304,43 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
         variant="info"
         onCancel={() => {
           setPendingSingleStart(null);
-          window.setTimeout(() => singleInputRef.current?.focus(), 0);
+          if (!simpleMode) window.setTimeout(() => singleInputRef.current?.focus(), 0);
         }}
         onConfirm={async () => {
           if (pendingSingleStart) await executeSingleStart(pendingSingleStart);
         }}
       />
+      {simpleMode && <MobileStationShell title="Start" onClose={toggleSimpleMode} navigation={mobileNavigation} busy={isStarting || isSavingSingle}>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" disabled={isStarting || isSavingSingle} aria-pressed={activeTab === 'mass'} onClick={() => setActiveTab('mass')} className={`min-h-12 rounded-xl font-bold ${activeTab === 'mass' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800'}`}>Groepsstart</button>
+          <button type="button" disabled={isStarting || isSavingSingle} aria-pressed={activeTab !== 'mass'} onClick={() => setActiveTab('individual')} className={`min-h-12 rounded-xl font-bold ${activeTab !== 'mass' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800'}`}>Individueel</button>
+        </div>
+        {activeTab === 'mass' ? <div className="space-y-3">
+          <label className="block text-sm font-bold">Startgroep
+            <select value={selectedWave?.id || ''} disabled={isStarting} onChange={e => setSelectedWaveId(e.target.value)} className="mt-2 w-full min-h-12 rounded-xl border border-slate-600 bg-slate-900 px-3 text-base">
+              {!waves.length && <option value="">Geen startgroepen</option>}
+              {waves.map(wave => <option key={wave.id} value={wave.id}>{wave.name} · {wave.scheduledStartTime}</option>)}
+            </select>
+          </label>
+          <p className="text-sm text-slate-300">{waveParticipants.filter(p => p.bibNumber).length} deelnemers met startnummer · {startedParticipants.length} al gestart</p>
+          <button type="button" onClick={handleStartWave} disabled={isStarting || !selectedWave || !waveParticipants.some(p => p.bibNumber) || selectedWave.status !== 'SCHEDULED'} className="w-full min-h-24 rounded-2xl bg-emerald-500 text-slate-950 text-xl font-black disabled:opacity-40">
+            {countdown !== null ? `Start over ${countdown}…` : isStarting ? 'Start opslaan…' : selectedWave && selectedWave.status !== 'SCHEDULED' ? 'Startgroep al gestart' : 'Start groep (3 sec.)'}
+          </button>
+        </div> : <>
+          <BibKeypad value={singleBibInput} onChange={setSingleBibInput} disabled={isSavingSingle || !!pendingSingleStart} participantName={matchedSingleParticipant ? `${matchedSingleParticipant.firstName} ${matchedSingleParticipant.lastName}` : undefined} />
+          {singleBibInput && timingRecords.some(record => record.type === 'START' && !record.isReversed && record.bibNumber === parsedSingleBib) && <p role="status" className="text-sm text-amber-300">Dit startnummer heeft al een startregistratie.</p>}
+          <button type="button" onClick={() => handleSingleStart()} disabled={isSavingSingle || !!pendingSingleStart || !(parsedSingleBib > 0)} className="w-full min-h-16 rounded-2xl bg-emerald-500 text-slate-950 text-xl font-black disabled:opacity-40">{isSavingSingle ? 'Opslaan…' : 'Start nu vastleggen'}</button>
+          <p className="text-xs text-slate-400">{event?.requireStartConfirmation ? 'Bevestiging gevraagd; de tijd wordt meteen vastgelegd.' : 'Direct registreren zonder extra bevestiging.'}</p>
+        </>}
+        {feedbackMsg && <p role="status" className={`rounded-xl border p-3 text-sm ${feedbackMsg.type === 'success' ? 'border-emerald-700 text-emerald-300' : 'border-amber-700 text-amber-300'}`}>{feedbackMsg.text}</p>}
+        <div className="rounded-xl bg-slate-900 p-3 text-sm space-y-2">
+          <h3 className="font-bold">Laatste starts</h3>
+          {!recentStarts.length && <p className="text-slate-400">Nog geen starts geregistreerd.</p>}
+          {recentStarts.slice(0, 3).map(record => <p key={record.id} className="flex justify-between gap-2"><strong>#{record.bibNumber}</strong><span className="font-mono text-emerald-400">{formatLocalTime(record.timestamp, true)}</span></p>)}
+        </div>
+        <p className="text-xs text-slate-400">Handmatige tijden en correcties vind je via Gewone weergave.</p>
+      </MobileStationShell>}
+      <div hidden={simpleMode} className="space-y-6">
       {/* 3 Start Modes Navigation (Requirement 15) */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
         <div className="flex items-center gap-2">
@@ -304,7 +353,8 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-slate-850 p-1.5 rounded-xl border border-slate-750">
+        <MobileModeButton onClick={toggleSimpleMode} disabled={isStarting || isSavingSingle} />
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-850 p-1.5 rounded-xl border border-slate-750">
           <button
             type="button"
             onClick={() => setActiveTab('mass')}
@@ -491,7 +541,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
 
             <button
               type="submit"
-              disabled={!singleBibInput.trim()}
+              disabled={!singleBibInput.trim() || isSavingSingle}
               className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg uppercase tracking-wider shadow-xl shadow-emerald-500/25 active:scale-98 transition disabled:opacity-40"
             >
               START {matchedSingleParticipant ? `${matchedSingleParticipant.firstName.toUpperCase()} NU (ENTER)` : 'NU REGISTREREN'}
@@ -675,6 +725,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
         </div>
       </div>
 
+      </div>
       {/* Edit Start Time Modal */}
       {editingRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">

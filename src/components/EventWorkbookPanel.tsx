@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Download, Upload, FileSpreadsheet } from 'lucide-react';
 import type * as XLSX from 'xlsx';
-import { currentWorkbookData, downloadEventWorkbook, readEventWorkbook, planEventWorkbook, applyEventWorkbook } from '../services/eventWorkbook';
+import { currentWorkbookData, downloadEventWorkbook, readEventWorkbook, planEventWorkbook, applyEventWorkbook, type WorkbookData } from '../services/eventWorkbook';
 import { createFullSnapshot, downloadJsonFile } from '../services/backupService';
 import { syncStyles as ui } from './syncSettingsStyles';
+import { StartListExportPanel } from './StartListExportPanel';
 
 export function EventWorkbookPanel({ onRefresh }: { onRefresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [workbookData, setWorkbookData] = useState<WorkbookData>();
   const [preview, setPreview] = useState<{ book: XLSX.WorkBook; expected: string; plan: ReturnType<typeof planEventWorkbook> }>();
+  useEffect(() => {
+    let active = true;
+    void currentWorkbookData().then(data => { if (active) setWorkbookData(data); }).catch(error => { if (active) setMessage((error as Error).message); });
+    return () => { active = false; };
+  }, []);
   const run = async (action: () => Promise<void>) => { setBusy(true); setMessage(''); try { await action(); } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); } };
   return <details open className={ui.card}>
     <summary className="cursor-pointer font-bold text-white flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-amber-400" />Werken met Excel (zonder Stamhoofd)</summary>
@@ -29,8 +36,9 @@ export function EventWorkbookPanel({ onRefresh }: { onRefresh: () => void }) {
       <p className="text-amber-300">De evenementinstellingen en bestaande rijen met dezelfde code worden bijgewerkt. Eerst wordt een lokale herstelback-up bewaard. Koppel andere pc’s pas na deze voorbereiding.</p>
       {preview.plan.errors.length > 0 && <div className="max-h-48 overflow-auto text-red-400" role="alert"><p className="font-bold">Los deze fouten op in Excel en lees opnieuw in:</p><ul className="list-disc pl-5">{preview.plan.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
       {preview.plan.warnings.length > 0 && <div className="max-h-48 overflow-auto text-amber-300"><p>Deze deelnemers vereisen nog indeling in de app:</p><ul className="list-disc pl-5">{preview.plan.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul></div>}
-      <div className="flex gap-3"><button type="button" className={ui.primary} disabled={busy || !!preview.plan.errors.length} onClick={() => run(async () => { const result = await applyEventWorkbook(preview.book, preview.expected); setPreview(undefined); setMessage(`${result.imported} deelnemersrijen verwerkt. De voorbereiding is bijgewerkt.`); onRefresh(); })}>Voorbereiding importeren</button><button type="button" className={ui.secondary} disabled={busy} onClick={() => setPreview(undefined)}>Annuleren</button></div>
+      <div className="flex gap-3"><button type="button" className={ui.primary} disabled={busy || !!preview.plan.errors.length} onClick={() => run(async () => { const result = await applyEventWorkbook(preview.book, preview.expected); setWorkbookData(result.data); setPreview(undefined); setMessage(`${result.imported} deelnemersrijen verwerkt. De voorbereiding is bijgewerkt.`); onRefresh(); })}>Voorbereiding importeren</button><button type="button" className={ui.secondary} disabled={busy} onClick={() => setPreview(undefined)}>Annuleren</button></div>
     </div>}
+    <StartListExportPanel data={workbookData} />
     {busy && <p role="status">Bestand verwerken...</p>}
     {message && <p role="status" className="text-amber-300 whitespace-pre-wrap">{message}</p>}
   </details>;

@@ -9,6 +9,8 @@ export type StartListColumnKey =
   | 'bibNumber'
   | 'firstName'
   | 'lastName'
+  | 'birthDate'
+  | 'gender'
   | 'category'
   | 'club'
   | 'team'
@@ -38,6 +40,8 @@ export const START_LIST_COLUMNS: ReadonlyArray<{ key: StartListColumnKey; label:
   { key: 'bibNumber', label: 'Borstnummer', width: 14 },
   { key: 'firstName', label: 'Voornaam', width: 22 },
   { key: 'lastName', label: 'Achternaam', width: 24 },
+  { key: 'birthDate', label: 'Geboortedatum', width: 16 },
+  { key: 'gender', label: 'Geslacht', width: 12 },
   { key: 'category', label: 'Categorie', width: 22 },
   { key: 'club', label: 'Club / School', width: 28 },
   { key: 'team', label: 'Team / Ploeg', width: 24 },
@@ -72,6 +76,8 @@ function valueFor(entry: StartListEntry, key: StartListColumnKey): string | numb
     case 'bibNumber': return participant.bibNumber ?? '';
     case 'firstName': return participant.firstName;
     case 'lastName': return participant.lastName;
+    case 'birthDate': return participant.birthDate ?? '';
+    case 'gender': return participant.gender ?? '';
     case 'category': return categoryName;
     case 'club': return participant.club ?? '';
     case 'team': return participant.team ?? '';

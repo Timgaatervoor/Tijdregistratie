@@ -319,6 +319,7 @@ export class OperationService {
     await db.waves.update(waveId, {
       actualStartTime: capturedTimestamp,
       status: 'STARTED',
+      autoStartEnabled: false,
     });
 
     const operation: RaceOperation = {

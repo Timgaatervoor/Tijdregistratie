@@ -102,6 +102,9 @@ export interface Wave extends SyncMetadata {
   waveNumber: number;
   scheduledStartTime: string; // HH:mm:ss or ISO
   actualStartTime?: string;
+  autoStartEnabled?: boolean;
+  autoStartDeviceId?: string;
+  autoStartAt?: string;
   categoryIds: string[];
   maxParticipants: number;
   assignmentGroup?: { type: 'article' | 'profile'; value: string };

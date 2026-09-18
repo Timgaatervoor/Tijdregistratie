@@ -16,6 +16,17 @@ export interface TvKioskConfig {
 
 export const KIOSK_PAGE_SIZES = Array.from({ length: 50 }, (_, index) => index + 1);
 
+export function leaderboardPodiums(rows: RaceResult[]) {
+  const groups = new Map<string, { id: string; name: string; winners: RaceResult[] }>();
+  for (const row of rows) {
+    const id = row.raceProfileId ?? '';
+    if (!groups.has(id)) groups.set(id, { id, name: row.raceProfileName ?? '', winners: [] });
+    if (row.status === 'FINISHED' && row.rankOverall !== undefined && !row.resultIssues?.length) groups.get(id)!.winners.push(row);
+  }
+  for (const group of groups.values()) group.winners = group.winners.sort((a, b) => a.rankOverall! - b.rankOverall!).slice(0, 3);
+  return groups.size ? [...groups.values()] : [{ id: '', name: '', winners: [] }];
+}
+
 // The storage key and all existing preferences remain compatible.
 export function readTvKioskConfig(value: unknown): TvKioskConfig {
   const stored = value && typeof value === 'object' ? value as Record<string, unknown> : {};

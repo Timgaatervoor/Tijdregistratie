@@ -18,6 +18,7 @@ import { db, getActiveEventId } from '../../db/dexieDb';
 import { generateUUID, operationService } from '../../services/operationService';
 import { WavePlanningPanel } from '../WavePlanningPanel';
 import { updateWaveSettings } from '../../services/waveEditing';
+import { AutomaticWaveStartButton } from '../AutomaticWaveStartButton';
 import { defaultWaveSettings, nextWaveTime, timeSeconds, waveAllows, type WaveSettings } from '../../services/wavePlanning';
 import { soundService } from '../../services/soundService';
 import { SafeConfirmButton } from '../SafeConfirmButton';
@@ -74,6 +75,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
     }
     await db.waves.update(w.id, {
       scheduledStartTime: inlineTimeValue.trim(),
+      ...(inlineTimeValue.trim() !== w.scheduledStartTime ? { autoStartEnabled: false } : {}),
     });
     await operationService.logAudit(
       'WAVE_UPDATED',
@@ -179,6 +181,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
     await db.waves.update(wave.id, {
       scheduledStartTime: updatedTime,
+      autoStartEnabled: false,
     });
 
     await operationService.logAudit(
@@ -399,6 +402,7 @@ export const WavesView: React.FC<WavesViewProps> = ({
 
               {/* Action Buttons: Participants & Quick Delay */}
               <div className="space-y-2 pt-2 border-t border-slate-800">
+                <AutomaticWaveStartButton wave={w} onRefresh={onRefresh} />
                 <button
                   type="button"
                   onClick={() => { setManagingParticipantsWave(w); setParticipantSearch(''); setAssignmentError(''); }}

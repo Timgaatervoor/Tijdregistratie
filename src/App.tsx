@@ -1,6 +1,7 @@
 import { DevicePairingPanel } from './components/DevicePairingPanel';
 import React, { useState } from 'react';
 import { useEventData } from './hooks/useEventData';
+import { useAutomaticWaveStarts } from './hooks/useAutomaticWaveStarts';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { Header } from './components/Header';
 import { Navigation, getLockedTabForRole, type ActiveTab } from './components/Navigation';
@@ -62,6 +63,7 @@ export default function App() {
   } = useEventData();
 
   const { isSimulatedOffline, toggleSimulatedOffline } = useOnlineStatus();
+  const automaticStarts = useAutomaticWaveStarts(waves, refresh);
   const [currentTab, setCurrentTab] = useState<ActiveTab>(getInitialTab);
   const [joinLink, setJoinLink] = useState(() => location.hash.startsWith('#join=') ? location.href : '');
   const [isLeaderboardKiosk, setIsLeaderboardKiosk] = useState(false);
@@ -187,6 +189,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950">
+      {automaticStarts.error && <div role="alert" className="fixed bottom-3 left-3 right-3 z-[60] rounded-xl border border-amber-500 bg-slate-900 p-3 text-sm text-amber-300 shadow-xl flex items-center justify-between gap-3"><span>{automaticStarts.error}</span><button type="button" onClick={automaticStarts.clearError} className="min-h-11 px-3 font-bold">Sluiten</button></div>}
       {joinLink && <div className="fixed inset-0 z-[100] bg-slate-950/95 overflow-auto p-6"><div className="max-w-2xl mx-auto"><DevicePairingPanel initialLink={joinLink} onJoined={() => { setJoinLink(''); location.reload(); }} /><button className="p-3" onClick={() => { setJoinLink(''); history.replaceState(null, '', location.pathname); }}>Sluiten</button></div></div>}
       {/* Test Mode / Simulated Offline Banner */}
       {!isLeaderboardKiosk && (event?.isTestMode || isSimulatedOffline) && (

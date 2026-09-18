@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, leaderboardSummary } from '../src/services/leaderboardPresentation';
+import { readTvKioskConfig, leaderboardPage, leaderboardPodiums, nextLeaderboardSlide, rotationCategories, leaderboardSummary } from '../src/services/leaderboardPresentation';
 import type { RaceResult } from '../src/types';
 
 const result = (id: number, categoryId = 'a', status: RaceResult['status'] = 'FINISHED'): RaceResult => ({
@@ -26,6 +26,18 @@ test('existing kiosk preferences survive new defaults and malformed storage', ()
   for (const pageSize of [5, 10, 15, 25, 30, 40, 50]) {
     assert.equal(readTvKioskConfig({ pageSize }).pageSize, pageSize);
   }
+});
+
+test('podiums keep empty places and rank eligible finishers separately per profile', () => {
+  assert.deepEqual(leaderboardPodiums([]), [{ id: '', name: '', winners: [] }]);
+  const rows = [3, 1, 4, 2].map(rank => ({ ...result(rank), rankOverall: rank, raceProfileId: 'a', raceProfileName: 'A' }));
+  const other = { ...result(5), rankOverall: 1, raceProfileId: 'b', raceProfileName: 'B' };
+  const unranked = { ...result(6), raceProfileId: 'a' };
+  const running = { ...result(7, 'a', 'STARTED'), raceProfileId: 'a' };
+  const podiums = leaderboardPodiums([...rows, other, unranked, running]);
+  assert.deepEqual(podiums[0].winners.map(row => row.participantId), ['1', '2', '3']);
+  assert.deepEqual(podiums[1].winners, [other]);
+  assert.deepEqual(leaderboardPodiums([running])[0].winners, []);
 });
 
 test('screen rotation persists and defaults to the normal orientation', () => {

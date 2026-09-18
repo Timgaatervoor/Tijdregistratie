@@ -11,6 +11,6 @@ export async function updateWaveSettings(id: string, changes: Pick<Wave, 'waveNu
     const duplicate = await db.waves.where('eventId').equals(wave.eventId)
       .filter(other => other.id !== id && other.waveNumber === changes.waveNumber).first();
     if (duplicate) throw new Error(`Startgroepnummer ${changes.waveNumber} is al in gebruik. Kies een ander nummer.`);
-    await db.waves.update(id, changes);
+    await db.waves.update(id, { ...changes, ...(changes.scheduledStartTime !== wave.scheduledStartTime ? { autoStartEnabled: false } : {}) });
   });
 }

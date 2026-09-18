@@ -19,6 +19,7 @@ import { formatLocalTime } from '../../services/timingEngine';
 import { SafeConfirmDialog } from '../SafeConfirmDialog';
 import { useStationMobileMode } from '../../hooks/useMobileMode';
 import { BibKeypad, MobileModeButton, MobileStationShell } from '../MobileStation';
+import { AutomaticWaveStartButton } from '../AutomaticWaveStartButton';
 
 interface StartStationViewProps {
   mobileNavigation?: React.ReactNode;
@@ -355,6 +356,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
               {waves.map(wave => <option key={wave.id} value={wave.id}>{wave.name} · {wave.scheduledStartTime}</option>)}
             </select>
           </label>
+          {selectedWave && <AutomaticWaveStartButton wave={selectedWave} disabled={isStarting || savingAttendance} onRefresh={onRefresh} />}
           <p className="text-sm text-slate-300">{waveParticipants.filter(p => p.bibNumber).length} deelnemers met startnummer · {startedParticipants.length} al gestart</p>
           <p className="text-xs text-slate-400">Duid afwezige deelnemers aan. Zij krijgen DNS bij de groepsstart en kunnen later individueel starten.</p>
           <div className="max-h-72 overflow-y-auto space-y-2">
@@ -506,6 +508,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
               </div>
 
               <div className="w-full md:w-auto">
+                <AutomaticWaveStartButton wave={selectedWave} disabled={isStarting || savingAttendance} onRefresh={onRefresh} />
                 <button
                   onClick={handleStartWave}
                   disabled={isStarting || savingAttendance || waveParticipants.length === 0 || selectedWave.status !== 'SCHEDULED'}

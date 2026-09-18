@@ -4,15 +4,12 @@ import './LiveLeaderboardView.css';
 import {
   Trophy,
   Search,
-  Medal,
   Tv,
   Lock,
   Unlock,
   Download,
   Settings,
   Clock,
-  Sun,
-  Moon,
   Shield,
   KeyRound,
   Play,
@@ -27,7 +24,7 @@ import { formatDuration } from '../../services/timingEngine';
 import { downloadCsvFile } from '../../services/backupService';
 import { soundService } from '../../services/soundService';
 import { SafeConfirmButton } from '../SafeConfirmButton';
-import { KIOSK_PAGE_SIZES, readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, type TvKioskConfig } from '../../services/leaderboardPresentation';
+import { KIOSK_PAGE_SIZES, leaderboardPodiums, readTvKioskConfig, leaderboardPage, nextLeaderboardSlide, rotationCategories, type TvKioskConfig } from '../../services/leaderboardPresentation';
 
 interface LiveLeaderboardViewProps {
   results: RaceResult[];
@@ -281,10 +278,12 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
     return leader ? `+${formatDuration(r.officialTimeMs - leader.officialTimeMs!, true, false)}` : '';
   };
 
-  // Top 3 Podium finishers for the current filter
-  const finishedPodium = filteredResults
-    .filter((r) => r.status === 'FINISHED' && displayRank(r))
-    .slice(0, 3);
+  // Podiums follow the competition selection, independent of table search/status/page.
+  const podiums = leaderboardPodiums(results.filter(r =>
+    (activeProfile === 'ALL' || r.raceProfileId === activeProfile) &&
+    (selectedCategory === 'ALL' || r.categoryId === selectedCategory) &&
+    (selectedWave === 'ALL' || r.waveId === selectedWave) &&
+    (selectedGender === 'ALL' || r.gender === selectedGender)));
 
   const handleExportCsv = () => {
     const headers =
@@ -366,22 +365,6 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
               <Clock className="w-4 h-4" />
               <span>{currentTime.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
             </div>
-          )}
-
-          {isKioskMode && (
-            <button
-              type="button"
-              onClick={() => {
-                const nextTheme = tvConfig.theme === 'daylight' ? 'dark' : 'daylight';
-                setTvConfig({ ...tvConfig, theme: nextTheme });
-                soundService.playSuccess();
-              }}
-              title={tvConfig.theme === 'daylight' ? 'Schakel naar Donkere Modus' : 'Schakel naar Zonlicht / Daglicht Modus'}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-bold transition"
-            >
-              {tvConfig.theme === 'daylight' ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
-              <span className="hidden sm:inline">{tvConfig.theme === 'daylight' ? 'Nacht' : 'Zonlicht'}</span>
-            </button>
           )}
 
           {!isKioskMode && (
@@ -756,113 +739,37 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
         {isKioskMode && tvConfig.rotateCategories && <p className="text-xs text-amber-300">Categorierotatie actief. Zelf een categorie kiezen stopt de rotatie.</p>}
       </div>
 
-      {/* Podium Cards if finishes exist */}
-      {tvConfig.showPodium && finishedPodium.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Silver #2 */}
-          {finishedPodium[1] && (
-            <div
-              onClick={() => !isKioskMode && onSelectParticipant(finishedPodium[1])}
-              className="bg-slate-900 border border-slate-750 hover:border-slate-600 rounded-2xl p-5 shadow cursor-pointer transition flex flex-col justify-between order-2 sm:order-1 relative overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="w-9 h-9 rounded-xl bg-slate-300 text-slate-950 font-black text-base flex items-center justify-center shadow">
-                  #2
-                </span>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  ZILVER
-                </span>
-              </div>
-              <div>
-                <span className="text-lg font-bold text-white block">
-                  {finishedPodium[1].name}
-                </span>
-                <span className="text-xs text-slate-400">
-                  Bib #{finishedPodium[1].bibNumber} • {finishedPodium[1].categoryName}
-                </span>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-400">
-                  {finishedPodium[1].totalMisses} missers ({finishedPodium[1].penaltyFormatted})
-                </span>
-                <span className="font-mono font-black text-slate-200 text-base">
-                  {finishedPodium[1].officialTimeFormatted}
-                </span>
+      {tvConfig.showPodium && (
+        <section aria-label="Podium" className="leaderboard-podiums">
+          {podiums.map(podium => (
+            <div key={podium.id}>
+              {podiums.length > 1 && <h3 className="text-xs font-bold text-slate-300 mb-1">{podium.name || 'Wedstrijdprofiel'}</h3>}
+              <div className="leaderboard-podium">
+                {([
+                  { rank: 1, label: 'Goud', medal: '🥇' },
+                  { rank: 2, label: 'Zilver', medal: '🥈' },
+                  { rank: 3, label: 'Brons', medal: '🥉' },
+                ] as const).map(({ rank, label, medal }) => {
+                  const winner = podium.winners[rank - 1];
+                  return (
+                    <button key={rank} type="button" data-medal={rank}
+                      disabled={isKioskMode || !winner}
+                      onClick={() => winner && onSelectParticipant(winner)}
+                      className="leaderboard-podium-card bg-slate-900 text-white"
+                    >
+                      <span className="leaderboard-podium-heading"><span aria-hidden="true" className="leaderboard-podium-medal">{medal}</span><span>{label} · {rank}</span></span>
+                      <span className="leaderboard-podium-name">{winner?.name || 'Nog geen finisher'}</span>
+                      {winner && <>
+                        <span className="leaderboard-podium-meta text-slate-400">#{winner.bibNumber || '-'} · {winner.categoryName}</span>
+                        <span className="leaderboard-podium-time">{winner.officialTimeFormatted}</span>
+                      </>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          )}
-
-          {/* Gold #1 */}
-          {finishedPodium[0] && (
-            <div
-              onClick={() => !isKioskMode && onSelectParticipant(finishedPodium[0])}
-              className="bg-gradient-to-b from-amber-950/40 to-slate-900 border-2 border-amber-500/60 rounded-2xl p-6 shadow-2xl cursor-pointer transition flex flex-col justify-between order-1 sm:order-2 scale-105 z-10 relative overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="w-11 h-11 rounded-xl bg-amber-400 text-slate-950 font-black text-xl flex items-center justify-center shadow-lg shadow-amber-400/30">
-                  #1
-                </span>
-                <span className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-1">
-                  <Medal className="w-4 h-4" /> GOUD
-                </span>
-              </div>
-              <div>
-                <span className="text-xl font-black text-white block">
-                  {finishedPodium[0].name}
-                </span>
-                <span className="text-xs text-slate-300">
-                  Bib #{finishedPodium[0].bibNumber} • {finishedPodium[0].categoryName}
-                </span>
-                {finishedPodium[0].club && (
-                  <span className="text-[11px] text-slate-400 block italic">
-                    {finishedPodium[0].club}
-                  </span>
-                )}
-              </div>
-              <div className="mt-4 pt-3 border-t border-amber-500/20 flex items-center justify-between text-xs">
-                <span className="text-slate-300">
-                  {finishedPodium[0].totalMisses} missers ({finishedPodium[0].penaltyFormatted})
-                </span>
-                <span className="font-mono font-black text-amber-400 text-xl">
-                  {finishedPodium[0].officialTimeFormatted}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Bronze #3 */}
-          {finishedPodium[2] && (
-            <div
-              onClick={() => !isKioskMode && onSelectParticipant(finishedPodium[2])}
-              className="bg-slate-900 border border-slate-750 hover:border-slate-600 rounded-2xl p-5 shadow cursor-pointer transition flex flex-col justify-between order-3 relative overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="w-9 h-9 rounded-xl bg-amber-700 text-slate-100 font-black text-base flex items-center justify-center shadow">
-                  #3
-                </span>
-                <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">
-                  BRONS
-                </span>
-              </div>
-              <div>
-                <span className="text-lg font-bold text-white block">
-                  {finishedPodium[2].name}
-                </span>
-                <span className="text-xs text-slate-400">
-                  Bib #{finishedPodium[2].bibNumber} • {finishedPodium[2].categoryName}
-                </span>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-400">
-                  {finishedPodium[2].totalMisses} missers ({finishedPodium[2].penaltyFormatted})
-                </span>
-                <span className="font-mono font-black text-slate-200 text-base">
-                  {finishedPodium[2].officialTimeFormatted}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+          ))}
+        </section>
       )}
 
       {/* Main Results Table */}
@@ -986,7 +893,9 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                       {/* Status */}
                       <td className="py-3 px-4 text-center">
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                          title={r.resultIssues?.length ? `${r.status}: ${r.resultIssues.join('; ')}` : r.status}
+                          aria-label={r.resultIssues?.length ? `${r.status}: ${r.resultIssues.join('; ')}` : r.status}
+                          className={`leaderboard-status-badge text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                             r.status === 'FINISHED'
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                               : r.status === 'STARTED'
@@ -998,7 +907,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                         >
                           {r.resultIssues?.length ? 'VOORLOPIG' : r.status}
                         </span>
-                        {r.resultIssues?.map(issue => <span key={issue} className="block text-amber-300 text-xs">{issue}</span>)}
+                        {!isKioskMode && r.resultIssues?.map(issue => <span key={issue} className="block text-amber-300 text-xs">{issue}</span>)}
                       </td>
                     </tr>
                   );

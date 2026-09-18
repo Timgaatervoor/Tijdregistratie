@@ -223,8 +223,11 @@ export class OperationService {
     await db.timingRecords.put(record);
 
     if (participant) {
+      const current = await db.participants.get(participant.id);
       await db.participants.update(participant.id, {
         status: 'STARTED',
+        absentFromWaveStart: false,
+        ...(current?.status === 'DNS' ? { statusReason: '' } : {}),
         updatedAt: new Date().toISOString(),
       });
     }
@@ -265,8 +268,25 @@ export class OperationService {
     });
   }
 
+  public async setWaveStartAbsence(eventId: string, participantId: string, absent: boolean): Promise<void> {
+    await db.transaction('rw', [db.events, db.participants, db.waves, db.timingRecords, db.auditLogs], async () => {
+      const event = await db.events.get(eventId);
+      if (event?.officialResultsLocked) throw new Error('De uitslagen zijn vergrendeld.');
+      const participant = await db.participants.get(participantId);
+      const wave = participant?.waveId ? await db.waves.get(participant.waveId) : undefined;
+      if (!participant || (participant.eventId && participant.eventId !== eventId) || !wave || wave.eventId !== eventId || wave.status !== 'SCHEDULED' || wave.actualStartTime) {
+        throw new Error('Deze startgroep bestaat niet of is al gestart.');
+      }
+      const hasStart = await db.timingRecords.where('participantId').equals(participantId)
+        .filter(record => record.eventId === eventId && record.type === 'START' && !record.isReversed).count();
+      if (hasStart || !['REGISTERED', 'CHECKED_IN', 'READY'].includes(participant.status)) throw new Error('Deze deelnemer kan niet meer als afwezig worden aangeduid.');
+      await db.participants.update(participantId, { absentFromWaveStart: absent, updatedAt: new Date().toISOString() });
+      await this.logAudit('WAVE_START_ATTENDANCE', `${participant.firstName} ${participant.lastName}: ${absent ? 'afwezig' : 'aanwezig'} bij de wavestart`, participantId, participant.bibNumber);
+    });
+  }
+
   /**
-   * Mass start for all participants in a wave
+   * Start present participants and mark absent participants DNS atomically.
    */
   public async recordMassWaveStart(
     eventId: string,
@@ -283,8 +303,16 @@ export class OperationService {
     if (!wave || wave.eventId !== eventId || wave.actualStartTime || wave.status === 'STARTED' || wave.status === 'COMPLETED') throw new Error('Deze startgroep bestaat niet of is al gestart.');
     for (const p of participants) {
       const current = await db.participants.get(p.id);
-      if (current?.waveId === waveId && current.bibNumber && ['REGISTERED', 'CHECKED_IN', 'READY'].includes(current.status)) {
-        await this.recordStart(eventId, current.bibNumber, current, capturedTimestamp, monotonic);
+      if (current?.waveId === waveId && (!current.eventId || current.eventId === eventId) && ['REGISTERED', 'CHECKED_IN', 'READY'].includes(current.status)) {
+        const hasStart = await db.timingRecords.where('participantId').equals(current.id)
+          .filter(record => record.eventId === eventId && record.type === 'START' && !record.isReversed).count();
+        if (hasStart) continue;
+        if (current.absentFromWaveStart) {
+          await db.participants.update(current.id, { status: 'DNS', statusReason: 'Afwezig bij de wavestart', updatedAt: new Date().toISOString() });
+          await this.logAudit('STATUS_CHANGED', 'DNS: afwezig bij de wavestart', current.id, current.bibNumber);
+        } else if (current.bibNumber) {
+          await this.recordStart(eventId, current.bibNumber, current, capturedTimestamp, monotonic);
+        }
       }
     }
 

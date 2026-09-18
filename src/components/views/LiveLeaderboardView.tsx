@@ -304,12 +304,14 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
   };
 
   return (
+    <div className={isKioskMode ? 'kiosk-viewport' : 'contents'}>
+    <div className={isKioskMode ? 'kiosk-frame' : 'contents'} data-screen-rotation={isKioskMode ? tvConfig.screenRotation : undefined}>
     <div
       data-text-scale={isKioskMode ? tvConfig.textScale : undefined}
       data-theme={isKioskMode ? tvConfig.theme : undefined}
       className={`space-y-5 text-xs ${
         isKioskMode
-          ? `leaderboard-kiosk p-3 sm:p-6 min-h-screen ${
+          ? `leaderboard-kiosk p-3 sm:p-6 ${
               tvConfig.theme === 'daylight' ? 'bg-white text-slate-950' : 'bg-slate-950 text-white'
             }`
           : ''
@@ -531,6 +533,21 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                 <option value={20}>20 seconden</option>
                 <option value={30}>30 seconden</option>
                 <option value={60}>60 seconden</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="kiosk-screen-rotation" className="text-slate-300 block">Scherm kantelen (rechtsom):</label>
+              <select
+                id="kiosk-screen-rotation"
+                value={tvConfig.screenRotation}
+                onChange={(event) => setTvConfig({ ...tvConfig, screenRotation: Number(event.target.value) as TvKioskConfig['screenRotation'] })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+              >
+                <option value={0}>360° / 0° (normaal)</option>
+                <option value={90}>90°</option>
+                <option value={180}>180°</option>
+                <option value={270}>270°</option>
               </select>
             </div>
 
@@ -1087,6 +1104,8 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
           </div>
         </div>
       )}
+    </div>
+    </div>
     </div>
   );
 };

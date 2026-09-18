@@ -167,6 +167,36 @@ test('wave start writes an outgoing start operation for every participant and is
   assert.equal((await db.waves.get('wave'))?.status, 'STARTED');
 });
 
+test('wave attendance persists, absent runners get DNS without a start and may start individually later', async () => {
+  const present = { ...p, id: 'attendance-present', eventId: 'event', waveId: 'attendance-wave', bibNumber: 81 };
+  const absent = { ...present, id: 'attendance-absent', bibNumber: 82 };
+  const noBib = { ...present, id: 'attendance-no-bib', bibNumber: undefined };
+  await db.waves.put({ id: 'attendance-wave', eventId: 'event', status: 'SCHEDULED' } as any);
+  await db.participants.bulkPut([present, absent, noBib]);
+  await operationService.setWaveStartAbsence('event', present.id, true);
+  await operationService.setWaveStartAbsence('event', present.id, false);
+  await operationService.setWaveStartAbsence('event', absent.id, true);
+  await operationService.setWaveStartAbsence('event', noBib.id, true);
+  assert.equal((await db.participants.get(absent.id))?.status, 'READY');
+  // Stale UI data must not override the saved attendance choices.
+  await operationService.recordMassWaveStart('event', 'attendance-wave', 2, [present, absent, noBib], '2026-09-07T11:00:00Z');
+  assert.equal((await db.participants.get(present.id))?.status, 'STARTED');
+  for (const runner of [absent, noBib]) {
+    assert.equal((await db.participants.get(runner.id))?.status, 'DNS');
+    assert.equal(await db.timingRecords.where('participantId').equals(runner.id).count(), 0);
+  }
+  await assert.rejects(operationService.setWaveStartAbsence('event', absent.id, false), /gestart/);
+  await operationService.recordStart('event', absent.bibNumber, absent, '2026-09-07T11:02:00Z', 0);
+  const lateStarter = await db.participants.get(absent.id);
+  assert.equal(lateStarter?.status, 'STARTED');
+  assert.equal(lateStarter?.statusReason, '');
+  assert.equal(lateStarter?.absentFromWaveStart, false);
+  assert.equal((await db.timingRecords.where('participantId').equals(absent.id).first())?.timestamp, '2026-09-07T11:02:00Z');
+  const updates = await db.operations.filter(op => op.type === 'ENTITY_UPSERT' && op.payload.table === 'participants' && op.payload.recordId === absent.id).toArray();
+  assert.ok(updates.some(op => op.payload.record.status === 'DNS'));
+  assert.ok(updates.some(op => op.payload.record.status === 'STARTED' && !op.payload.record.absentFromWaveStart));
+});
+
 test('sync reads beyond 1000 operations and applies revocation before original record without losing it', async () => {
   await db.operations.clear(); await db.timingRecords.clear(); await db.shootingResults.clear();
   const getConfig = syncService.getConfig, oldFetch = globalThis.fetch;

@@ -46,6 +46,8 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
   const [selectedWaveId, setSelectedWaveId] = useState<string>(waves[0]?.id || '');
   const [isStarting, setIsStarting] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const attendanceGate = useRef(false);
 
   // Individual start state (Requirement 16)
   const [singleBibInput, setSingleBibInput] = useState('');
@@ -67,6 +69,37 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
   const selectedWave = waves.find((w) => w.id === selectedWaveId) || waves[0];
   const waveParticipants = participants.filter((p) => p.waveId === selectedWave?.id);
   const startedParticipants = waveParticipants.filter((p) => p.status === 'STARTED' || p.status === 'FINISHED');
+
+  const toggleAbsence = async (participant: Participant) => {
+    if (attendanceGate.current || waveStartGate.current || !selectedWave) return;
+    attendanceGate.current = true;
+    setSavingAttendance(true);
+    try {
+      await operationService.setWaveStartAbsence(selectedWave.eventId, participant.id, !participant.absentFromWaveStart);
+      onRefresh();
+    } catch (error) {
+      setFeedbackMsg({ text: error instanceof Error ? error.message : 'Aanwezigheid opslaan mislukt.', type: 'warn' });
+    } finally {
+      attendanceGate.current = false;
+      setSavingAttendance(false);
+    }
+  };
+
+  const attendanceToggle = (participant: Participant) => (
+    participant.status === 'DNS' ? <span className="text-xs font-bold text-amber-300">DNS · Individueel starten mogelijk</span> :
+    selectedWave?.status === 'SCHEDULED' && ['REGISTERED', 'CHECKED_IN', 'READY'].includes(participant.status) ? (
+      <button
+        type="button"
+        aria-pressed={!!participant.absentFromWaveStart}
+        aria-label={`Afwezig bij wavestart: ${participant.firstName} ${participant.lastName}`}
+        disabled={isStarting || savingAttendance}
+        onClick={e => { e.stopPropagation(); void toggleAbsence(participant); }}
+        className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40 ${participant.absentFromWaveStart ? 'border-amber-500 bg-amber-500/20 text-amber-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
+      >
+        {participant.absentFromWaveStart ? 'Afwezig · DNS bij start' : 'Aanwezig'}
+      </button>
+    ) : null
+  );
 
   // Matched participant for Individual quick start
   const parsedSingleBib = parseInt(singleBibInput.trim(), 10);
@@ -98,7 +131,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
   useEffect(() => () => window.clearTimeout(waveStartTimer.current), []);
 
   const handleStartWave = async () => {
-    if (!selectedWave || waveStartGate.current) return;
+    if (!selectedWave || waveStartGate.current || attendanceGate.current) return;
     waveStartGate.current = true;
     setIsStarting(true);
     try {
@@ -323,7 +356,16 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
             </select>
           </label>
           <p className="text-sm text-slate-300">{waveParticipants.filter(p => p.bibNumber).length} deelnemers met startnummer · {startedParticipants.length} al gestart</p>
-          <button type="button" onClick={handleStartWave} disabled={isStarting || !selectedWave || !waveParticipants.some(p => p.bibNumber) || selectedWave.status !== 'SCHEDULED'} className="w-full min-h-24 rounded-2xl bg-emerald-500 text-slate-950 text-xl font-black disabled:opacity-40">
+          <p className="text-xs text-slate-400">Duid afwezige deelnemers aan. Zij krijgen DNS bij de groepsstart en kunnen later individueel starten.</p>
+          <div className="max-h-72 overflow-y-auto space-y-2">
+            {waveParticipants.filter(p => p.status !== 'STARTED' && p.status !== 'FINISHED').map(p => (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-900 p-3">
+                <span className="text-sm">#{p.bibNumber || '-'} {p.firstName} {p.lastName}</span>
+                {attendanceToggle(p)}
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={handleStartWave} disabled={isStarting || savingAttendance || !selectedWave || !waveParticipants.length || selectedWave.status !== 'SCHEDULED'} className="w-full min-h-24 rounded-2xl bg-emerald-500 text-slate-950 text-xl font-black disabled:opacity-40">
             {countdown !== null ? `Start over ${countdown}…` : isStarting ? 'Start opslaan…' : selectedWave && selectedWave.status !== 'SCHEDULED' ? 'Startgroep al gestart' : 'Start groep (3 sec.)'}
           </button>
         </div> : <>
@@ -416,7 +458,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                 Massastart per startgroep
               </h3>
               <p className="text-xs text-slate-400">
-                Alle deelnemers uit de geselecteerde wave krijgen synchroon exact dezelfde starttijd.
+                Aanwezige deelnemers krijgen exact dezelfde starttijd. Afwezige deelnemers krijgen DNS en kunnen later individueel starten.
               </p>
             </div>
 
@@ -424,6 +466,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
               <label className="text-xs text-slate-400 font-semibold">Startgroep:</label>
               <select
                 value={selectedWave?.id || ''}
+                disabled={isStarting || savingAttendance}
                 onChange={(e) => setSelectedWaveId(e.target.value)}
                 className="bg-slate-850 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white font-bold focus:outline-none focus:border-emerald-500"
               >
@@ -465,7 +508,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
               <div className="w-full md:w-auto">
                 <button
                   onClick={handleStartWave}
-                  disabled={isStarting || waveParticipants.length === 0}
+                  disabled={isStarting || savingAttendance || waveParticipants.length === 0 || selectedWave.status !== 'SCHEDULED'}
                   className="w-full md:w-auto px-8 py-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black text-xl shadow-2xl shadow-emerald-500/30 active:scale-98 transition flex items-center justify-center gap-3 disabled:opacity-40 uppercase tracking-wider"
                 >
                   {countdown !== null ? (
@@ -631,7 +674,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
             <UserCheck className="w-4 h-4 text-emerald-400" /> Nog Niet Gestart in {selectedWave?.name}
           </h3>
           <p className="text-xs text-slate-400">
-            Klik op een loper om direct het startnummer in te laden.
+            Klik op een loper om het startnummer in te laden. Gebruik de aanwezigheidsknop om afwezigen aan te duiden; zij krijgen DNS bij de wavestart.
           </p>
 
           <div className="max-h-72 overflow-y-auto space-y-1.5 text-xs pr-1">
@@ -644,7 +687,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                     setSingleBibInput(String(p.bibNumber || ''));
                     setManualBibInput(String(p.bibNumber || ''));
                   }}
-                  className="p-2.5 rounded-lg bg-slate-800/60 hover:bg-slate-750 cursor-pointer flex items-center justify-between transition border border-slate-700/50"
+                  className="p-2.5 rounded-lg bg-slate-800/60 hover:bg-slate-750 cursor-pointer flex flex-wrap gap-2 items-center justify-between transition border border-slate-700/50"
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="font-mono font-black text-amber-400 w-8">#{p.bibNumber}</span>
@@ -652,7 +695,7 @@ export const StartStationView: React.FC<StartStationViewProps> = ({
                       {p.firstName} {p.lastName}
                     </span>
                   </div>
-                  <span className="text-[10px] text-emerald-400 font-medium">Selecteer</span>
+                  {attendanceToggle(p)}
                 </div>
               ))}
             {waveParticipants.filter((p) => p.status !== 'STARTED' && p.status !== 'FINISHED').length === 0 && (

@@ -130,6 +130,7 @@ export interface Participant extends StamhoofdSource, SyncMetadata {
   notes?: string;
   status: ParticipantStatus;
   statusReason?: string;
+  absentFromWaveStart?: boolean;
   bibHistory?: Array<{
     oldBib: number;
     newBib: number;

@@ -7,13 +7,14 @@ export interface TvKioskConfig {
   categoryIds: string[];
   rotationSeconds: number;
   textScale: 'normal' | 'large' | 'extra-large' | 'jumbo-tv';
+  screenRotation: 0 | 90 | 180 | 270;
   theme: 'dark' | 'daylight';
   pageSize: number;
   autoPaginate: boolean;
   kioskPin: string;
 }
 
-export const KIOSK_PAGE_SIZES = [5, 8, 10, 12, 15, 16, 20, 25, 30, 40, 50] as const;
+export const KIOSK_PAGE_SIZES = Array.from({ length: 50 }, (_, index) => index + 1);
 
 // The storage key and all existing preferences remain compatible.
 export function readTvKioskConfig(value: unknown): TvKioskConfig {
@@ -26,6 +27,7 @@ export function readTvKioskConfig(value: unknown): TvKioskConfig {
     rotationSeconds: [10, 15, 20, 30, 60].includes(Number(stored.rotationSeconds)) ? Number(stored.rotationSeconds) : 15,
     textScale: ['normal', 'large', 'extra-large', 'jumbo-tv'].includes(String(stored.textScale)) ? stored.textScale as TvKioskConfig['textScale'] : 'large',
     theme: stored.theme === 'daylight' ? 'daylight' : 'dark',
+    screenRotation: [90, 180, 270].includes(stored.screenRotation as number) ? stored.screenRotation as TvKioskConfig['screenRotation'] : 0,
     pageSize: (stored.pageSize === 0 || KIOSK_PAGE_SIZES.includes(stored.pageSize as typeof KIOSK_PAGE_SIZES[number]))
       ? stored.pageSize as number
       : 12,

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Delete, Smartphone, Minimize2, Maximize2 } from 'lucide-react';
 import { useMobileMode } from '../hooks/useMobileMode';
+import { keepScreenAwake, type ScreenAwakeStatus } from '../services/screenWakeLock';
 
 export function GlobalMobileModeButton() {
   const { modes, setAll } = useMobileMode();
@@ -25,6 +26,13 @@ export function MobileStationShell({ title, onClose, navigation, busy = false, c
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState('');
+  const [awakeStatus, setAwakeStatus] = useState<ScreenAwakeStatus>('requesting');
+  const awakeSession = useRef<ReturnType<typeof keepScreenAwake> | null>(null);
+  useEffect(() => {
+    const session = keepScreenAwake(document, navigator.wakeLock, window.isSecureContext, setAwakeStatus);
+    awakeSession.current = session;
+    return () => { session.stop(); awakeSession.current = null; };
+  }, []);
   useEffect(() => {
     const update = () => setFullscreen(Boolean(document.fullscreenElement));
     update();
@@ -67,6 +75,16 @@ export function MobileStationShell({ title, onClose, navigation, busy = false, c
       {fullscreenButton}
       </>}
       {fullscreenError && <p role="status" className="text-sm text-amber-300">{fullscreenError}</p>}
+      <div className={`text-xs ${awakeStatus === 'active' ? 'text-emerald-400' : 'text-amber-300'}`}>
+        <span role="status">
+          {awakeStatus === 'active' ? 'Scherm blijft aan' :
+            awakeStatus === 'requesting' ? 'Scherm aanhouden activeren…' :
+            awakeStatus === 'https-required' ? 'Scherm aanhouden vereist een HTTPS-verbinding.' :
+            awakeStatus === 'unavailable' ? 'Deze browser kan het scherm niet aanhouden. Pas de automatische schermvergrendeling aan in je toestelinstellingen.' :
+            'Scherm aanhouden is onderbroken. Controleer ook de batterijbesparing.'}
+        </span>
+        {awakeStatus === 'inactive' && <button type="button" onClick={() => void awakeSession.current?.request()} className="ml-2 min-h-11 underline font-bold">Opnieuw activeren</button>}
+      </div>
       {!compact && <fieldset disabled={busy} className="mobile-station-navigation min-w-0">{navigation}</fieldset>}
       {children}
     </div>

@@ -28,6 +28,17 @@ test('existing kiosk preferences survive new defaults and malformed storage', ()
   }
 });
 
+test('screen rotation persists and defaults to the normal orientation', () => {
+  assert.equal(readTvKioskConfig({}).screenRotation, 0);
+  for (const screenRotation of [0, 90, 180, 270]) {
+    const saved = readTvKioskConfig({ screenRotation });
+    assert.equal(readTvKioskConfig(JSON.parse(JSON.stringify(saved))).screenRotation, screenRotation);
+  }
+  for (const screenRotation of [360, -90, 45, '90', null]) {
+    assert.equal(readTvKioskConfig({ screenRotation }).screenRotation, 0);
+  }
+});
+
 test('pagination shows every row once without mutating ranks or ordering', () => {
   const rows = Array.from({ length: 25 }, (_, i) => result(i + 1));
   const before = structuredClone(rows);

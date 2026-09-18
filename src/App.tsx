@@ -213,6 +213,7 @@ export default function App() {
       {!isLeaderboardKiosk && <div className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800">
         <Header
           stationNavigation={<Navigation variant="stations" activeTab={displayedTab} onSelectTab={setCurrentTab} conflictCount={unresolvedConflictsCount} attentionCount={attentionCount} deviceConfig={deviceConfig} />}
+          navigation={<Navigation activeTab={displayedTab} onSelectTab={setCurrentTab} conflictCount={unresolvedConflictsCount} attentionCount={attentionCount} deviceConfig={deviceConfig} />}
           event={event}
           deviceConfig={deviceConfig}
           pendingSyncCount={pendingSyncCount}
@@ -222,13 +223,6 @@ export default function App() {
           onOpenPrint={() => setShowPrintModal(true)}
           onUnlockDevice={handleOpenUnlockModal}
           isTestMode={event?.isTestMode ?? false}
-        />
-        <Navigation
-          activeTab={displayedTab}
-          onSelectTab={setCurrentTab}
-          conflictCount={unresolvedConflictsCount}
-          attentionCount={attentionCount}
-          deviceConfig={deviceConfig}
         />
       </div>}
 

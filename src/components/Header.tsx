@@ -33,6 +33,7 @@ const roleLabels: Record<DeviceConfig['role'], string> = {
 
 interface HeaderProps {
   stationNavigation: React.ReactNode;
+  navigation: React.ReactNode;
   event: RaceEvent | null;
   deviceConfig: DeviceConfig | null;
   pendingSyncCount: number;
@@ -46,6 +47,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   stationNavigation,
+  navigation,
   event,
   deviceConfig,
   pendingSyncCount,
@@ -60,6 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
   const syncConfigured = syncService.getConfig().enabled;
   const [isSoundOn, setIsSoundOn] = useState(soundService.getSoundEnabled());
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -124,8 +127,18 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="relative text-slate-100">
+      <div className="lg:hidden flex h-14 items-center gap-2 px-3">
+        <h1 className="min-w-0 flex-1 truncate text-sm font-bold">{event?.name || 'Tijdregistratie'}</h1>
+        <span className={`shrink-0 text-xs font-bold ${!isOnline || pendingSyncCount > 0 ? 'text-amber-300' : 'text-emerald-400'}`}>
+          {!isOnline ? 'Offline' : pendingSyncCount > 0 ? `${pendingSyncCount} wacht` : 'Online'}
+        </span>
+        <button type="button" aria-expanded={mobileMenuOpen} aria-controls="header-controls" onClick={() => setMobileMenuOpen(open => !open)} className="min-h-11 shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 text-sm font-bold">
+          {mobileMenuOpen ? 'Sluiten' : 'Menu'}{unreadMessages > 0 && <span className="ml-1 rounded-full bg-blue-500 px-1.5 text-xs" aria-label={`${unreadMessages} ongelezen berichten`}>{unreadMessages}</span>}
+        </button>
+      </div>
+      <div id="header-controls" onKeyDown={e => { if (e.key === 'Escape') setMobileMenuOpen(false); }} className={`${mobileMenuOpen ? 'block' : 'hidden'} absolute left-0 top-full z-50 max-h-[calc(100dvh-4rem)] w-full overflow-y-auto border-b border-slate-700 bg-slate-900 shadow-xl lg:static lg:block lg:max-h-none lg:overflow-visible lg:border-0 lg:bg-transparent lg:shadow-none`}>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
-        {stationNavigation}
+        <div className="min-w-0 max-w-full [&_nav]:flex-wrap" onClick={() => setMobileMenuOpen(false)}>{stationNavigation}</div>
         {/* Brand & Event Title */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/20 ring-1 ring-amber-400/40">
@@ -323,6 +336,8 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
         </div>
+      </div>
+      <div onClick={() => setMobileMenuOpen(false)}>{navigation}</div>
       </div>
 
       {syncToast && (

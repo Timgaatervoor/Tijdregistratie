@@ -51,30 +51,21 @@ export function MobileStationShell({ title, onClose, navigation, busy = false, c
   };
   const fullscreenButton = <button type="button" onClick={toggleFullscreen} aria-pressed={fullscreen}
     aria-label={fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'} title={fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'}
-    className={`${compact ? 'w-11 shrink-0' : 'w-full'} min-h-11 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-700`}>
+    className="w-11 shrink-0 min-h-11 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-700">
     {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-    <span className={compact ? 'sr-only' : ''}>{fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'}</span>
+    <span className="sr-only">{fullscreen ? 'Scherm verkleinen' : 'Volledig scherm'}</span>
   </button>;
   return <section aria-label={`Gsm-modus ${title}`} className={`mobile-station ${compact ? 'mobile-station-compact' : ''} fixed inset-0 z-[45] h-[100dvh] overflow-y-auto overscroll-contain bg-slate-950 text-white`}>
     <div className={compact ? 'mobile-station-compact-inner' : 'mx-auto w-full max-w-md space-y-3'}>
-      {compact ? <header className="flex items-center gap-2 relative">
+      <header className="flex items-center gap-2 relative">
         <h2 className="text-lg font-black flex-1">{title}</h2>
+        <span role="status" title={awakeStatus === 'active' ? 'Scherm blijft aan' : 'Scherm aanhouden: zie Menu'} aria-label={awakeStatus === 'active' ? 'Scherm blijft aan' : 'Scherm aanhouden niet actief; zie Menu'} className={`h-2.5 w-2.5 shrink-0 rounded-full ${awakeStatus === 'active' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
         {fullscreenButton}
         <details className="relative">
           <summary className="min-h-11 px-3 rounded-xl border border-slate-700 bg-slate-800 flex items-center cursor-pointer font-bold text-sm">Menu</summary>
-          <div className="absolute right-0 top-full mt-1 z-10 w-72 max-w-[calc(100vw-16px)] rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-xl space-y-3">
+          <div className="absolute right-0 top-full mt-1 z-10 w-72 max-w-[calc(100vw-24px)] max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-xl space-y-3">
             <fieldset disabled={busy} className="mobile-station-navigation min-w-0">{navigation}</fieldset>
             <MobileModeButton enabled onClick={onClose} disabled={busy} />
-          </div>
-        </details>
-      </header> : <>
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-black">{title}</h2>
-        <MobileModeButton enabled onClick={onClose} disabled={busy} />
-      </header>
-      {fullscreenButton}
-      </>}
-      {fullscreenError && <p role="status" className="text-sm text-amber-300">{fullscreenError}</p>}
       <div className={`text-xs ${awakeStatus === 'active' ? 'text-emerald-400' : 'text-amber-300'}`}>
         <span role="status">
           {awakeStatus === 'active' ? 'Scherm blijft aan' :
@@ -85,7 +76,10 @@ export function MobileStationShell({ title, onClose, navigation, busy = false, c
         </span>
         {awakeStatus === 'inactive' && <button type="button" onClick={() => void awakeSession.current?.request()} className="ml-2 min-h-11 underline font-bold">Opnieuw activeren</button>}
       </div>
-      {!compact && <fieldset disabled={busy} className="mobile-station-navigation min-w-0">{navigation}</fieldset>}
+          </div>
+        </details>
+      </header>
+      {fullscreenError && <p role="status" className="text-sm text-amber-300">{fullscreenError}</p>}
       {children}
     </div>
   </section>;

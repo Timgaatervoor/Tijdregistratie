@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@media (max-width: 1023px) {
+  #header-controls button { min-height: 44px; }
+}
+
 .mobile-station {
   margin: 0;
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));

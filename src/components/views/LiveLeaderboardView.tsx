@@ -544,7 +544,7 @@ export const LiveLeaderboardView: React.FC<LiveLeaderboardViewProps> = ({
                 onChange={(event) => setTvConfig({ ...tvConfig, screenRotation: Number(event.target.value) as TvKioskConfig['screenRotation'] })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
               >
-                <option value={0}>360° / 0° (normaal)</option>
+                <option value={0}>0° (normaal)</option>
                 <option value={90}>90°</option>
                 <option value={180}>180°</option>
                 <option value={270}>270°</option>

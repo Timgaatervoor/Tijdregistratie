@@ -273,11 +273,15 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                         {waveParticipants.length} deelnemers
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-2 text-xs">
                       {waveParticipants.map((wp) => (
-                        <div key={wp.id} className="p-1.5 bg-slate-800 print:bg-slate-100 rounded flex items-center justify-between">
-                          <span className="font-bold text-amber-400 print:text-black">#{wp.bibNumber}</span>
-                          <span className="truncate ml-1 font-medium">{wp.firstName} {wp.lastName}</span>
+                        <div key={wp.id} className="min-w-0 border border-slate-600 print:border-black bg-slate-800 print:bg-white rounded flex items-stretch break-inside-avoid">
+                          <span className="w-16 shrink-0 border-r border-slate-600 print:border-black px-2 py-2 flex items-center justify-center font-mono text-sm font-bold text-amber-400 print:text-black">
+                            {wp.bibNumber ? `#${wp.bibNumber}` : '—'}
+                          </span>
+                          <span className="min-w-0 px-3 py-2 flex items-center font-medium text-slate-100 print:text-black break-words [overflow-wrap:anywhere]">
+                            {wp.firstName} {wp.lastName}
+                          </span>
                         </div>
                       ))}
                     </div>
